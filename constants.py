@@ -1,0 +1,63 @@
+import numpy as np
+
+def calc_standard_gibbs_energy(k_25: float) -> float:
+    return -np.log(k_25) * GAS_CONST * 298.15
+
+def calc_equibilium_const(dg_25, temperature) -> float:
+    return np.exp(-dg_25 / (GAS_CONST * temperature))
+
+def calc_dielectric_const_water(temperature: float):
+    # 十分低い周波数における値であることに注意!
+    # http://www.isc.meiji.ac.jp/~nkato/Useful_Info.files/water.html
+    t = temperature - 273.15
+    coeff = 88.15 - 0.414 * t + 0.131 * 1.0e-2 * t**2 - 0.046 * 1.0e-4 * t**3
+    return coeff * DIELECTRIC_VACUUM
+
+DIELECTRIC_VACUUM = 8.8541878128e-12
+ELEMENTARY_CHARGE = 1.60217663e-19 # 電気素量
+BOLTZMANN_CONST = 1.380649e-23 # ボルツマン定数
+AVOGADRO_CONST = 6.0221408e+23
+GAS_CONST = 8.31446262
+
+# 平衡定数 (at 25℃)
+k_aloh = 1.0e-10 # Leroy and Revil, 2003, table 1
+k_sioh = 1.3e-6 # Gonçalvès et al., 2007, table 1
+k_xh = 1.0e-2 # Gonçalvès et al., 2007, table 1
+k_xna = 0.95 # Gonçalvès et al., 2007, table 1
+
+# 標準ギブスエネルギー
+dg_aloh = calc_standard_gibbs_energy(k_aloh)
+dg_sioh = calc_standard_gibbs_energy(k_sioh)
+dg_xh = calc_standard_gibbs_energy(k_xh)
+dg_xna = calc_standard_gibbs_energy(k_xna)
+
+# http://apchem2.kanagawa-u.ac.jp/matsumotolab/Echem3.pdf
+# Mobility_TrunDiffuseは, Mobility_InfDiffuseの1/10と設定した.
+# 参考文献：doi:10.1029/2008JB006114
+# In the dynamic stern layer assumtion, stern layer has surtain
+# mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
+# ↑ 現状, Stern層の移動度は設定しているが参照されていない
+# TODO: H+とOH-の"Mobility_Stern"を設定する
+ion_props_default = {"Na": {"Concentration": 1.0e-3,
+                            "Mobility_InfDiffuse": 5.19e-8,
+                            "Mobility_TrunDiffuse": 0.52e-8,
+                            "Mobility_Stern": 2.59e-8,
+                            "Valence": 1},
+                      "Cl": {"Concentration": 1.0e-3,
+                             "Mobility_InfDiffuse": 7.91e-8,
+                             "Mobility_TrunDiffuse": 0.791e-8,
+                             "Mobility_Stern": 3.95e-8,
+                             "Valence": -1},
+                      "H":  {"Concentration": 1.0e-7,
+                             "Mobility_InfDiffuse": 36.3e-8,
+                             "Mobility_TrunDiffuse": 1.6e-8,
+                             "Valence": 1},
+                      "OH": {"Concentration": 1.0e-7,
+                             "Mobility_InfDiffuse": 20.5e-8,
+                             "Mobility_TrunDiffuse": 2.05e-8,
+                             "Valence": -1}}
+
+activities_default = {"Na": 1.0e-3,
+                      "Cl": 1.0e-3,
+                      "H": 1.0e-7,
+                      "OH": 1.0e-7}

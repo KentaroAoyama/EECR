@@ -1,4 +1,4 @@
-# TODO: カオリナイト, pyrite実装する
+# pyrite実装する
 
 from typing import Dict, List, Tuple
 from logging import Logger
@@ -9,10 +9,10 @@ from scipy.integrate import quad
 
 import constants as const
 
-class Smectite:
+class Phyllosilicate:
     """
-    Smectite Class
-    It has a function to calculate the conductivity of smectite particles and
+    Phyllosilicate Class
+    It has a function to calculate the conductivity of phyllosilicate particles and
     the member variables necessary for the calculation.
 
     To calculate the surface potential, we use the equation proposed by
@@ -31,9 +31,6 @@ class Smectite:
         Leroy P., A. Revil, 2004, doi:10.1016/j.jcis.2003.08.007
         Leroy p., and Revil A., 2009, doi:10.1029/2008JB006114
     """
-    # TODO: 平衡定数の値はクラス内部で計算する仕様にしたほうがいいかも?
-    # TODO: Qiを0と設定すると収束しない不具合があるので修正する
-    # TODO: layer_widthで水分子が入り込める大きさか否かチェックする
     def __init__(self,
                  temperature: float = 298.15,
                  ion_props: Dict = const.ion_props_default,
@@ -61,7 +58,7 @@ class Smectite:
                  iter_max: int = 1000,
                  logger: Logger = None,
                  ):
-        """ Initialize Smectite class.
+        """ Initialize Phyllosilicate class.
 
         Args:
             temperature (float): temperature (unit: K). Defaults to None.
@@ -86,7 +83,7 @@ class Smectite:
             potential_0 (float, optional): surface potential (unit: V). Defaults to None.
             potential_stern (float, optional): stern plane potential (unit: V). Defaults to None.
             potential_zeta (float, optional): zeta plane potential (unit: V). Defaults to None.
-            potential_r (float, optional): potential at the position truncated inside the smectite layer (unit: V). Defaults to None.
+            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V). Defaults to None.
             charge_0 (float, optional): charges in surface layer (unit: C/m3). Defaults to None.
             charge_stern (float, optional): charges in stern layer (unit: C/m3). Defaults to None.
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3). Defaults to None.
@@ -110,7 +107,7 @@ class Smectite:
         self.m_activities: Dict = activities
         self.m_dielec_water: float = None
         ####################################################
-        # Parameters held by smectite
+        # Parameters held by phyllosilicate
         ####################################################
         self.m_layer_width: float = layer_width
         self.m_gamma_1: float = gamma_1
@@ -131,7 +128,7 @@ class Smectite:
         self.m_charge_stern: float = charge_stern
         self.m_charge_diffuse: float = charge_diffuse
         self.m_xd = xd
-        # Parameters subordinate to those required for smectite initialization,
+        # Parameters subordinate to those required for phyllosilicate initialization,
         # but useful to be obtained in advance
         self.m_ionic_strength = None
         self.m_kappa = None
@@ -160,7 +157,7 @@ class Smectite:
 
         # START DEBUGGING
         if self.m_logger is not None:
-            self.m_logger.info("Initialize Smectite")
+            self.m_logger.info("Initialize Phyllosilicate")
             for name, value in vars(self).items():
                 _msg = f"name: {name}, value: {value}"
                 self.m_logger.debug(_msg)
@@ -707,8 +704,26 @@ class Smectite:
             List: list containing potentials and charges
               [phi0, phib, phid, q0, qb, qs]
         """
+        # In the case of Qi=0, the initial value dependence is strong.
+        # So, change the initial value depending on the pH & concentration.
         # phi0, phib, phid, q0, qb, qs
-        xn = np.zeros(6, np.float64).reshape(-1, 1)
+        # TODO: verify this initialization
+        # TODO: pHが10以上の場合に適用できるようにする
+        xn = [0. for _ in range(6)]
+        if self.m_ion_props["H"]["Concentration"] < 1.0e-10:
+            xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1] # broken if qi=0
+        if self.m_ion_props["H"]["Concentration"] < 1.0e-8:
+            xn = [-0.2, -0.05, -0.01, -0.6, 0.6, 0.01]
+        elif self.m_ion_props["H"]["Concentration"] < 1.0e-6:
+            xn = [-0.14, 0.01, 0.001, -0.3, 0.3, 0.]
+        elif self.m_ion_props["H"]["Concentration"] < 1.0e-4:
+            xn = [-1.5e-3, 4.0e-2, 7.0e-3, -9.0e-2, 0.1, -2.0e-2]
+        else:
+            if self.m_ion_props["Na"]["Concentration"] < 1.1:
+                xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1]
+            else:
+                xn = [-0.01, 0.05, 0., -0.3, 0.3, 0.]
+        xn = np.array(xn, np.float64).reshape(-1, 1)
         residual = float_info.max
         cou = 0
         while self.m_convergence_condition < residual:
@@ -729,6 +744,9 @@ class Smectite:
             step_size = np.sum(np.sqrt(np.square(step)), axis=0)[0]
             xn_size = np.sum(np.sqrt(np.square(xn)), axis=0)[0]
             residual = step_size / xn_size
+            #! DEBUG用
+            if cou > self.m_iter_max - 10:
+                print(xn)
             if cou > self.m_iter_max:
                 raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
@@ -881,7 +899,7 @@ class Smectite:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        assert self.m_kappa is not None, "self.m_kappa is not None"
+        assert self.m_kappa is not None, "self.m_kappa is None"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -910,7 +928,7 @@ class Smectite:
         """
         # TODO: Verify that the mobility is a constant.
         assert self.m_kappa_truncated is not None, \
-            "self.m_kappa_truncated is not None"
+            "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
@@ -974,7 +992,7 @@ class Smectite:
         """
         # TODO: Verify that the mobility is a constant.
         assert self.m_kappa_stern is not None, \
-            "self.m_kappa_stern is not None"
+            "self.m_kappa_stern is None"
         assert _x <= self.m_xd, "self.m_xd < _x"
 
         _na = const.AVOGADRO_CONST
@@ -1019,13 +1037,17 @@ class Smectite:
         Returns:
             Tuple[float]: conductivity, integral error
         """
+        # When the layer thickness is less than 1 nm,, water molecules
+        # cannot pass between the layers of smectite (Shirozu, 1998;
+        # Levy et al., 2018)
+        assert self.m_layer_width >= 1.0e-9, "self.m_layer_width < 1.0e-9"
         assert self._check_if_calculated_electrical_params_truncated(), \
             "Before calculating the conductivity of interlayer, we should" \
             "obtain electrical parameters for truncated diffuse layer case"
         if self.m_xd is None:
             self.calc_xd()
         assert self.m_xd < self.m_layer_width, \
-        f"self.m_xd: {self.m_xd} < self.m_layer_width: {self.m_layer_width}"
+        f"self.m_xd: {self.m_xd} > self.m_layer_width: {self.m_layer_width}"
         if self.m_kappa_truncated is None:
             self.__calc_kappa_truncated()
         if self.m_kappa_stern is None:
@@ -1095,6 +1117,9 @@ class Smectite:
         cond_ohm_stern = self.m_xd * 2.59e-8 * abs(self.m_charge_stern)
         return cond_ohm_diffuse + cond_ohm_stern
 
+    def calc_cond_tensor(self):
+        return
+
     def get_logger(self) -> Logger:
         """ Getter for the logging.Logger
 
@@ -1103,6 +1128,6 @@ class Smectite:
         """
         return self.m_logger
 
-class Montmorillonite(Smectite):
+class Montmorillonite(Phyllosilicate):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)

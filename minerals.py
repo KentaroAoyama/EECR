@@ -30,12 +30,15 @@ class Phyllosilicate:
         Gonçalvès J., P. Rousseau-Gueutin, A. Revil, 2007, doi:10.1016/j.jcis.2007.07.023
         Leroy P., A. Revil, 2004, doi:10.1016/j.jcis.2003.08.007
         Leroy p., and Revil A., 2009, doi:10.1029/2008JB006114
+        Shirozu, 1998, Introduction to Clay Mineralogy
     """
     def __init__(self,
                  temperature: float = 298.15,
                  ion_props: Dict = const.ion_props_default,
                  activities: Dict = const.activities_default,
                  layer_width: float = 1.3e-9,
+                 tetra_hight: float = 2.2e-10,
+                 oct_hight: float = 2.2e-10,
                  gamma_1: float = 0.,
                  gamma_2: float = 5.5,
                  gamma_3: float = 5.5,
@@ -54,10 +57,15 @@ class Phyllosilicate:
                  charge_stern: float = None,
                  charge_diffuse: float = None,
                  xd: float = None,
+                 cond_stern_plus_edl: float = None,
                  convergence_condition: float = 1.0e-9,
                  iter_max: int = 1000,
                  logger: Logger = None,
                  ):
+        # TODO: fix default value in docstring
+        # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
+        # TODO: スメクタイトかつ, pH < 3, pH > 10, Cna > 3 で計算が収束しないバグをfix
+        # TODO: Goncalves(2007)のグラフと合わない箇所を修正する
         """ Initialize Phyllosilicate class.
 
         Args:
@@ -67,7 +75,9 @@ class Phyllosilicate:
             activities (Dict): key is ionic species (Na, Cl, etc.), and
                 value is activity (unit: Mol). Defaults to None.
             layer_width (float): Distance between sheets of phyllosilicate minerals
-                (unit: m). Defaults to None.
+                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
+            tetra_hight (float): Tetrahedral sheet height. Defaults to 2.2e-10 based on Shirozu (1998)
+            oct_hight (float): Octahedral sheet height. Defaults to 2.2e-10 based on Shirozu (1998)
             mobility_na_diffuselayer (float): Mobility of Na ions in an infinitely developing diffuse layer
             mobility_na_interlayer (float): Mobility of Na ions in an truncated diffuse layer
             gamma_1 (float): surface site densities of aluminol (unit: sites/nm2). Defaults to 0.
@@ -88,6 +98,7 @@ class Phyllosilicate:
             charge_stern (float, optional): charges in stern layer (unit: C/m3). Defaults to None.
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3). Defaults to None.
             xd (float, optional): Distance from mineral surface to zeta plane. Defaults to 1.0e-12.
+            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL
             convergence_condition (float): Convergence conditions for calculating potential
                 nd charge using the Newton-Raphson method. Defaults to 1.0e-9.
             iter_max (int): Maximum number of iterations when calculating potential and charge
@@ -110,6 +121,8 @@ class Phyllosilicate:
         # Parameters held by phyllosilicate
         ####################################################
         self.m_layer_width: float = layer_width
+        self.m_tetra_hight: float = tetra_hight
+        self.m_oct_hight: float = oct_hight
         self.m_gamma_1: float = gamma_1
         self.m_gamma_2: float = gamma_2
         self.m_gamma_3: float = gamma_3
@@ -128,6 +141,7 @@ class Phyllosilicate:
         self.m_charge_stern: float = charge_stern
         self.m_charge_diffuse: float = charge_diffuse
         self.m_xd = xd
+        self.m_cond_stern_plus_edl = cond_stern_plus_edl
         # Parameters subordinate to those required for phyllosilicate initialization,
         # but useful to be obtained in advance
         self.m_ionic_strength = None
@@ -143,9 +157,11 @@ class Phyllosilicate:
         self.m_iter_max = iter_max
 
         ####################################################
-        # DEBUG CONFIG
+        # DEBUG LOGGER
         ####################################################
         self.m_logger = logger
+
+        # value check
         # Currently, only H2O-NaCl fluid is implemented.
         electrolytes_assumed: List = ["Na", "Cl", "H", "OH"]
         for key in activities:
@@ -692,6 +708,27 @@ class Phyllosilicate:
         assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.m_xd, _err
 
+    def __set_init_elec_params_inf_kaolinite(self) -> List:
+        xn = [0. for _ in range(6)]
+        return xn
+
+    def __set_init_elec_params_inf_smectite(self) -> List:
+        xn = [0. for _ in range(6)]
+        if self.m_ion_props["H"]["Concentration"] < 1.0e-10:
+            xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1] # broken if qi=0
+        elif self.m_ion_props["H"]["Concentration"] < 1.0e-8:
+            xn = [-0.2, -0.05, -0.01, -0.6, 0.6, 0.01]
+        elif self.m_ion_props["H"]["Concentration"] < 1.0e-6:
+            xn = [-0.14, 0.01, 0.001, -0.3, 0.3, 0.]
+        elif self.m_ion_props["H"]["Concentration"] < 1.0e-4:
+            xn = [-1.5e-3, 4.0e-2, 7.0e-3, -9.0e-2, 0.1, -2.0e-2]
+        else:
+            if self.m_ion_props["Na"]["Concentration"] < 1.1:
+                xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1]
+            else:
+                xn = [-0.01, 0.05, 0., -0.3, 0.3, 0.]
+        return xn
+
     def calc_potentials_and_charges_inf(self) -> List:
         """ Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
@@ -710,19 +747,14 @@ class Phyllosilicate:
         # TODO: verify this initialization
         # TODO: pHが10以上の場合に適用できるようにする
         xn = [0. for _ in range(6)]
-        if self.m_ion_props["H"]["Concentration"] < 1.0e-10:
-            xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1] # broken if qi=0
-        if self.m_ion_props["H"]["Concentration"] < 1.0e-8:
-            xn = [-0.2, -0.05, -0.01, -0.6, 0.6, 0.01]
-        elif self.m_ion_props["H"]["Concentration"] < 1.0e-6:
-            xn = [-0.14, 0.01, 0.001, -0.3, 0.3, 0.]
-        elif self.m_ion_props["H"]["Concentration"] < 1.0e-4:
-            xn = [-1.5e-3, 4.0e-2, 7.0e-3, -9.0e-2, 0.1, -2.0e-2]
-        else:
-            if self.m_ion_props["Na"]["Concentration"] < 1.1:
-                xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1]
-            else:
-                xn = [-0.01, 0.05, 0., -0.3, 0.3, 0.]
+        # for smectite
+        if self.m_qi < 0 and self.m_gamma_1 == 0.:
+            xn = self.__set_init_elec_params_inf_smectite()
+        # for kaolinite
+        if self.m_qi >= 0 and self.m_gamma_1 > 0:
+            xn = self.__set_init_elec_params_inf_kaolinite()
+            pass
+
         xn = np.array(xn, np.float64).reshape(-1, 1)
         residual = float_info.max
         cou = 0
@@ -915,6 +947,31 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
+    def __calc_specific_cond_at_x_inf_diffuse(self, _x: float) -> float:
+        """Calculate the specific conductivity of the infinite diffuse layer.
+        Specific conductivity is defined as eq.(26) in Leroy and Revil (2004)
+
+        Args:
+            _x (float): Distance from zeta plane
+
+        Returns:
+            float: Specific conductivity at a point _x away from the zeta plane
+        """
+        assert self.m_kappa is not None, "self.m_kappa is None"
+        _na = const.AVOGADRO_CONST
+        _e = const.ELEMENTARY_CHARGE
+        kb = const.BOLTZMANN_CONST
+        _t = self.m_temperature
+        potential = self.m_potential_zeta *\
+            np.exp((-1.) * self.m_kappa * _x)
+        prop_na = self.m_ion_props["Na"]
+        _conc = 1000. * prop_na["Concentration"]
+        _v = prop_na["Valence"]
+        _mobility = prop_na["Mobility_InfDiffuse"]
+        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
+        _cond = _e * abs(_v) * _mobility * _na  * _conc
+        return _cond
+
     def __calc_cond_at_x_truncated_diffuse(self, _x: float) -> float:
         """ Calculate the conductivity of the inter layer.
             The following assumptions are made:
@@ -943,6 +1000,33 @@ class Phyllosilicate:
             _mobility = prop["Mobility_TrunDiffuse"]
             _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na  * _conc
+        return _cond
+
+    def __calc_specific_cond_at_x_truncated_diffuse(self, _x: float) -> float:
+        """Calculate the specific conductivity of the truncated diffuse layer.
+
+        Args:
+            _x (float): Distance from zeta plane
+
+        Returns:
+            float: Specific conductivity at a point _x away from the zeta plane
+        """
+        # TODO: Verify that the mobility is a constant.
+        assert self.m_kappa_truncated is not None, \
+            "self.m_kappa_truncated is None"
+        assert self.m_xd <= _x, "self.m_xd > _x"
+        _na = const.AVOGADRO_CONST
+        _e = const.ELEMENTARY_CHARGE
+        kb = const.BOLTZMANN_CONST
+        _t = self.m_temperature
+        potential = self.m_potential_zeta *\
+            np.exp((-1.) * self.m_kappa_truncated * _x)
+        prop_na = self.m_ion_props["Na"]
+        _conc = 1000. * prop_na["Concentration"]
+        _v = prop_na["Valence"]
+        _mobility = prop_na["Mobility_TrunDiffuse"]
+        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
+        _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
     def __calc_cond_at_x_stern_inf(self, _x: float) -> float:
@@ -975,8 +1059,37 @@ class Phyllosilicate:
             # 参考文献：doi:10.1029/2008JB006114.
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
             _mobility = prop["Mobility_InfDiffuse"] * 0.5
-            _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
+            _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
             _cond += _e * abs(_v) * _mobility * _na  * _conc
+        return _cond
+
+    def __calc_specific_cond_at_x_stern_inf(self, _x: float) -> float:
+        """ Calculate specific conductivity in the stern layer at a point _x away
+        from the surface for the infinite diffuse layer case.
+        Specific conductity is defined as eq.(26) in Leroy and Revil (2004)
+
+        Args:
+            _x (float): Distance from the mineral surface
+
+        Returns:
+            float: Specific conductivity
+        """
+        assert self.m_kappa_stern is not None, \
+            "self.m_kappa_stern is None"
+        assert _x <= self.m_xd, "self.m_xd < _x"
+        _na = const.AVOGADRO_CONST
+        _e = const.ELEMENTARY_CHARGE
+        kb = const.BOLTZMANN_CONST
+        _t = self.m_temperature
+        potential = self.m_potential_stern * \
+            np.exp((-1.) * self.m_kappa_stern * _x)
+        prop_na: Dict = self.m_ion_props["Na"]
+        _conc = 1000. * prop_na["Concentration"]
+        _v = prop_na["Valence"] # 1
+        # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
+        _mobility = prop_na["Mobility_InfDiffuse"] * 0.5
+        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
+        _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
     def __calc_cond_at_x_stern_truncated(self, _x: float) -> float:
@@ -1005,12 +1118,41 @@ class Phyllosilicate:
         for _, prop in self.m_ion_props.items():
             _conc = 1000. * prop["Concentration"]
             _v = prop["Valence"]
-            # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
-            # 参考文献：doi:10.1029/2008JB006114.
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
             _mobility = prop["Mobility_TrunDiffuse"] * 0.5
-            _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
+            _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
             _cond += _e * abs(_v) * _mobility * _na  * _conc
+        return _cond
+
+    def __calc_specific_cond_at_x_stern_truncated(self, _x: float) -> float:
+        """ Calculate specific conductivity in the stern layer at a point _x away
+        from the surface for the truncated diffuse layer case.
+        Specific conductity is defined as eq.(26) in Leroy and Revil (2004)
+
+        Args:
+            _x (float): Distance from the mineral surface
+
+        Returns:
+            float: Specific conductivity
+        """
+        assert self.m_kappa_stern is not None, \
+            "self.m_kappa_stern is None"
+        assert _x <= self.m_xd, "self.m_xd < _x"
+        _na = const.AVOGADRO_CONST
+        _e = const.ELEMENTARY_CHARGE
+        kb = const.BOLTZMANN_CONST
+        _t = self.m_temperature
+        potential = self.m_potential_stern * \
+            np.exp((-1.) * self.m_kappa_stern * _x)
+        prop_na: Dict = self.m_ion_props["Na"]
+        _conc = 1000. * prop_na["Concentration"]
+        _v = prop_na["Valence"] # 1
+        # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
+        # 参考文献：doi:10.1029/2008JB006114.
+        # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
+        _mobility = prop_na["Mobility_TrunDiffuse"] * 0.5
+        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
+        _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
     def __calc_kappa_truncated(self) -> None:
@@ -1030,9 +1172,7 @@ class Phyllosilicate:
             * np.log(self.m_potential_stern / self.m_potential_zeta)
 
     def calc_cond_interlayer(self) -> Tuple[float]:
-        """Calculate the conductivity of the inter layer
-         Note that we assume that ions in the stern layer do not
-          contribute to conductivity
+        """Calculate the Stern + EDL conductivity of the inter layer
 
         Returns:
             Tuple[float]: conductivity, integral error
@@ -1060,6 +1200,7 @@ class Phyllosilicate:
                                       0.,
                                       self.m_xd)
         cond = (cond_ohmic_diffuse + cond_ohmic_stern) / _xdl
+        self.m_cond_stern_plus_edl = cond
         if self.m_logger is not None:
             self.m_logger.info("Finished the calculation of interlayer conductivity")
             self.m_logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
@@ -1067,9 +1208,8 @@ class Phyllosilicate:
         return cond, _err1 + _err2
 
     def calc_cond_infdiffuse(self) -> Tuple[float]:
-        """Calculate the conductivity of the inter layer
-         Note that we assume that ions in the stern layer do not
-          contribute to conductivity
+        """Calculate the Stern + EDL conductivity for the inifinite diffuse
+         layer case.
 
         Returns:
             Tuple[float]: conductivity, integral error
@@ -1091,6 +1231,7 @@ class Phyllosilicate:
         # Based on eq.(26) of Leroy & Revil (2004), we assume that Na
         # ions are densely charged on the surface
         cond = (cond_ohmic_diffuse + cond_ohmic_stern) / _xdl
+        self.m_cond_stern_plus_edl = cond
         if self.m_logger is not None:
             self.m_logger.info("Finished the calculation of infinite diffuse "\
                 "layer conductivity")
@@ -1098,27 +1239,59 @@ class Phyllosilicate:
             self.m_logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
         return cond, _err1 + _err2
 
-    def calc_specific_surface_cond(self) -> float:
-        # Leroy & Revil, 2003のFig.9, Fig10 (a)と比較するために作成した関数
-        # TODO: 計算方法が分からないので, doi:10.1016/j.jcis.2003.08.007を読んで理解する
+    def calc_specific_surface_cond_inf(self) -> float:
+        """ Calculate specific surface conductivity of infinite diffuse layer
+            Specific surface conductivity is defined as eq.(26) in Leroy and Revil (2004)
+            Prepared for the purpose of comparison with Fig. 9, Fig. 10
+             (a) of Leroy & Revil, 2004
+
+        Returns:
+            float: Specific surface conductivity
+        """
+        # Leroy & Revil, 2004のFig.9, Fig10 (a)と比較するために作成した関数
         assert self._check_if_calculated_electrical_params_inf(), \
             "Before calculating the specific surface conductivity of" \
             "inffinite diffuse layer, we should obtain electrical" \
             "parameters for infinite diffuse layer case"
         if self.m_xd is None:
             self.calc_xd()
+        if self.m_kappa_stern is None:
+            self.__calc_kappa_stern()
         _xdl = self.m_xd + 1. / self.m_kappa
-        # Based on eq.(26) of Leroy & Revil (2004), we assume that Na
-        # ions are densely charged on the surface
-        cond_ohm_diffuse = self.m_ion_props["Na"]["Mobility_InfDiffuse"] \
-            * abs(self.m_charge_diffuse)
+        cond_ohmic_diffuse, _err1 = quad(self.__calc_specific_cond_at_x_inf_diffuse,
+                                        self.m_xd,
+                                        _xdl)
+        cond_ohmic_stern, _err2 = quad(self.__calc_specific_cond_at_x_stern_inf,
+                                      0.,
+                                      self.m_xd)
         # In the dynamic stern layer assumtion, stern layer has surtain
         # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
-        cond_ohm_stern = self.m_xd * 2.59e-8 * abs(self.m_charge_stern)
-        return cond_ohm_diffuse + cond_ohm_stern
+        return cond_ohmic_diffuse + cond_ohmic_stern, _err1 + _err2
 
-    def calc_cond_tensor(self):
-        return
+    def calc_cond_tensor_with_sq_oxyz(self, edge_length: float) -> np.ndarray:
+        """Calculate conductivity tensor in smectite with layers aligned
+         perpendicular to the z-plane. The T-O-T plane is assumed to be an
+         insulator, following Watanabe (2005).
+
+        Args:
+            edge_length (float): Lengths of the edges of the cube's cells
+
+        Returns:
+            np.ndarray: 3 rows and 3 columns condutivity tensor
+        """
+        assert self._check_if_calculated_electrical_params_truncated, \
+            "Before calculating the conductivity of the smectite cell, we should" \
+            "calculate electrical parameters for truncated diffuse layer case"
+        sigma_intra = self.m_cond_stern_plus_edl
+        assert sigma_intra is not None, "Before calculating the conductivity" \
+            "of the smectite cell, we should calculate interlayer conductivity"
+        sigma_h = sigma_intra * self.m_layer_width / edge_length
+        sigma_v = 0.
+        cond_tensor = np.array([[sigma_h, 0. ,0.],
+                                [0., sigma_h ,0.],
+                                [0., 0., sigma_v]],
+                                dtype=np.float64)
+        return cond_tensor
 
     def get_logger(self) -> Logger:
         """ Getter for the logging.Logger

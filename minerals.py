@@ -1,4 +1,4 @@
-# pyrite実装する
+# TODO: pyrite実装する
 
 from typing import Dict, List, Tuple
 from logging import Logger
@@ -10,6 +10,9 @@ import numpy as np
 from scipy.integrate import quad
 
 import constants as const
+
+ion_props_default = const.ion_props_default.copy()
+activities_default = const.activities_default.copy()
 
 # Load global parameters
 # for smectite
@@ -46,8 +49,8 @@ class Phyllosilicate:
     """
     def __init__(self,
                  temperature: float = 298.15,
-                 ion_props: Dict = const.ion_props_default,
-                 activities: Dict = const.activities_default,
+                 ion_props: Dict = ion_props_default,
+                 activities: Dict = activities_default,
                  layer_width: float = 1.3e-9,
                  tetra_hight: float = 2.2e-10,
                  oct_hight: float = 2.2e-10,
@@ -76,7 +79,6 @@ class Phyllosilicate:
                  ):
         # TODO: fix default value in docstring
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
-        # TODO: スメクタイトかつ, pH < 3, pH > 10, Cna > 3 で計算が収束しないバグをfix
         # TODO: Goncalves(2007)のグラフと合わない箇所を修正する
         """ Initialize Phyllosilicate class.
 
@@ -702,7 +704,7 @@ class Phyllosilicate:
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
         _qs = self.m_charge_diffuse
-        xd_ls:List = [1.0e-11 + float(i) * 1.0e-11 for i in range(1000)]
+        xd_ls:List = [1.0e-12 + float(i) * 1.0e-12 for i in range(1000)]
         qs_ls: List = []
         err_ls: List = []
         for _xd_tmp in xd_ls:

@@ -3,11 +3,23 @@
 from typing import Dict, List, Tuple
 from logging import Logger
 from sys import float_info
+from os import path, getcwd, PathLike
+import pickle
 
 import numpy as np
 from scipy.integrate import quad
 
 import constants as const
+
+# Load global parameters
+# for smectite
+smectite_init_pth: PathLike = path.join(getcwd(), "params", "smectite_init.pkl")
+with open(smectite_init_pth, "rb") as pkf:
+    smectite_init_params = pickle.load(pkf)
+# for kaolinite
+kaolinite_init_pth: PathLike = path.join(getcwd(), "params", "kaolinite_init.pkl")
+with open(kaolinite_init_pth, "rb") as pkf:
+    kaolinite_init_params = pickle.load(pkf)
 
 class Phyllosilicate:
     """
@@ -690,7 +702,7 @@ class Phyllosilicate:
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
         _qs = self.m_charge_diffuse
-        xd_ls:List = [1.0e-10 + float(i) * 1.0e-10 for i in range(100)]
+        xd_ls:List = [1.0e-11 + float(i) * 1.0e-11 for i in range(1000)]
         qs_ls: List = []
         err_ls: List = []
         for _xd_tmp in xd_ls:
@@ -708,26 +720,6 @@ class Phyllosilicate:
         assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.m_xd, _err
 
-    def __set_init_elec_params_inf_kaolinite(self) -> List:
-        xn = [0. for _ in range(6)]
-        return xn
-
-    def __set_init_elec_params_inf_smectite(self) -> List:
-        xn = [0. for _ in range(6)]
-        if self.m_ion_props["H"]["Concentration"] < 1.0e-10:
-            xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1] # broken if qi=0
-        elif self.m_ion_props["H"]["Concentration"] < 1.0e-8:
-            xn = [-0.2, -0.05, -0.01, -0.6, 0.6, 0.01]
-        elif self.m_ion_props["H"]["Concentration"] < 1.0e-6:
-            xn = [-0.14, 0.01, 0.001, -0.3, 0.3, 0.]
-        elif self.m_ion_props["H"]["Concentration"] < 1.0e-4:
-            xn = [-1.5e-3, 4.0e-2, 7.0e-3, -9.0e-2, 0.1, -2.0e-2]
-        else:
-            if self.m_ion_props["Na"]["Concentration"] < 1.1:
-                xn = [-0.1, -0.05, -0.05, -0.1, -0., 0.1]
-            else:
-                xn = [-0.01, 0.05, 0., -0.3, 0.3, 0.]
-        return xn
 
     def calc_potentials_and_charges_inf(self) -> List:
         """ Calculate the potential and charge of each layer
@@ -741,20 +733,19 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, q0, qb, qs]
         """
-        # In the case of Qi=0, the initial value dependence is strong.
-        # So, change the initial value depending on the pH & concentration.
-        # phi0, phib, phid, q0, qb, qs
-        # TODO: verify this initialization
-        # TODO: pHが10以上の場合に適用できるようにする
-        xn = [0. for _ in range(6)]
+        # Set initial electrical parameters
         # for smectite
-        if self.m_qi < 0 and self.m_gamma_1 == 0.:
-            xn = self.__set_init_elec_params_inf_smectite()
+        if self.m_qi < 0:
+            params = smectite_init_params
         # for kaolinite
-        if self.m_qi >= 0 and self.m_gamma_1 > 0:
-            xn = self.__set_init_elec_params_inf_kaolinite()
-            pass
-
+        else:
+            params = kaolinite_init_params
+        ch = self.m_ion_props["H"]["Concentration"]
+        cna = self.m_ion_props["Na"]["Concentration"]
+        ch_cna_arr = np.array(list(params.keys()))
+        ch_cna_arr_diff = ch_cna_arr - np.array([ch, cna])
+        _idx = np.argmin(np.sum(np.square(ch_cna_arr_diff), axis=1))
+        xn = params[(ch_cna_arr[_idx][0], ch_cna_arr[_idx][1])]
         xn = np.array(xn, np.float64).reshape(-1, 1)
         residual = float_info.max
         cou = 0
@@ -776,9 +767,6 @@ class Phyllosilicate:
             step_size = np.sum(np.sqrt(np.square(step)), axis=0)[0]
             xn_size = np.sum(np.sqrt(np.square(xn)), axis=0)[0]
             residual = step_size / xn_size
-            #! DEBUG用
-            if cou > self.m_iter_max - 10:
-                print(xn)
             if cou > self.m_iter_max:
                 raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1

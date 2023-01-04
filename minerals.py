@@ -1,9 +1,9 @@
 # TODO: pyrite実装する
-
+# TODO: 平衡定数はminerals内部で計算する仕様に変更する
 from typing import Dict, List, Tuple
 from logging import Logger
 from sys import float_info
-from os import path, getcwd, PathLike
+from os import path, PathLike
 import pickle
 
 import numpy as np
@@ -13,14 +13,17 @@ import constants as const
 
 ion_props_default = const.ion_props_default.copy()
 activities_default = const.activities_default.copy()
-
 # Load global parameters
 # for smectite
-smectite_init_pth: PathLike = path.join(getcwd(), "params", "smectite_init.pkl")
+smectite_init_pth: PathLike = path.join(path.dirname(__file__),
+                                        "params",
+                                        "smectite_inf_init.pkl")
 with open(smectite_init_pth, "rb") as pkf:
-    smectite_init_params = pickle.load(pkf)
+    smectite_inf_init_params = pickle.load(pkf)
 # for kaolinite
-kaolinite_init_pth: PathLike = path.join(getcwd(), "params", "kaolinite_init.pkl")
+kaolinite_init_pth: PathLike = path.join(path.dirname(__file__),
+                                         "params",
+                                         "kaolinite_init.pkl")
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
@@ -723,7 +726,7 @@ class Phyllosilicate:
         return self.m_xd, _err
 
 
-    def calc_potentials_and_charges_inf(self) -> List:
+    def calc_potentials_and_charges_inf(self, x_init: List = None) -> List:
         """ Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
         eq.(16)~(21) of Gonçalvès et al. (2007) is used.
@@ -735,20 +738,23 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, q0, qb, qs]
         """
-        # Set initial electrical parameters
-        # for smectite
-        if self.m_qi < 0:
-            params = smectite_init_params
-        # for kaolinite
-        else:
-            params = kaolinite_init_params
-        ch = self.m_ion_props["H"]["Concentration"]
-        cna = self.m_ion_props["Na"]["Concentration"]
-        ch_cna_arr = np.array(list(params.keys()))
-        ch_cna_arr_diff = ch_cna_arr - np.array([ch, cna])
-        _idx = np.argmin(np.sum(np.square(ch_cna_arr_diff), axis=1))
-        xn = params[(ch_cna_arr[_idx][0], ch_cna_arr[_idx][1])]
-        xn = np.array(xn, np.float64).reshape(-1, 1)
+        if x_init is None:
+            # Set initial electrical parameters
+            if self.m_qi < 0:
+                # for smectite
+                params = smectite_inf_init_params
+            else:
+                # for kaolinite
+                params = kaolinite_init_params
+            ch = self.m_ion_props["H"]["Concentration"]
+            ch_ls = list(params.keys())
+            _idx_ch: int = np.argmin(np.square(np.array(ch_ls, dtype=np.float64) - ch))
+            cna = self.m_ion_props["Na"]["Concentration"]
+            cna_dct: Dict = params[ch_ls[_idx_ch]]
+            cna_ls = list(cna_dct.keys())
+            _idx_cna: int = np.argmin(np.square(np.array(cna_ls, dtype=np.float64) - cna))
+            x_init = cna_dct[cna_ls[_idx_cna]]
+        xn = np.array(x_init, np.float64).reshape(-1, 1)
         residual = float_info.max
         cou = 0
         while self.m_convergence_condition < residual:
@@ -791,7 +797,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"m_charge_diffuse: {self.m_charge_diffuse}")
         return xn
 
-    def calc_potentials_and_charges_truncated(self) -> List:
+    def calc_potentials_and_charges_truncated(self, x_init: List = None) -> List:
         """ Calculate the potential and charge of each layer
         in the case of truncated diffuse layer development.
         eq.(16)~(20), (32), (33) of Gonçalvès et al. (2007) is used.
@@ -809,13 +815,14 @@ class Phyllosilicate:
             self.calc_potentials_and_charges_inf()
         if self.m_xd is None:
             self.calc_xd()
-        x_init = [self.m_potential_0,
-                  self.m_potential_stern,
-                  self.m_potential_zeta,
-                  self.m_potential_zeta * 0.5,
-                  self.m_charge_0,
-                  self.m_charge_stern,
-                  self.m_charge_diffuse]
+        if x_init is None:
+            x_init = [self.m_potential_0,
+                      self.m_potential_stern,
+                      self.m_potential_zeta,
+                      self.m_potential_zeta * 0.5,
+                      self.m_charge_0,
+                      self.m_charge_stern,
+                      self.m_charge_diffuse]
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         residual = float_info.max
         cou = 0
@@ -839,6 +846,7 @@ class Phyllosilicate:
             xn_size: float = np.sum(np.sqrt(np.square(xn)), axis=0)[0]
             residual = step_size / xn_size
             if cou > self.m_iter_max:
+                print(f"xn: {xn}") #!
                 raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
         xn = xn.T.tolist()[0]

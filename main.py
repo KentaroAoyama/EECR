@@ -1,4 +1,3 @@
-# TODO: テスト項目をまとめて, 関数に実装する
 # 比較する実験データ：
 # Revil and Leroy (1998)のFig.3 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
 # Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
@@ -9,11 +8,7 @@
 # Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
 # 1. ポテンシャル：
 #  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
-# 2. pHと電解質の塩濃度をいろいろと変えてニュートンラフソン法がきちんと収束するか
-#   pHが9以上2以下なら問題ない
-# とりあえずの値域: 
-# NaCl濃度：1e-5~5
-# pH: 1~14
+
 from typing import List, Dict
 from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
@@ -117,7 +112,7 @@ def get_kaolinite_init_params():
                 xn = [-0.11981927328918424, -0.11473565574493996, -0.11060450870500958, -0.01067559684291298, 0.008391072529831484, 0.0022845243130814965]
             elif i == 0 and 0.001 <= ch:
                 xn = [0.048734941903571076, 0.052339692399616285, 0.045514985770143554, -0.007569976041694926, 0.011344038807793347, -0.00377406276609842]
-            xn = kaolinite.calc_potentials_and_charges_inf(xn)
+            xn = kaolinite.calc_potentials_and_charges_inf()
             ch_cna_init_dict.setdefault((ch, cna), xn)
 
     with open(f"./kaolinite_init.pkl", "wb") as yf:
@@ -272,75 +267,57 @@ def main():
     k3 = const.calc_equibilium_const(const.dg_xh, temperature)
     k4 = const.calc_equibilium_const(const.dg_xna, temperature)
     # test
-    interval = (1.0e-1 - 1.0e-14) / 1000.
-    ch_ls = [1.0e-14, 1.0e-13, 1.0e-12, 1.0e-11, 1.0e-10, 1.0e-9, 1.0e-8,1.0e-7,1.0e-6,1.0e-5,1.0e-4,1.0e-3,1.0e-2,1.0e-1]
-    ph_ls = -1. * np.log10(ch_ls)
-    interval = (5 - 0.00001) / 1000. # 0始まりはだめかも
-    conc_ls = [0.00001 + i * interval for i in range(100)]
-    interval = (398. - 298.) / 100.
-    tempe_ls: List = [298. + i * interval for i in range(100)]
     interval = (5.0e-9 - 1.0e-9) / 100.
     r_ls: List = [1.0e-9 + i * interval for i in range(100)]
     phid_ls = []
     cond_ls: List = []
-    xn0 = [-0.483487410763895, -0.28780440715837535, -0.2385350836636377,
-    -0.4109343075715913, 0.3836883716790014, 0.02724593589258992]
-    xn1 = [-0.4558996142383811, -0.15418575952981733, -0.09214633957638822,
-          -0.6335990948879838, 0.5992912956537376, 0.0343077992342463]
-    ch_cna_init_dict: Dict = {}
-    for ch in ch_ls:
-        print(f"ch: {ch}") #!
-        for i, cna in enumerate(conc_ls):
-            # print(f"ch, cna: {ch}, {cna}")
-            ion_props = const.ion_props_default.copy()
-            activities = const.activities_default.copy()
-            ch = ch
-            ion_props["H"]["Concentration"] = ch
-            ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-            ion_props["Na"]["Concentration"] = cna
-            ion_props["Cl"]["Concentration"] = cna
-            activities["H"] = ch
-            activities["OH"] = 1.0e-14 / ch
-            activities["Na"] = cna
-            activities["Cl"] = cna
-            logger = create_logger(cna)
-            smectite = Phyllosilicate(temperature = 298.15,
-                                    ion_props = ion_props,
-                                    activities = activities,
-                                    layer_width = 1.14e-9,
-                                    gamma_1 = 5.5,
-                                    gamma_2 = 5.5,
-                                    gamma_3 = 5.5,
-                                    qi = 0.,
-                                    k1 = k1,
-                                    k2 = k2,
-                                    k3 = k3,
-                                    k4 = k4,
-                                    c1 = 2.1,
-                                    c2 = 0.553,
-                                    xd = None,
-                                    convergence_condition = 1.0e-9,
-                                    iter_max = 10000,
-                                    logger = None, #!
-                                    )
-            xn = smectite.calc_potentials_and_charges_inf()
-
+    for _r in r_ls:
+        ion_props = const.ion_props_default.copy()
+        activities = const.activities_default.copy()
+        ch = 1.0e-7
+        cna = 1.0e-3
+        ion_props["H"]["Concentration"] = ch
+        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+        ion_props["Na"]["Concentration"] = cna
+        ion_props["Cl"]["Concentration"] = cna
+        activities["H"] = ch
+        activities["OH"] = 1.0e-14 / ch
+        activities["Na"] = cna
+        activities["Cl"] = cna
+        logger = create_logger(cna)
+        smectite = Phyllosilicate(temperature = 298.15,
+                                ion_props = ion_props,
+                                activities = activities,
+                                layer_width = _r,
+                                gamma_1 = 0.,
+                                gamma_2 = 5.5,
+                                gamma_3 = 5.5,
+                                qi = -1.,
+                                k1 = k1,
+                                k2 = k2,
+                                k3 = k3,
+                                k4 = k4,
+                                c1 = 2.1,
+                                c2 = 0.553,
+                                xd = None,
+                                convergence_condition = 1.0e-9,
+                                iter_max = 10000,
+                                logger = None, #!
+                                )
+        xn = smectite.calc_potentials_and_charges_truncated()
+        print(f"m_xd: {smectite.m_xd}")
+        phid_ls.append(smectite.m_charge_diffuse)
     fig, ax = plt.subplots()
-    ax.invert_xaxis()
+    #ax.invert_xaxis()
     # ax.invert_yaxis()
     # ph_arr = (-1.) * np.log10(np.array(ph_ls))
-    ax.plot(phid_ls, cond_ls)
+    ax.plot(r_ls, phid_ls)
     # ax.set_xscale("log")
     # ax.set_yscale("log")
     # ax.plot(phid_ls, sp_cond_ls) #!
     # ax.plot(np.log10(cf_ls).tolist(), sp_cond_ls)
     # ax.plot(np.log10(cf_ls).tolist(), qb_ls)
     # ax.plot(np.log10(cf_ls).tolist(), qs_ls)
-    start = time.time()
-    with open(f"./smectite_init.pkl", "rb") as yf:
-        f = pickle.load(yf)
-    end = time.time()
-    print(f"elasped time to load pickle: {end-start}") #!
     ax.grid()
     plt.savefig('./temp.png')
 if __name__ == "__main__":

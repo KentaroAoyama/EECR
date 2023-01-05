@@ -82,6 +82,7 @@ class Phyllosilicate:
                  logger: Logger = None,
                  ):
         # TODO: fix default value in docstring
+        # TODO: iter_maxは計算を行う関数内のlocal argsと変更する
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
         """ Initialize Phyllosilicate class.
 
@@ -782,8 +783,7 @@ class Phyllosilicate:
         qs_diff = np.square(np.array(qs_ls) - _qs)
         _idx = np.argmin(qs_diff)
         _xd = xd_ls[_idx]
-        # TODO: xdがlayer_width/2を超えないようにするとエラーが起きるので、修正する
-        # 初期値の設定によるのかもしれない。原因不明
+        # TODO: 以下加えたほうがよいのか検討する
         # if self.m_layer_width * 0.5 < _xd:
         #     _xd = self.m_layer_width * 0.5
         self.m_xd = _xd
@@ -795,16 +795,16 @@ class Phyllosilicate:
     def calc_potentials_and_charges_inf(self,
                                         x_init: List = None,
                                         _beta: float = 0.9,
-                                        _lamda: float = 0.5) -> List:
+                                        _lamda: float = 2.) -> List:
         """ Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
         eq.(16)~(21) of Gonçalvès et al. (2007) is used.
         Damped Newton-Raphson method is applied.
 
         x_init (List): Initial electrical parameters (length is 6)
-        _beta (float): Hyper parameter for damping. The larger this value,
+        _beta (float): Hyper parameter for damping(0, 1). The larger this value,
             the smaller the damping effect.
-        _lamda (float): Hyper parameter for damping. The amount by which
+        _lamda (float): Hyper parameter for damping([1, ∞]). The amount by which
             the step-width coefficients are updated in a single iteration
 
         Raises:
@@ -817,10 +817,10 @@ class Phyllosilicate:
         if x_init is None:
             # Set initial electrical parameters
             if self.m_qi < 0 and self.m_gamma_1 == 0.:
-                # for smectite
+                # for smectite case
                 params = smectite_inf_init_params
             elif self.m_qi == 0 and self.m_gamma_1 > 0.:
-                # for kaolinite
+                # for kaolinite case
                 params = kaolinite_init_params
             else:
                 # TODO: Prepare more initial parameters in other minerals.
@@ -892,7 +892,7 @@ class Phyllosilicate:
     def calc_potentials_and_charges_truncated(self,
                                               x_init: List = None,
                                               _beta: float = 0.9,
-                                              _lamda: float = 0.5) -> List:
+                                              _lamda: float = 2.) -> List:
         """ Calculate the potential and charge of each layer
         in the case of truncated diffuse layer development.
         eq.(16)~(20), (32), (33) of Gonçalvès et al. (2007) is used.
@@ -960,6 +960,8 @@ class Phyllosilicate:
             fn = fn_tmp
             norm_fn = _norm_fn_tmp
             if cou > self.m_iter_max:
+                print(f"xn: {xn}") #!
+                print(f"fn: {fn}") #!
                 raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
         xn = xn.T.tolist()[0]
@@ -1218,7 +1220,6 @@ class Phyllosilicate:
         assert self.m_kappa_stern is not None, \
             "self.m_kappa_stern is None"
         assert _x <= self.m_xd, "self.m_xd < _x"
-
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST

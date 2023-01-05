@@ -21,3 +21,5 @@ test/Leroy_fig9.png
 test/Revil1998_Fig3.png
 utils.py
 *.pkl
+__pycache__/minerals.cpython-39.pyc
+__pycache__/constants.cpython-39.pyc

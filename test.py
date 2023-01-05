@@ -1,3 +1,5 @@
+# pylint: disable=import-error
+
 # TODO: テスト項目をまとめて, 関数に実装する
 # 比較する実験データ：
 # Revil and Glover (1998)のFig.2 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
@@ -9,12 +11,16 @@
 # Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
 # 1. ポテンシャル：
 #  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
-
+# TODO: 下記で初期値が定まっていない問題をfix
+# CH: 1.0476157527896662e-11, CNa: 4.691986824612529以上
+# CH: 1.9179102616724927e-11, CNa 4.112以上
+# 2.5950242113997427e-11, 3.603992840801795
 from typing import List, Dict
 from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
 import pickle
 from os import path, getcwd
+import math
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -153,7 +159,7 @@ def get_kaolinite_init_params():
             _cna_dct: Dict = ch_cna_init_dict.setdefault(ch, {})
             _cna_dct.setdefault(cna, xn)
         # value check
-        if float('inf') in xn or sum([abs(i) for i in xn]) > 10.:
+        if float('inf') in xn or float('nan') or sum([abs(i) for i in xn]) > 10.:
             print("breaked") #!
             break
     with open(f"./kaolinite_init.pkl", "wb") as yf:
@@ -239,7 +245,7 @@ def get_smectite_init_params_inf():
             _cna_dct: Dict = ch_cna_init_dict.setdefault(ch, {})
             _cna_dct.setdefault(cna, xn)
         # value check
-        if float('inf') in xn or sum([abs(i) for i in xn]) > 10.:
+        if float('inf') in xn or float('nan') in xn or sum([abs(i) for i in xn]) > 10.:
             print("breaked") #!
             break
     with open(f"./smectite_init_inf.pkl", "wb") as pklf:
@@ -256,9 +262,11 @@ def get_smectite_init_params_truncated():
     temperature = 298.15
 
     ch_ls = np.logspace(-14, -1, 100, base=10.).tolist()
-    conc_ls = np.logspace(-5., 0.69, 100, base=10.).tolist() # 5Mまで
+    conc_ls = np.logspace(-5., 0.5, 200, base=10.).tolist() # 3Mまで
     ch_cna_init_dict: Dict = {}
     for ch in ch_ls:
+        if ch < 8.697490026177835e-11:
+            continue
         print(f"ch: {ch}") #!
         for j, cna in enumerate(conc_ls):
             print(f"cna: {cna}") #!
@@ -282,7 +290,18 @@ def get_smectite_init_params_truncated():
                                       gamma_3 = 5.5,
                                       qi = -1.,
                                      )
-
+            if math.isclose(ch, 1.0476157527896662e-11, abs_tol=1.0e-12) and cna > 4.691:
+                continue
+            if math.isclose(ch, 1.9179102616724927e-11, abs_tol=1.0e-12) and cna > 4.112:
+                continue
+            if math.isclose(ch, 2.5950242113997427e-11, abs_tol=1.0e-12) and cna > 3.60:
+                continue
+            if math.isclose(ch, 4.750810162102813e-11, abs_tol=1.0e-12) and cna > 3.37:
+                continue
+            if math.isclose(ch, 6.428073117284319e-11, abs_tol=1.0e-12) and cna > 3.158:
+                continue
+            if math.isclose(ch, 8.697490026177835e-11, abs_tol=1.0e-12) and cna > 2.957:
+                continue
             if ch < 1.0e-13:
                 if j == 0:
                     xn = smectite.calc_potentials_and_charges_inf()
@@ -327,14 +346,18 @@ def get_smectite_init_params_truncated():
                 if j == 0:
                     xn = smectite.calc_potentials_and_charges_inf()
                     xn.insert(3, xn[2] / 2.)
-            # print(f"xn before: {xn}") #!
+            # xn = smectite.calc_potentials_and_charges_inf().copy()
+            # xn.insert(3, xn[2] / 2.)
+            print(f"xn before: {xn}") #!
+            smectite.calc_potentials_and_charges_inf()
+            smectite.calc_xd()
+            print(f"smectite.m_xd: {smectite.m_xd}") #!
             xn = smectite.calc_potentials_and_charges_truncated(xn)
-            # smectite.calc_xd()
             print(f"xn after: {xn}") #!
             cna_dct: Dict = ch_cna_init_dict.setdefault(ch, {})
             cna_dct.setdefault(cna, xn)
         # value check
-        if float('inf') in xn or sum([abs(i) for i in xn]) > 10.:
+        if float('inf') in xn or float('nan') in xn or sum([abs(i) for i in xn]) > 3. or np.nan in xn:
             print("breaked") #!
             break
 

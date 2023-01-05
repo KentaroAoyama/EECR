@@ -8,6 +8,7 @@
 # Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
 # 1. ポテンシャル：
 #  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
+# TODO: pyrite実装する
 
 from typing import List, Dict
 from logging import getLogger, FileHandler, Formatter, DEBUG

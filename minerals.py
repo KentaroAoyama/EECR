@@ -1,5 +1,5 @@
-# TODO: pyrite実装する
-# TODO: 平衡定数はminerals内部で計算する仕様に変更する
+# pylint: disable=import-error
+# pylint: disable=invalid-name
 from typing import Dict, List, Tuple
 from logging import Logger
 from sys import float_info
@@ -14,12 +14,20 @@ import constants as const
 ion_props_default = const.ion_props_default.copy()
 activities_default = const.activities_default.copy()
 # Load global parameters
-# for smectite
-smectite_init_pth: PathLike = path.join(path.dirname(__file__),
+# for smectite, infinite diffuse layer case
+smectite_inf_init_pth: PathLike = path.join(path.dirname(__file__),
                                         "params",
                                         "smectite_inf_init.pkl")
-with open(smectite_init_pth, "rb") as pkf:
+with open(smectite_inf_init_pth, "rb") as pkf:
     smectite_inf_init_params = pickle.load(pkf)
+
+# for smectite, truncated diffuse layer case
+smectite_trun_init_pth: PathLike = path.join(path.dirname(__file__),
+                                             "params",
+                                             "smectite_trun_init.pkl")
+with open(smectite_trun_init_pth, "rb") as pkf:
+    smectite_trun_init_params = pickle.load(pkf)
+
 # for kaolinite
 kaolinite_init_pth: PathLike = path.join(path.dirname(__file__),
                                          "params",
@@ -50,23 +58,16 @@ class Phyllosilicate:
         Leroy p., and Revil A., 2009, doi:10.1029/2008JB006114
         Shirozu, 1998, Introduction to Clay Mineralogy
     """
+    # pylint: disable=dangerous-default-value
     def __init__(self,
                  temperature: float = 298.15,
-                 ion_props: Dict = ion_props_default,
-                 activities: Dict = activities_default,
+                 ion_props: Dict = ion_props_default.copy(),
+                 activities: Dict = activities_default.copy(),
                  layer_width: float = 1.3e-9,
-                 tetra_hight: float = 2.2e-10,
-                 oct_hight: float = 2.2e-10,
                  gamma_1: float = 0.,
                  gamma_2: float = 5.5,
                  gamma_3: float = 5.5,
                  qi: float = -1.,
-                 k1: float = 1.0e-10,
-                 k2: float = 1.3e-6,
-                 k3: float = 0.01,
-                 k4: float = 0.95,
-                 c1: float = 1.0,
-                 c2: float = 0.2,
                  potential_0: float = None,
                  potential_stern: float = None,
                  potential_zeta: float = None,
@@ -82,7 +83,6 @@ class Phyllosilicate:
                  ):
         # TODO: fix default value in docstring
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
-        # TODO: Goncalves(2007)のグラフと合わない箇所を修正する
         """ Initialize Phyllosilicate class.
 
         Args:
@@ -93,20 +93,12 @@ class Phyllosilicate:
                 value is activity (unit: Mol). Defaults to None.
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            tetra_hight (float): Tetrahedral sheet height. Defaults to 2.2e-10 based on Shirozu (1998)
-            oct_hight (float): Octahedral sheet height. Defaults to 2.2e-10 based on Shirozu (1998)
             mobility_na_diffuselayer (float): Mobility of Na ions in an infinitely developing diffuse layer
             mobility_na_interlayer (float): Mobility of Na ions in an truncated diffuse layer
             gamma_1 (float): surface site densities of aluminol (unit: sites/nm2). Defaults to 0.
             gamma_2 (float): surface site densities of sianol (unit: sites/nm2). Defaults to 5.5.
             gamma_3 (float): surface site densities of >Si-O-Al< (unit: sites/nm2). Defaults to 5.5.
             qi (float): layer charge density (charge/nm2). Defaults to -1.
-            k1 (float): equilibrium constant of eq.(12) in Gonçalvès et al. (2007). Defaults to None.
-            k2 (float): equilibrium constant of eq.(13) in Gonçalvès et al. (2007). Defaults to 1.3e-6.
-            k3 (float): equilibrium constant of eq.(14) in Gonçalvès et al. (2007). Defaults to 0.01.
-            k4 (float): equilibrium constant of eq.(15) in Gonçalvès et al. (2007). Defaults to 0.95.
-            c1 (float): capacitance of stern layer (unit: F/m2). Defaults to 1.0.
-            c2 (float): capacitance of diffuse layer (unit: F/m2). Defaults to 0.2.
             potential_0 (float, optional): surface potential (unit: V). Defaults to None.
             potential_stern (float, optional): stern plane potential (unit: V). Defaults to None.
             potential_zeta (float, optional): zeta plane potential (unit: V). Defaults to None.
@@ -114,7 +106,7 @@ class Phyllosilicate:
             charge_0 (float, optional): charges in surface layer (unit: C/m3). Defaults to None.
             charge_stern (float, optional): charges in stern layer (unit: C/m3). Defaults to None.
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3). Defaults to None.
-            xd (float, optional): Distance from mineral surface to zeta plane. Defaults to 1.0e-12.
+            xd (float, optional): Distance from mineral surface to zeta plane. Defaults to None.
             cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL
             convergence_condition (float): Convergence conditions for calculating potential
                 nd charge using the Newton-Raphson method. Defaults to 1.0e-9.
@@ -138,18 +130,16 @@ class Phyllosilicate:
         # Parameters held by phyllosilicate
         ####################################################
         self.m_layer_width: float = layer_width
-        self.m_tetra_hight: float = tetra_hight
-        self.m_oct_hight: float = oct_hight
         self.m_gamma_1: float = gamma_1
         self.m_gamma_2: float = gamma_2
         self.m_gamma_3: float = gamma_3
         self.m_qi: float = qi * 1.0e18 * const.ELEMENTARY_CHARGE
-        self.m_k1: float = k1
-        self.m_k2: float = k2
-        self.m_k3: float = k3
-        self.m_k4: float = k4
-        self.m_c1: float = c1
-        self.m_c2: float = c2
+        self.m_k1: float = None
+        self.m_k2: float = None
+        self.m_k3: float = None
+        self.m_k4: float = None
+        self.m_c1: float = None
+        self.m_c2: float = None
         self.m_potential_0: float = potential_0
         self.m_potential_stern: float = potential_stern
         self.m_potential_zeta: float = potential_zeta
@@ -185,7 +175,7 @@ class Phyllosilicate:
             assert key in electrolytes_assumed, \
                 f"keys must be included in the following list: {electrolytes_assumed}"
 
-        # Calculate frequently used parameters.
+        # Calculate frequently used constants and parameters.
         self.init_default()
 
         # START DEBUGGING
@@ -196,16 +186,35 @@ class Phyllosilicate:
                 self.m_logger.debug(_msg)
 
     def init_default(self) -> None:
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
+        """Calculate constants and parameters commonly used when computing
+        electrical parameters
+        """
+        # k1 (float): equilibrium constant of eq.(12) in Gonçalvès et al. (2007).
+        # k2 (float): equilibrium constant of eq.(13) in Gonçalvès et al. (2007).
+        # k3 (float): equilibrium constant of eq.(14) in Gonçalvès et al. (2007).
+        # k4 (float): equilibrium constant of eq.(15) in Gonçalvès et al. (2007).
+        self.m_k1: float = const.calc_equibilium_const(const.dg_aloh,
+                                                       self.m_temperature)
+        self.m_k2: float = const.calc_equibilium_const(const.dg_sioh,
+                                                       self.m_temperature)
+        self.m_k3: float = const.calc_equibilium_const(const.dg_xh,
+                                                       self.m_temperature)
+        self.m_k4: float = const.calc_equibilium_const(const.dg_xna,
+                                                       self.m_temperature)
+        # c1 (float): capacitance of stern layer (unit: F/m2).
+        # c2 (float): capacitance of diffuse layer (unit: F/m2).
+        self.m_c1: float =  2.1
+        self.m_c2: float = 0.533
 
+        _e = const.ELEMENTARY_CHARGE
+        _kb = const.BOLTZMANN_CONST
         # Dielectric constant of water
         self.m_dielec_water = const.calc_dielectric_const_water(self.m_temperature)
 
         # Ionic strength (based on Leroy & Revil, 2004)
         strength = 0.
         for elem, props in self.m_ion_props.items():
-            if elem == "Na" or elem == "Cl":
+            if elem in ("Na", "Cl"):
                 strength += props["Concentration"]
         strength += self.m_ion_props["H"]["Concentration"]
         self.m_ionic_strength = strength
@@ -214,7 +223,7 @@ class Phyllosilicate:
         # Electrolyte concentration is assumed to be equal to Na+ concentration
         top = 2000. * self.m_ion_props["Na"]["Concentration"] \
             * const.AVOGADRO_CONST * _e**2
-        bottom = self.m_dielec_water * kb * self.m_temperature
+        bottom = self.m_dielec_water * _kb * self.m_temperature
         self.m_kappa = np.sqrt(top / bottom)
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
@@ -228,9 +237,9 @@ class Phyllosilicate:
             float: left side of eq.(16) minus right side
         """
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
+        _kb = const.BOLTZMANN_CONST
         ch = self.m_activities["H"]
-        x = -_e * phi0 / (kb * self.m_temperature)
+        x = -_e * phi0 / (_kb * self.m_temperature)
         a = self.__calc_A(phi0)
         b = self.__calc_B(phi0)
         right1 = self.m_gamma_1 / a * (ch / self.m_k1 * np.exp(x) - 1.)
@@ -250,12 +259,13 @@ class Phyllosilicate:
             float: left side of eq.(17) minus right side
         """
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
+        _kb = const.BOLTZMANN_CONST
         ch = self.m_activities["H"]
         cna = self.m_activities["Na"]
-        x = -_e * phib / (kb * self.m_temperature)
+        x = -_e * phib / (_kb * self.m_temperature)
         c = self.__calc_C(phib)
-        f2 = qb - _e * self.m_gamma_3 / c * (ch / self.m_k3 + cna / self.m_k4) * np.exp(x) * 1.0e18
+        f2 = qb - _e * self.m_gamma_3 / c * \
+            (ch / self.m_k3 + cna / self.m_k4) * np.exp(x) * 1.0e18
         return f2
 
     def __calc_f3(self, q0: float, qb: float, qs: float) -> float:
@@ -652,6 +662,56 @@ class Phyllosilicate:
         k4 = self.m_k4
         return 1. + (ch / k3 + cna / k4) * np.exp(-_e * phib / (kb * t))
 
+    def __calc_functions_inf(self, xn: np.ndarray) -> np.ndarray:
+        """ Calculate functions 1 to 6 for infinite diffuse layer version
+
+        Args:
+            xn (np.ndarray): 2d array of electrical parameters (column vector).
+            xn[0][0]: potential of O plane
+            xn[1][0]: potential of Stern plane
+            xn[2][0]: potential of Zeta plane
+            xn[3][0]: charge of O layer
+            xn[4][0]: charge of Stern layer
+            xn[5][0]: charge of Diffuse layer
+
+        Returns:
+            np.ndarray: 2d array containing the value of each function
+        """
+        f1 = self.__calc_f1(xn[0][0], xn[3][0])
+        f2 = self.__calc_f2(xn[1][0], xn[4][0])
+        f3 = self.__calc_f3(xn[3][0], xn[4][0], xn[5][0])
+        f4 = self.__calc_f4(xn[0][0], xn[1][0], xn[3][0])
+        f5 = self.__calc_f5(xn[1][0], xn[2][0], xn[5][0])
+        f6 = self.__calc_f6(xn[2][0], xn[5][0])
+        fn = np.array([f1, f2, f3, f4, f5, f6]).reshape(-1, 1)
+        return fn
+
+    def __calc_functions_truncated(self, xn: np.ndarray) -> np.ndarray:
+        """ Calculate functions 1 to 7 for truncated version
+
+        Args:
+            xn (np.ndarray): 2d array of electrical parameters (column vector).
+            xn[0][0]: potential of O plane
+            xn[1][0]: potential of Stern plane
+            xn[2][0]: potential of Zeta plane
+            xn[3][0]: potential of Truncated plane
+            xn[4][0]: charge of O layer
+            xn[5][0]: charge of Stern layer
+            xn[6][0]: charge of Diffuse layer
+
+        Returns:
+            np.ndarray: 2d array containing the value of each function
+        """
+        f1 = self.__calc_f1(xn[0][0], xn[4][0])
+        f2 = self.__calc_f2(xn[1][0], xn[5][0])
+        f3 = self.__calc_f3(xn[4][0], xn[5][0], xn[6][0])
+        f4 = self.__calc_f4(xn[0][0], xn[1][0], xn[4][0])
+        f5 = self.__calc_f5(xn[1][0], xn[2][0], xn[6][0])
+        f6 = self.__calc_f6_truncated(xn[2][0], xn[3][0], xn[6][0])
+        f7 = self.__calc_f7_truncated(xn[2][0], xn[3][0])
+        fn = np.array([f1, f2, f3, f4, f5, f6, f7]).reshape(-1, 1)
+        return fn
+
     def __calc_qs_inf(self, _x: float) -> float:
         """Calculate the amount of charge (C/m3) at _x distance from the
         surface in the case of infinite diffuse layer development
@@ -707,7 +767,8 @@ class Phyllosilicate:
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
         _qs = self.m_charge_diffuse
-        xd_ls:List = [1.0e-12 + float(i) * 1.0e-12 for i in range(1000)]
+        xd_ls: List = [1.0e-12 + float(i) * 1.0e-12 for i in range(1000)]
+        # xd_ls: List = np.logspace(-12, -4, 1000, base=10.).tolist()
         qs_ls: List = []
         err_ls: List = []
         for _xd_tmp in xd_ls:
@@ -720,16 +781,31 @@ class Phyllosilicate:
             err_ls.append(_err)
         qs_diff = np.square(np.array(qs_ls) - _qs)
         _idx = np.argmin(qs_diff)
-        self.m_xd = xd_ls[_idx]
+        _xd = xd_ls[_idx]
+        # TODO: xdがlayer_width/2を超えないようにするとエラーが起きるので、修正する
+        # 初期値の設定によるのかもしれない。原因不明
+        # if self.m_layer_width * 0.5 < _xd:
+        #     _xd = self.m_layer_width * 0.5
+        self.m_xd = _xd
         _err = err_ls[_idx]
         assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.m_xd, _err
 
 
-    def calc_potentials_and_charges_inf(self, x_init: List = None) -> List:
+    def calc_potentials_and_charges_inf(self,
+                                        x_init: List = None,
+                                        _beta: float = 0.9,
+                                        _lamda: float = 0.5) -> List:
         """ Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
         eq.(16)~(21) of Gonçalvès et al. (2007) is used.
+        Damped Newton-Raphson method is applied.
+
+        x_init (List): Initial electrical parameters (length is 6)
+        _beta (float): Hyper parameter for damping. The larger this value,
+            the smaller the damping effect.
+        _lamda (float): Hyper parameter for damping. The amount by which
+            the step-width coefficients are updated in a single iteration
 
         Raises:
             RuntimeError: Occurs when loop count exceeds m_iter_max
@@ -740,11 +816,14 @@ class Phyllosilicate:
         """
         if x_init is None:
             # Set initial electrical parameters
-            if self.m_qi < 0:
+            if self.m_qi < 0 and self.m_gamma_1 == 0.:
                 # for smectite
                 params = smectite_inf_init_params
-            else:
+            elif self.m_qi == 0 and self.m_gamma_1 > 0.:
                 # for kaolinite
+                params = kaolinite_init_params
+            else:
+                # TODO: Prepare more initial parameters in other minerals.
                 params = kaolinite_init_params
             ch = self.m_ion_props["H"]["Concentration"]
             ch_ls = list(params.keys())
@@ -755,26 +834,39 @@ class Phyllosilicate:
             _idx_cna: int = np.argmin(np.square(np.array(cna_ls, dtype=np.float64) - cna))
             x_init = cna_dct[cna_ls[_idx_cna]]
         xn = np.array(x_init, np.float64).reshape(-1, 1)
-        residual = float_info.max
+        fn = self.__calc_functions_inf(xn)
+        norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
         cou = 0
-        while self.m_convergence_condition < residual:
+        # The convergence condition is that the L2 norm in eqs.1~7
+        # becomes sufficiently small.
+        while self.m_convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian(xn[0][0], xn[1][0], xn[2][0])
+            # To avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
             _j_inv = np.linalg.inv(_j)
-            f1 = self.__calc_f1(xn[0][0], xn[3][0])
-            f2 = self.__calc_f2(xn[1][0], xn[4][0])
-            f3 = self.__calc_f3(xn[3][0], xn[4][0], xn[5][0])
-            f4 = self.__calc_f4(xn[0][0], xn[1][0], xn[3][0])
-            f5 = self.__calc_f5(xn[1][0], xn[2][0], xn[5][0])
-            f6 = self.__calc_f6(xn[2][0], xn[5][0])
-            fn = np.array([f1, f2, f3, f4, f5, f6]).reshape(-1, 1)
-            # update xn
             step = np.matmul(_j_inv, fn)
-            xn = xn - step
-            # calculate residual
-            step_size = np.sum(np.sqrt(np.square(step)), axis=0)[0]
-            xn_size = np.sum(np.sqrt(np.square(xn)), axis=0)[0]
-            residual = step_size / xn_size
+            # Damping is applied. References are listed below:
+            # [1] http://www.misojiro.t.u-tokyo.ac.jp/~murota/lect-suchi/newton130805.pdf
+            # [2] http://www.ep.sci.hokudai.ac.jp/~gfdlab/comptech/y2016/resume/070_newton/2014_0626-mkuriki.pdf
+            _mu = 1.
+            _cou_damp: int = 0
+            _norm_fn_tmp, _rhs = float_info.max, float_info.min
+            # At least once, enter the following loop
+            while _norm_fn_tmp > _rhs:
+                # update μ
+                _mu = _mu / (_lamda ** _cou_damp)
+                # calculate left hand side of eq.(21) of [1]
+                xn_tmp: np.ndarray = xn - _mu * step
+                fn_tmp = self.__calc_functions_inf(xn_tmp)
+                _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
+                # calculate right hand side of eq.(21) of [1]
+                _rhs = (1. - (1. - _beta) * _mu) * norm_fn
+                if _cou_damp > 10000:
+                    break
+                _cou_damp += 1
+            xn = xn_tmp
+            fn = fn_tmp
+            norm_fn = _norm_fn_tmp
             if cou > self.m_iter_max:
                 raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
@@ -797,11 +889,20 @@ class Phyllosilicate:
             self.m_logger.debug(f"m_charge_diffuse: {self.m_charge_diffuse}")
         return xn
 
-    def calc_potentials_and_charges_truncated(self, x_init: List = None) -> List:
+    def calc_potentials_and_charges_truncated(self,
+                                              x_init: List = None,
+                                              _beta: float = 0.9,
+                                              _lamda: float = 0.5) -> List:
         """ Calculate the potential and charge of each layer
         in the case of truncated diffuse layer development.
         eq.(16)~(20), (32), (33) of Gonçalvès et al. (2007) is used.
+        Damped Newton-Raphson method is applied.
 
+        x_init (List): Initial electrical parameters (length is 7)
+        _beta (float): Hyper parameter for damping. The larger this value,
+            the smaller the damping effect.
+        _lamda (float): Hyper parameter for damping. The amount by which
+            the step-width coefficients are updated in a single iteration
         Raises:
             RuntimeError: RuntimeError: Occurs when loop count exceeds m_iter_max
 
@@ -816,37 +917,49 @@ class Phyllosilicate:
         if self.m_xd is None:
             self.calc_xd()
         if x_init is None:
-            x_init = [self.m_potential_0,
-                      self.m_potential_stern,
-                      self.m_potential_zeta,
-                      self.m_potential_zeta * 0.5,
-                      self.m_charge_0,
-                      self.m_charge_stern,
-                      self.m_charge_diffuse]
+            _ch = self.m_ion_props["H"]["Concentration"]
+            _cna = self.m_ion_props["Na"]["Concentration"]
+            ch_ls = list(smectite_trun_init_params.keys())
+            _idx = np.argmin((np.array(ch_ls, dtype=np.float64) - _ch))
+            cna_dct: Dict = smectite_trun_init_params[ch_ls[_idx]]
+            cna_ls = list(cna_dct.keys())
+            _idx = np.argmin((np.array(cna_ls, dtype=np.float64) - _cna))
+            x_init = cna_dct[cna_ls[_idx]]
         xn = np.array(x_init, np.float64).reshape(-1, 1)
-        residual = float_info.max
+        fn = self.__calc_functions_truncated(xn)
+        norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
         cou = 0
-        while self.m_convergence_condition < residual:
+        # The convergence condition is that the L2 norm in eqs.1~7
+        # becomes sufficiently small.
+        while self.m_convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian_truncated(xn[0][0], xn[1][0], xn[2][0], xn[3][0])
+            # To avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
             _j_inv = np.linalg.inv(_j)
-            f1 = self.__calc_f1(xn[0][0], xn[4][0])
-            f2 = self.__calc_f2(xn[1][0], xn[5][0])
-            f3 = self.__calc_f3(xn[4][0], xn[5][0], xn[6][0])
-            f4 = self.__calc_f4(xn[0][0], xn[1][0], xn[4][0])
-            f5 = self.__calc_f5(xn[1][0], xn[2][0], xn[6][0])
-            f6 = self.__calc_f6_truncated(xn[2][0], xn[3][0], xn[6][0])
-            f7 = self.__calc_f7_truncated(xn[2][0], xn[3][0])
-            fn = np.array([f1, f2, f3, f4, f5, f6, f7]).reshape(-1, 1)
-            # update xn
             step = np.matmul(_j_inv, fn)
-            xn = xn - step
-            # calculate residual
-            step_size: float = np.sum(np.sqrt(np.square(step)), axis=0)[0]
-            xn_size: float = np.sum(np.sqrt(np.square(xn)), axis=0)[0]
-            residual = step_size / xn_size
+            # Damping is applied. References are listed below:
+            # [1] http://www.misojiro.t.u-tokyo.ac.jp/~murota/lect-suchi/newton130805.pdf
+            # [2] http://www.ep.sci.hokudai.ac.jp/~gfdlab/comptech/y2016/resume/070_newton/2014_0626-mkuriki.pdf
+            _mu = 1.
+            _cou_damp: int = 0
+            _norm_fn_tmp, _rhs = float_info.max, float_info.min
+            # At least once, enter the following loop
+            while _norm_fn_tmp > _rhs:
+                # update μ
+                _mu = _mu / (_lamda ** _cou_damp)
+                # calculate left hand side of eq.(21) of [1]
+                xn_tmp: np.ndarray = xn - _mu * step
+                fn_tmp = self.__calc_functions_truncated(xn_tmp)
+                _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
+                # calculate right hand side of eq.(21) of [1]
+                _rhs = (1. - (1. - _beta) * _mu) * norm_fn
+                if _cou_damp > 10000:
+                    break
+                _cou_damp += 1
+            xn = xn_tmp
+            fn = fn_tmp
+            norm_fn = _norm_fn_tmp
             if cou > self.m_iter_max:
-                print(f"xn: {xn}") #!
                 raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
         xn = xn.T.tolist()[0]

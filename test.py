@@ -298,50 +298,53 @@ def get_smectite_init_params_inf():
     print(f"elasped time to load pickle: {end-start}") #!
 
 def get_smectite_init_params_truncated():
-    # TODO: layer_widthを変えると収束しない場合があるかどうか検証する
     temperature = 298.15
-
     ch_ls = np.logspace(-14, -1, 100, base=10.).tolist()
+    r_ls = [i * 2.0e-9 for i in range(1, 6)]
     conc_ls = np.logspace(-5., 0.5, 200, base=10.).tolist() # 3Mまで
-    ch_cna_init_dict: Dict = {}
-    for ch in ch_ls:
-        if ch < 8.697490026177835e-11:
-            continue
-        print(f"ch: {ch}") #!
-        for j, cna in enumerate(conc_ls):
-            print(f"cna: {cna}") #!
-            ion_props = const.ion_props_default.copy()
-            activities = const.activities_default.copy()
-            ch = ch
-            ion_props["H"]["Concentration"] = ch
-            ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-            ion_props["Na"]["Concentration"] = cna
-            ion_props["Cl"]["Concentration"] = cna
-            activities["H"] = ch
-            activities["OH"] = 1.0e-14 / ch
-            activities["Na"] = cna
-            activities["Cl"] = cna
-            smectite = Phyllosilicate(temperature = temperature,
-                                      ion_props = ion_props,
-                                      activities = activities,
-                                      layer_width = 1.14e-9,
-                                      gamma_1 = 0,
-                                      gamma_2 = 5.5,
-                                      gamma_3 = 5.5,
-                                      qi = -1.,
-                                     )
-            if math.isclose(ch, 1.0476157527896662e-11, abs_tol=1.0e-12) and cna > 4.691:
+    r_ch_cna_init_dict: Dict = {}
+    for _r in r_ls:
+        print(f"_r: {_r}") #!
+        ch_cna_dct: Dict = r_ch_cna_init_dict.setdefault(_r, {})
+        for ch in ch_ls:
+            cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
+            if ch < 8.697490026177835e-11:
                 continue
-            if math.isclose(ch, 1.9179102616724927e-11, abs_tol=1.0e-12) and cna > 4.112:
-                continue
-            if math.isclose(ch, 2.5950242113997427e-11, abs_tol=1.0e-12) and cna > 3.60:
-                continue
-            if math.isclose(ch, 4.750810162102813e-11, abs_tol=1.0e-12) and cna > 3.37:
-                continue
-            if math.isclose(ch, 6.428073117284319e-11, abs_tol=1.0e-12) and cna > 3.158:
-                continue
-            if math.isclose(ch, 8.697490026177835e-11, abs_tol=1.0e-12) and cna > 2.957:
-                continue
+            print(f"ch: {ch}") #!
+            for j, cna in enumerate(conc_ls):
+                print(f"cna: {cna}") #!
+                ion_props = const.ion_props_default.copy()
+                activities = const.activities_default.copy()
+                ch = ch
+                ion_props["H"]["Concentration"] = ch
+                ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+                ion_props["Na"]["Concentration"] = cna
+                ion_props["Cl"]["Concentration"] = cna
+                activities["H"] = ch
+                activities["OH"] = 1.0e-14 / ch
+                activities["Na"] = cna
+                activities["Cl"] = cna
+                smectite = Phyllosilicate(temperature = temperature,
+                                        ion_props = ion_props,
+                                        activities = activities,
+                                        layer_width = _r,
+                                        gamma_1 = 0,
+                                        gamma_2 = 5.5,
+                                        gamma_3 = 5.5,
+                                        qi = -1.,
+                                        )
+            # if math.isclose(ch, 1.0476157527896662e-11, abs_tol=1.0e-12) and cna > 4.691:
+            #     continue
+            # if math.isclose(ch, 1.9179102616724927e-11, abs_tol=1.0e-12) and cna > 4.112:
+            #     continue
+            # if math.isclose(ch, 2.5950242113997427e-11, abs_tol=1.0e-12) and cna > 3.60:
+            #     continue
+            # if math.isclose(ch, 4.750810162102813e-11, abs_tol=1.0e-12) and cna > 3.37:
+            #     continue
+            # if math.isclose(ch, 6.428073117284319e-11, abs_tol=1.0e-12) and cna > 3.158:
+            #     continue
+            # if math.isclose(ch, 8.697490026177835e-11, abs_tol=1.0e-12) and cna > 2.957:
+            #     continue
             if ch < 1.0e-13:
                 if j == 0:
                     xn = smectite.calc_potentials_and_charges_inf()
@@ -386,15 +389,10 @@ def get_smectite_init_params_truncated():
                 if j == 0:
                     xn = smectite.calc_potentials_and_charges_inf()
                     xn.insert(3, xn[2] / 2.)
-            # xn = smectite.calc_potentials_and_charges_inf().copy()
-            # xn.insert(3, xn[2] / 2.)
-            print(f"xn before: {xn}") #!
+
             smectite.calc_potentials_and_charges_inf()
-            smectite.calc_xd()
-            print(f"smectite.m_xd: {smectite.m_xd}") #!
             xn = smectite.calc_potentials_and_charges_truncated(xn)
             print(f"xn after: {xn}") #!
-            cna_dct: Dict = ch_cna_init_dict.setdefault(ch, {})
             cna_dct.setdefault(cna, xn)
         # value check
         if float('inf') in xn or float('nan') in xn or sum([abs(i) for i in xn]) > 3. or np.nan in xn:
@@ -402,7 +400,7 @@ def get_smectite_init_params_truncated():
             break
 
     with open(f"./smectite_trun_init.pkl", "wb") as pklf:
-        pickle.dump(ch_cna_init_dict, pklf)
+        pickle.dump(r_ch_cna_init_dict, pklf)
 
     start = time.time()
     with open(f"./smectite_trun_init.pkl", "rb") as pklf:
@@ -424,5 +422,5 @@ if __name__ == "__main__":
     #                 print(f"_ls: {_ls}") #!
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    # get_smectite_init_params_truncated()
-    goncalves_fig6()
+    get_smectite_init_params_truncated()
+    # goncalves_fig6()

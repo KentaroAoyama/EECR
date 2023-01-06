@@ -105,6 +105,46 @@ def revil_reloy_fig3():
     _pth = path.join(test_dir(), "Revil_Glover_1998_fig2.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+def goncalves_fig6():
+    cna = 1.0e-3
+    ch_ls = [1.0e-7, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-1]
+    ch_r_zeta: Dict = {}
+    for ch in ch_ls:
+        _dct = ch_r_zeta.setdefault(ch, {})
+        r_ls = [2.0e-9 * i for i in range(1, 6)]
+        for _r in r_ls:
+            print(f"_r: {_r}") #!
+            ion_props = const.ion_props_default.copy()
+            ion_props["Na"]["Concentration"] = cna
+            ion_props["Cl"]["Concentration"] = cna
+            ion_props["H"]["Concentration"] = ch
+            ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+            activities = const.activities_default.copy()
+            activities["Na"] = cna
+            activities["Cl"] = cna
+            activities["H"] = ch
+            activities["OH"] = 1.0e-14 / ch
+            smectite = Phyllosilicate(ion_props=ion_props,
+                                    layer_width = _r/2.)
+            xn = smectite.calc_potentials_and_charges_truncated()
+            print(f"xn: {xn}") #!
+            _dct.setdefault(_r, smectite.m_potential_zeta)
+    # plot
+    fig, ax = plt.subplots()
+    for ch, _dct in ch_r_zeta.items():
+        _x, _y = [], []
+        for _r, _zeta in _dct.items():
+            _x.append(_r)
+            _y.append(_zeta)
+        _x = [i / 2. for i in _x] # 論文中のrはlayer_widthの半分で定義されている
+        ax.plot(_x, _y, label=f"pH: {(-1.) * np.log10(ch)}")
+    _y_goncalves = [-0.159, -0.148, -0.145, -0.144, -0.1435]
+    ax.plot(_x, _y_goncalves, label="Gonçalvès")
+    ax.legend()
+    # ax.invert_yaxis()
+    _pth = path.join(test_dir(), "Goncalves_fig6_zeta.png")
+    fig.savefig(_pth, dpi=200, bbox_inches="tight")
+
 def get_kaolinite_init_params():
     temperature = 298.15
     # test
@@ -384,4 +424,5 @@ if __name__ == "__main__":
     #                 print(f"_ls: {_ls}") #!
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    # get_smectite_init_params_truncated()
+    goncalves_fig6()

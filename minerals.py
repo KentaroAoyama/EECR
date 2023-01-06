@@ -77,7 +77,7 @@ class Phyllosilicate:
                  charge_diffuse: float = None,
                  xd: float = None,
                  cond_stern_plus_edl: float = None,
-                 convergence_condition: float = 1.0e-9,
+                 convergence_condition: float = 1.0e-12,
                  iter_max: int = 1000,
                  logger: Logger = None,
                  ):
@@ -814,6 +814,9 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, q0, qb, qs]
         """
+        assert 0. < _beta < 1.
+        assert _lamda > 1.
+
         if x_init is None:
             # Set initial electrical parameters
             if self.m_qi < 0 and self.m_gamma_1 == 0.:
@@ -836,9 +839,9 @@ class Phyllosilicate:
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_inf(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-        cou = 0
         # The convergence condition is that the L2 norm in eqs.1~7
         # becomes sufficiently small.
+        cou = 0
         while self.m_convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian(xn[0][0], xn[1][0], xn[2][0])
             # To avoid overflow when calculating the inverse matrix
@@ -910,6 +913,9 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, phir, q0, qb, qs]
         """
+        assert 0. < _beta < 1.
+        assert _lamda > 1.
+
         # obtain init values based on infinity developed diffuse layer
         # phi0, phib, phid, phir, q0, qb, qs
         if not self._check_if_calculated_electrical_params_inf():
@@ -920,17 +926,17 @@ class Phyllosilicate:
             _ch = self.m_ion_props["H"]["Concentration"]
             _cna = self.m_ion_props["Na"]["Concentration"]
             ch_ls = list(smectite_trun_init_params.keys())
-            _idx = np.argmin((np.array(ch_ls, dtype=np.float64) - _ch))
+            _idx = np.argmin(np.square((np.array(ch_ls, dtype=np.float64) - _ch)))
             cna_dct: Dict = smectite_trun_init_params[ch_ls[_idx]]
             cna_ls = list(cna_dct.keys())
-            _idx = np.argmin((np.array(cna_ls, dtype=np.float64) - _cna))
+            _idx = np.argmin(np.square((np.array(cna_ls, dtype=np.float64) - _cna)))
             x_init = cna_dct[cna_ls[_idx]]
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-        cou = 0
         # The convergence condition is that the L2 norm in eqs.1~7
         # becomes sufficiently small.
+        cou = 0
         while self.m_convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian_truncated(xn[0][0], xn[1][0], xn[2][0], xn[3][0])
             # To avoid overflow when calculating the inverse matrix

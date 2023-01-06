@@ -23,3 +23,4 @@ utils.py
 *.pkl
 __pycache__/minerals.cpython-39.pyc
 __pycache__/constants.cpython-39.pyc
+test/Goncalves_fig6_zeta.png

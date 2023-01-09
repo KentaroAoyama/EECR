@@ -174,8 +174,6 @@ def get_kaolinite_init_params():
                                     gamma_3 = 5.5,
                                     qi = 0.,
                                     xd = None,
-                                    convergence_condition = 1.0e-9,
-                                    iter_max = 10000,
                                     logger = None,
                                     )
             if i == 0 and 1.0e-14 <= ch < 1.0e-13:
@@ -241,8 +239,6 @@ def get_smectite_init_params_inf():
                                       gamma_3 = 5.5,
                                       qi = -1.,
                                       xd = None,
-                                      convergence_condition = 1.0e-9,
-                                      iter_max = 10000,
                                       logger = None,
                                       )
             if i == 0 and ch < 1.0e-13:
@@ -391,7 +387,7 @@ def get_smectite_init_params_truncated():
                         xn.insert(3, xn[2] / 2.)
 
                 smectite.calc_potentials_and_charges_inf()
-                xn, _ = smectite.calc_potentials_and_charges_truncated(xn)
+                xn = smectite.calc_potentials_and_charges_truncated(xn)
                 print(f"xn after: {xn}") #!
                 print(f"xd: {smectite.m_xd}") #!
                 cna_dct.setdefault(cna, xn)
@@ -439,12 +435,12 @@ def test_single_condition():
                               gamma_3 = 5.5,
                               qi = -1.,
                               )
-    xn, history = smectite.calc_potentials_and_charges_truncated(x_init)
-    _x = [i for i in range(1, len(history) + 1)]
-    fig, ax = plt.subplots()
-    ax.plot(_x, history)
-    fig.savefig("./tmp.png", bbox_inches = "tight") #!
-    print(f"xn: {xn}") #!
+    xn = smectite.calc_potentials_and_charges_truncated(x_init)
+    # # _x = [i for i in range(1, len(history) + 1)]
+    # fig, ax = plt.subplots()
+    # # ax.plot(_x, history)
+    # fig.savefig("./tmp.png", bbox_inches = "tight") #!
+    # print(f"xn: {xn}") #!
 
 
 def main():
@@ -459,8 +455,8 @@ if __name__ == "__main__":
     #         for _f in _ls:
     #             if not isinstance(_f, float):
     #                 print(f"_ls: {_ls}") #!
-    # get_kaolinite_init_params()
-    # get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    get_kaolinite_init_params()
+    get_smectite_init_params_inf()
+    # get_smectite_init_params_truncated()
     test_single_condition()
     # goncalves_fig6()

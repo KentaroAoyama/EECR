@@ -82,6 +82,7 @@ class Phyllosilicate:
         # TODO: m_layer_widthのassertionを電位, 電荷を計算する関数に加える
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
         # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
+        # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
         """ Initialize Phyllosilicate class.
 
         Args:
@@ -1009,7 +1010,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"m_charge_0: {self.m_charge_0}")
             self.m_logger.debug(f"m_charge_stern: {self.m_charge_stern}")
             self.m_logger.debug(f"m_charge_diffuse: {self.m_charge_diffuse}")
-        return xn, history_ls #! TODO: history 消す
+        return xn
 
     def _check_if_calculated_electrical_params_inf(self) -> bool:
         """ Check if the electrical properties for infinite diffuse layer

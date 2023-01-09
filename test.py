@@ -308,7 +308,7 @@ def get_smectite_init_params_truncated():
         ch_cna_dct: Dict = r_ch_cna_init_dict.setdefault(_r, {})
         for ch in ch_ls:
             cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
-            if ch < 8.697490026177835e-11:
+            if ch < 6.428073117284319e-11:
                 continue
             print(f"ch: {ch}") #!
             for j, cna in enumerate(conc_ls):
@@ -333,71 +333,72 @@ def get_smectite_init_params_truncated():
                                         gamma_3 = 5.5,
                                         qi = -1.,
                                         )
-            # if math.isclose(ch, 1.0476157527896662e-11, abs_tol=1.0e-12) and cna > 4.691:
-            #     continue
-            # if math.isclose(ch, 1.9179102616724927e-11, abs_tol=1.0e-12) and cna > 4.112:
-            #     continue
-            # if math.isclose(ch, 2.5950242113997427e-11, abs_tol=1.0e-12) and cna > 3.60:
-            #     continue
-            # if math.isclose(ch, 4.750810162102813e-11, abs_tol=1.0e-12) and cna > 3.37:
-            #     continue
-            # if math.isclose(ch, 6.428073117284319e-11, abs_tol=1.0e-12) and cna > 3.158:
-            #     continue
-            # if math.isclose(ch, 8.697490026177835e-11, abs_tol=1.0e-12) and cna > 2.957:
-            #     continue
-            if ch < 1.0e-13:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-13 <= ch < 1.0e-12:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-12 <= ch < 1.0e-11:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-11 <= ch < 1.0e-10:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-10 <= ch < 1.0e-8:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-8 <= ch < 1.0e-7:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-7 <= ch < 1.0e-5:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-5 <= ch < 1.0e-4:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-4 <= ch < 1.0e-2:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            elif 1.0e-2 <= ch < 1.0e-1:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
-            else:
-                if j == 0:
-                    xn = smectite.calc_potentials_and_charges_inf()
-                    xn.insert(3, xn[2] / 2.)
+                # if math.isclose(ch, 1.0476157527896662e-11, abs_tol=1.0e-12) and cna > 4.691:
+                #     continue
+                # if math.isclose(ch, 1.9179102616724927e-11, abs_tol=1.0e-12) and cna > 4.112:
+                #     continue
+                # if math.isclose(ch, 2.5950242113997427e-11, abs_tol=1.0e-12) and cna > 3.60:
+                #     continue
+                # if math.isclose(ch, 4.750810162102813e-11, abs_tol=1.0e-12) and cna > 3.37:
+                #     continue
+                # if math.isclose(ch, 6.428073117284319e-11, abs_tol=1.0e-12) and cna > 3.158:
+                #     continue
+                # if math.isclose(ch, 8.697490026177835e-11, abs_tol=1.0e-12) and cna > 2.957:
+                #     continue
+                if ch < 1.0e-13:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-13 <= ch < 1.0e-12:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-12 <= ch < 1.0e-11:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-11 <= ch < 1.0e-10:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-10 <= ch < 1.0e-8:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-8 <= ch < 1.0e-7:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-7 <= ch < 1.0e-5:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-5 <= ch < 1.0e-4:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-4 <= ch < 1.0e-2:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                elif 1.0e-2 <= ch < 1.0e-1:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
+                else:
+                    if j == 0:
+                        xn = smectite.calc_potentials_and_charges_inf()
+                        xn.insert(3, xn[2] / 2.)
 
-            smectite.calc_potentials_and_charges_inf()
-            xn = smectite.calc_potentials_and_charges_truncated(xn)
-            print(f"xn after: {xn}") #!
-            cna_dct.setdefault(cna, xn)
-        # value check
-        if float('inf') in xn or float('nan') in xn or sum([abs(i) for i in xn]) > 3. or np.nan in xn:
-            print("breaked") #!
-            break
+                smectite.calc_potentials_and_charges_inf()
+                xn, _ = smectite.calc_potentials_and_charges_truncated(xn)
+                print(f"xn after: {xn}") #!
+                print(f"xd: {smectite.m_xd}") #!
+                cna_dct.setdefault(cna, xn)
+            # value check
+            if float('inf') in xn or float('nan') in xn or sum([abs(i) for i in xn]) > 3. or np.nan in xn:
+                print("breaked") #!
+                break
 
     with open(f"./smectite_trun_init.pkl", "wb") as pklf:
         pickle.dump(r_ch_cna_init_dict, pklf)
@@ -407,6 +408,44 @@ def get_smectite_init_params_truncated():
         f = pickle.load(pklf)
     end = time.time()
     print(f"elasped time to load pickle: {end-start}") #!
+
+def test_single_condition():
+    _r = 2.0e-09
+    _ch = 6.428073117284319e-11
+    _cna = 3.1622776601683795
+    ion_props = const.ion_props_default.copy()
+    activities = const.activities_default.copy()
+    ion_props["H"]["Concentration"] = _ch
+    ion_props["OH"]["Concentration"] = 1.0e-14 / _ch
+    ion_props["Na"]["Concentration"] = _cna
+    ion_props["Cl"]["Concentration"] = _cna
+    activities["H"] = _ch
+    activities["OH"] = 1.0e-14 / _ch
+    activities["Na"] = _cna
+    activities["Cl"] = _cna
+    x_init = [-0.3185634630543255,
+              -0.00016802801283331357,
+              -2.003817973960994e-05,
+              -3.3502612177072795e-07,
+              -0.6686304135871336,
+              0.6685515350060947,
+              7.887858103894404e-05]
+    smectite = Phyllosilicate(temperature = 293.15,
+                              ion_props = ion_props,
+                              activities = activities,
+                              layer_width = _r,
+                              gamma_1 = 0,
+                              gamma_2 = 5.5,
+                              gamma_3 = 5.5,
+                              qi = -1.,
+                              )
+    xn, history = smectite.calc_potentials_and_charges_truncated(x_init)
+    _x = [i for i in range(1, len(history) + 1)]
+    fig, ax = plt.subplots()
+    ax.plot(_x, history)
+    fig.savefig("./tmp.png", bbox_inches = "tight") #!
+    print(f"xn: {xn}") #!
+
 
 def main():
     return
@@ -423,4 +462,5 @@ if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
     get_smectite_init_params_truncated()
+    test_single_condition()
     # goncalves_fig6()

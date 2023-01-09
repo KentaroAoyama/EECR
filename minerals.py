@@ -77,25 +77,22 @@ class Phyllosilicate:
                  charge_diffuse: float = None,
                  xd: float = None,
                  cond_stern_plus_edl: float = None,
-                 convergence_condition: float = 1.0e-12,
-                 iter_max: int = 1000,
                  logger: Logger = None,
                  ):
-        # TODO: fix default value in docstring
-        # TODO: iter_maxは計算を行う関数内のlocal argsと変更する
+        # TODO: m_layer_widthのassertionを電位, 電荷を計算する関数に加える
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
+        # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
         """ Initialize Phyllosilicate class.
 
         Args:
-            temperature (float): temperature (unit: K). Defaults to None.
-            electrolytes (Dict): key is ionic species (Na, Cl, etc.), and
-                value is concentration (unit: Mol). Defaults to None.
+            temperature (float): temperature (unit: K). Defaults to 298.15.
+            ion_props (Dict): key is ionic species (Na, Cl, etc.), and
+                value is properties of dict. Check ion_props_default in constant.py for details.
+                Defaults to const.ion_props_default.
             activities (Dict): key is ionic species (Na, Cl, etc.), and
-                value is activity (unit: Mol). Defaults to None.
+                value is activity (unit: Mol). Defaults to const.activities.
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            mobility_na_diffuselayer (float): Mobility of Na ions in an infinitely developing diffuse layer
-            mobility_na_interlayer (float): Mobility of Na ions in an truncated diffuse layer
             gamma_1 (float): surface site densities of aluminol (unit: sites/nm2). Defaults to 0.
             gamma_2 (float): surface site densities of sianol (unit: sites/nm2). Defaults to 5.5.
             gamma_3 (float): surface site densities of >Si-O-Al< (unit: sites/nm2). Defaults to 5.5.
@@ -103,16 +100,14 @@ class Phyllosilicate:
             potential_0 (float, optional): surface potential (unit: V). Defaults to None.
             potential_stern (float, optional): stern plane potential (unit: V). Defaults to None.
             potential_zeta (float, optional): zeta plane potential (unit: V). Defaults to None.
-            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V). Defaults to None.
+            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
+                Defaults to None.
             charge_0 (float, optional): charges in surface layer (unit: C/m3). Defaults to None.
             charge_stern (float, optional): charges in stern layer (unit: C/m3). Defaults to None.
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3). Defaults to None.
-            xd (float, optional): Distance from mineral surface to zeta plane. Defaults to None.
-            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL
-            convergence_condition (float): Convergence conditions for calculating potential
-                nd charge using the Newton-Raphson method. Defaults to 1.0e-9.
-            iter_max (int): Maximum number of iterations when calculating potential and charge
-                using the Newton-Raphson method. Defaults to 1000.
+            xd (float, optional): Distance from mineral surface to zeta plane (unit: V). Defaults to None.
+            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m). Defaults to None.
+            logger (Logger): Logger for debugging. Defaults to None.
         """
         # Check input values
         # xd must be smaller than layer width, so we should check that
@@ -158,11 +153,6 @@ class Phyllosilicate:
         self.m_kappa_stern = None
         self.m_qs_coeff1_inf = None
         self.m_qs_coeff2_inf = None
-        ####################################################
-        # Parameters required to the Newton-Raphson method
-        ####################################################
-        self.m_convergence_condition = convergence_condition
-        self.m_iter_max = iter_max
 
         ####################################################
         # DEBUG LOGGER
@@ -557,10 +547,12 @@ class Phyllosilicate:
         # electrolyte concentration is assumed to be equal to Na+ concentration
         cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
         _na = const.AVOGADRO_CONST
-        b = 2. * np.sqrt(_na * cf * kb * _t * dielec)
+        b = np.sqrt(_na * cf * kb * _t * dielec)
         c = _e / (kb * _t)
         top = -b * c * np.sinh(c * phid)
-        bottom = 2. * np.sqrt(np.cosh(c * phid) - np.cosh(c * phir))
+        bottom = np.sqrt(np.cosh(c * phid) - np.cosh(c * phir))
+        if bottom == 0.:
+            return float_info.max
         return top / bottom
 
     def __calc_f6_phir_truncated(self, phid: float, phir: float) -> float:
@@ -581,10 +573,12 @@ class Phyllosilicate:
         cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
-        b = 2. * np.sqrt(_na * cf * kb * _t * dielec)
+        b = np.sqrt(_na * cf * kb * _t * dielec)
         c = _e / (kb * _t)
         top = b * c * np.sinh(c * phir)
-        bottom = 2. * np.sqrt(np.cosh(c * phid) - np.cosh(c * phir))
+        bottom = np.sqrt(np.cosh(c * phid) - np.cosh(c * phir))
+        if bottom == 0.:
+            return float_info.max
         return top / bottom
 
     def __calc_f7_phir_truncated(self, phir: float) -> float:
@@ -765,11 +759,12 @@ class Phyllosilicate:
         assert self._check_if_calculated_electrical_params_inf(),\
              "Before calculating xd, we should obtain electrical" \
              "arameters for infinite diffuse layer case"
+        assert not self._check_if_calculated_electrical_params_truncated() # TODO?: infとtruncatedでパラメータを場合分けしたほうがいいかも
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
         _qs = self.m_charge_diffuse
-        xd_ls: List = [1.0e-12 + float(i) * 1.0e-12 for i in range(1000)]
-        # xd_ls: List = np.logspace(-12, -4, 1000, base=10.).tolist()
+        # xd_ls: List = [1.0e-12 + float(i) * 1.0e-10 for i in range(100)]
+        xd_ls: List = np.logspace(-15, -7, 1000, base=10.).tolist()
         qs_ls: List = []
         err_ls: List = []
         for _xd_tmp in xd_ls:
@@ -791,31 +786,39 @@ class Phyllosilicate:
         assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.m_xd, _err
 
-
     def calc_potentials_and_charges_inf(self,
                                         x_init: List = None,
-                                        _beta: float = 0.9,
-                                        _lamda: float = 2.) -> List:
+                                        iter_max: int = 1000,
+                                        convergence_condition: float = 1.0e-10,
+                                        oscillation_tol: float = 1.0e-04,
+                                        beta: float = 0.75,
+                                        lamda: float = 2.) -> List:
         """ Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
         eq.(16)~(21) of Gonçalvès et al. (2007) is used.
         Damped Newton-Raphson method is applied.
 
         x_init (List): Initial electrical parameters (length is 6)
-        _beta (float): Hyper parameter for damping(0, 1). The larger this value,
+        iter_max (int): Maximum number of iterations when calculating potential and charge
+            using the Newton-Raphson method. Defaults to 1000.
+        convergence_condition (float): Convergence conditions for calculating potential
+            nd charge using the Newton-Raphson method. Defaults to 1.0e-10.
+        oscillation_tol (float): Oscillation tolerance. Defaults to 1.0e-5.
+        beta (float): Hyper parameter for damping(0, 1). The larger this value,
             the smaller the damping effect.
-        _lamda (float): Hyper parameter for damping([1, ∞]). The amount by which
+        lamda (float): Hyper parameter for damping([1, ∞]). The amount by which
             the step-width coefficients are updated in a single iteration
 
         Raises:
-            RuntimeError: Occurs when loop count exceeds m_iter_max
+            RuntimeError: Occurs when loop count exceeds m_iter_max &
+             norm of step exceeds oscillation_tol
 
         Returns:
             List: list containing potentials and charges
               [phi0, phib, phid, q0, qb, qs]
         """
-        assert 0. < _beta < 1.
-        assert _lamda > 1.
+        assert 0. < beta < 1.
+        assert lamda > 1.
 
         if x_init is None:
             # Set initial electrical parameters
@@ -842,7 +845,7 @@ class Phyllosilicate:
         # The convergence condition is that the L2 norm in eqs.1~7
         # becomes sufficiently small.
         cou = 0
-        while self.m_convergence_condition < norm_fn:
+        while convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian(xn[0][0], xn[1][0], xn[2][0])
             # To avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
@@ -851,28 +854,32 @@ class Phyllosilicate:
             # Damping is applied. References are listed below:
             # [1] http://www.misojiro.t.u-tokyo.ac.jp/~murota/lect-suchi/newton130805.pdf
             # [2] http://www.ep.sci.hokudai.ac.jp/~gfdlab/comptech/y2016/resume/070_newton/2014_0626-mkuriki.pdf
-            _mu = 1.
             _cou_damp: int = 0
             _norm_fn_tmp, _rhs = float_info.max, float_info.min
             # At least once, enter the following loop
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = _mu / (_lamda ** _cou_damp)
+                _mu = 1. / (lamda ** _cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_inf(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
                 # calculate right hand side of eq.(21) of [1]
-                _rhs = (1. - (1. - _beta) * _mu) * norm_fn
+                _rhs = (1. - (1. - beta) * _mu) * norm_fn
+                _cou_damp += 1
                 if _cou_damp > 10000:
                     break
-                _cou_damp += 1
             xn = xn_tmp
             fn = fn_tmp
             norm_fn = _norm_fn_tmp
-            if cou > self.m_iter_max:
-                raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
+            if cou > iter_max:
+                _norm_step = np.sum(np.sqrt(np.square(step)), axis=0)[0]
+                if _norm_step > oscillation_tol:
+                    raise RuntimeError(f"Loop count exceeded {iter_max} times &" \
+                        f" exceeds oscillation tolerance: {_norm_step}")
+                else:
+                    break
         xn = xn.T.tolist()[0]
         self.m_potential_0 = xn[0]
         self.m_potential_stern = xn[1]
@@ -894,28 +901,37 @@ class Phyllosilicate:
 
     def calc_potentials_and_charges_truncated(self,
                                               x_init: List = None,
-                                              _beta: float = 0.9,
-                                              _lamda: float = 2.) -> List:
+                                              iter_max: int = 1000,
+                                              convergence_condition: float = 1.0e-10,
+                                              oscillation_tol: float = 1.0e-04,
+                                              beta: float = 0.75,
+                                              lamda: float = 2.) -> List:
         """ Calculate the potential and charge of each layer
         in the case of truncated diffuse layer development.
         eq.(16)~(20), (32), (33) of Gonçalvès et al. (2007) is used.
         Damped Newton-Raphson method is applied.
 
         x_init (List): Initial electrical parameters (length is 7)
-        _beta (float): Hyper parameter for damping. The larger this value,
+        iter_max (int): Maximum number of iterations when calculating potential and charge
+            using the Newton-Raphson method. Defaults to 1000.
+        convergence_condition (float): Convergence conditions for calculating potential
+            nd charge using the Newton-Raphson method. Defaults to 1.0e-10.
+        oscillation_tol (float): Oscillation tolerance. Defaults to 1.0e-5.
+        beta (float): Hyper parameter for damping. The larger this value,
             the smaller the damping effect.
-        _lamda (float): Hyper parameter for damping. The amount by which
+        lamda (float): Hyper parameter for damping. The amount by which
             the step-width coefficients are updated in a single iteration
         Raises:
-            RuntimeError: RuntimeError: Occurs when loop count exceeds m_iter_max
+            RuntimeError: Occurs when loop count exceeds iter_max &
+             norm of step exceeds oscillation_tol
 
         Returns:
             List: list containing potentials and charges
               [phi0, phib, phid, phir, q0, qb, qs]
         """
-        assert 0. < _beta < 1.
-        assert _lamda > 1.
-
+        assert 0. < beta < 1.
+        assert lamda > 1.
+        history_ls: List = []
         # obtain init values based on infinity developed diffuse layer
         # phi0, phib, phid, phir, q0, qb, qs
         if not self._check_if_calculated_electrical_params_inf():
@@ -937,7 +953,8 @@ class Phyllosilicate:
         # The convergence condition is that the L2 norm in eqs.1~7
         # becomes sufficiently small.
         cou = 0
-        while self.m_convergence_condition < norm_fn:
+        while convergence_condition < norm_fn:
+            history_ls.append(norm_fn)
             _j = self._calc_Goncalves_jacobian_truncated(xn[0][0], xn[1][0], xn[2][0], xn[3][0])
             # To avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
@@ -946,30 +963,33 @@ class Phyllosilicate:
             # Damping is applied. References are listed below:
             # [1] http://www.misojiro.t.u-tokyo.ac.jp/~murota/lect-suchi/newton130805.pdf
             # [2] http://www.ep.sci.hokudai.ac.jp/~gfdlab/comptech/y2016/resume/070_newton/2014_0626-mkuriki.pdf
-            _mu = 1.
             _cou_damp: int = 0
             _norm_fn_tmp, _rhs = float_info.max, float_info.min
             # At least once, enter the following loop
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = _mu / (_lamda ** _cou_damp)
+                _mu = 1. / (lamda ** _cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_truncated(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
                 # calculate right hand side of eq.(21) of [1]
-                _rhs = (1. - (1. - _beta) * _mu) * norm_fn
+                _rhs = (1. - (1. - beta) * _mu) * norm_fn
+                _cou_damp += 1
                 if _cou_damp > 10000:
                     break
-                _cou_damp += 1
             xn = xn_tmp
             fn = fn_tmp
             norm_fn = _norm_fn_tmp
-            if cou > self.m_iter_max:
-                print(f"xn: {xn}") #!
-                print(f"fn: {fn}") #!
-                raise RuntimeError(f"Loop count exceeded {self.m_iter_max} times")
             cou += 1
+            if cou > iter_max:
+                norm_step = np.sum(np.sqrt(np.square(step)), axis=0)[0]
+                if norm_step > oscillation_tol:
+                    print(f"fn: {fn}") #!
+                    raise RuntimeError(f"Loop count exceeded {iter_max} times &" \
+                        f" exceeds oscillation tolerance: {norm_step}")
+                else:
+                    break
         xn = xn.T.tolist()[0]
         self.m_potential_0 = xn[0]
         self.m_potential_stern = xn[1]
@@ -989,7 +1009,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"m_charge_0: {self.m_charge_0}")
             self.m_logger.debug(f"m_charge_stern: {self.m_charge_stern}")
             self.m_logger.debug(f"m_charge_diffuse: {self.m_charge_diffuse}")
-        return xn
+        return xn, history_ls #! TODO: history 消す
 
     def _check_if_calculated_electrical_params_inf(self) -> bool:
         """ Check if the electrical properties for infinite diffuse layer
@@ -1102,7 +1122,7 @@ class Phyllosilicate:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant.
+        # TODO: Verify that the mobility is a constant (search temperature dependence or etc).
         assert self.m_kappa_truncated is not None, \
             "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
@@ -1130,7 +1150,7 @@ class Phyllosilicate:
         Returns:
             float: Specific conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant.
+        # TODO: Verify that the mobility is a constant (search temperature dependence or etc).
         assert self.m_kappa_truncated is not None, \
             "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
@@ -1159,7 +1179,7 @@ class Phyllosilicate:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant.
+        # TODO: Verify that the mobility is a constant (search temperature dependence or etc)..
         assert self.m_kappa_stern is not None, \
             "self.m_kappa_stern is None"
         assert _x <= self.m_xd, "self.m_xd < _x"
@@ -1222,7 +1242,7 @@ class Phyllosilicate:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant.
+        # TODO: Verify that the mobility is a constant (search temperature dependence or etc)..
         assert self.m_kappa_stern is not None, \
             "self.m_kappa_stern is None"
         assert _x <= self.m_xd, "self.m_xd < _x"
@@ -1265,7 +1285,7 @@ class Phyllosilicate:
         prop_na: Dict = self.m_ion_props["Na"]
         _conc = 1000. * prop_na["Concentration"]
         _v = prop_na["Valence"] # 1
-        # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
+        # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする. 他に方法がないか調べる
         # 参考文献：doi:10.1029/2008JB006114.
         # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
         _mobility = prop_na["Mobility_TrunDiffuse"] * 0.5
@@ -1296,8 +1316,7 @@ class Phyllosilicate:
             Tuple[float]: conductivity, integral error
         """
         # When the layer thickness is less than 1 nm,, water molecules
-        # cannot pass between the layers of smectite (Shirozu, 1998;
-        # Levy et al., 2018)
+        # cannot pass between the layers of smectite (Shirozu, 1998)
         assert self.m_layer_width >= 1.0e-9, "self.m_layer_width < 1.0e-9"
         assert self._check_if_calculated_electrical_params_truncated(), \
             "Before calculating the conductivity of interlayer, we should" \

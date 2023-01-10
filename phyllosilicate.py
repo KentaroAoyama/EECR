@@ -1439,6 +1439,124 @@ class Phyllosilicate:
         """
         return self.m_logger
 
-class Montmorillonite(Phyllosilicate):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+# pylint: disable=dangerous-default-value
+class Smectite(Phyllosilicate):
+    def __init__(self,
+                 temperature: float = 298.15,
+                 ion_props: Dict = ion_props_default.copy(),
+                 activities: Dict = activities_default.copy(),
+                 layer_width: float = 1.3e-9,
+                 potential_0: float = None,
+                 potential_stern: float = None,
+                 potential_zeta: float = None,
+                 potential_r: float = None,
+                 charge_0: float = None,
+                 charge_stern: float = None,
+                 charge_diffuse: float = None,
+                 xd: float = None,
+                 cond_stern_plus_edl: float = None,
+                 logger: Logger = None,):
+        """ Inherited classes from Philosilicate. Number density of
+            reactors on the surface and fixing the layer charge for 
+            smectite case.
+
+        Args:
+            temperature (float): temperature (unit: K). Defaults to 298.15.
+            ion_props (Dict): key is ionic species (Na, Cl, etc.), and
+                value is properties of dict. Check ion_props_default in constant.py for details.
+                Defaults to const.ion_props_default.
+            activities (Dict): key is ionic species (Na, Cl, etc.), and
+                value is activity (unit: Mol). Defaults to const.activities.
+            layer_width (float): Distance between sheets of phyllosilicate minerals
+                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
+            potential_0 (float, optional): surface potential (unit: V). Defaults to None.
+            potential_stern (float, optional): stern plane potential (unit: V). Defaults to None.
+            potential_zeta (float, optional): zeta plane potential (unit: V). Defaults to None.
+            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
+                Defaults to None.
+            charge_0 (float, optional): charges in surface layer (unit: C/m3). Defaults to None.
+            charge_stern (float, optional): charges in stern layer (unit: C/m3). Defaults to None.
+            charge_zeta (float, optional): charges in zeta layer (unit: C/m3). Defaults to None.
+            xd (float, optional): Distance from mineral surface to zeta plane (unit: V). Defaults to None.
+            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m). Defaults to None.
+            logger (Logger): Logger for debugging. Defaults to None.
+        """
+        super().__init__(temperature = temperature,
+                         ion_props = ion_props.copy(),
+                         activities = activities.copy(),
+                         layer_width = layer_width,
+                         gamma_1 = 0.,
+                         gamma_2 = 5.5,
+                         gamma_3 = 5.5,
+                         qi = -1.,
+                         potential_0 = potential_0,
+                         potential_stern = potential_stern,
+                         potential_zeta = potential_zeta,
+                         potential_r = potential_r,
+                         charge_0 = charge_0,
+                         charge_stern = charge_stern,
+                         charge_diffuse = charge_diffuse,
+                         xd = xd,
+                         cond_stern_plus_edl = cond_stern_plus_edl,
+                         logger = logger,)
+
+# pylint: disable=dangerous-default-value
+class Kaolinite(Phyllosilicate):
+    def __init__(self,
+                 temperature: float = 298.15,
+                 ion_props: Dict = ion_props_default.copy(),
+                 activities: Dict = activities_default.copy(),
+                 layer_width: float = 1.3e-9,
+                 potential_0: float = None,
+                 potential_stern: float = None,
+                 potential_zeta: float = None,
+                 potential_r: float = None,
+                 charge_0: float = None,
+                 charge_stern: float = None,
+                 charge_diffuse: float = None,
+                 xd: float = None,
+                 cond_stern_plus_edl: float = None,
+                 logger: Logger = None,):
+        """ Inherited classes from Philosilicate. Number density of
+            reactors on the surface and fixing the layer charge for 
+            kaolinite case.
+
+        Args:
+            temperature (float): temperature (unit: K). Defaults to 298.15.
+            ion_props (Dict): key is ionic species (Na, Cl, etc.), and
+                value is properties of dict. Check ion_props_default in constant.py for details.
+                Defaults to const.ion_props_default.
+            activities (Dict): key is ionic species (Na, Cl, etc.), and
+                value is activity (unit: Mol). Defaults to const.activities.
+            layer_width (float): Distance between sheets of phyllosilicate minerals
+                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
+            potential_0 (float, optional): surface potential (unit: V). Defaults to None.
+            potential_stern (float, optional): stern plane potential (unit: V). Defaults to None.
+            potential_zeta (float, optional): zeta plane potential (unit: V). Defaults to None.
+            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
+                Defaults to None.
+            charge_0 (float, optional): charges in surface layer (unit: C/m3). Defaults to None.
+            charge_stern (float, optional): charges in stern layer (unit: C/m3). Defaults to None.
+            charge_zeta (float, optional): charges in zeta layer (unit: C/m3). Defaults to None.
+            xd (float, optional): Distance from mineral surface to zeta plane (unit: V). Defaults to None.
+            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m). Defaults to None.
+            logger (Logger): Logger for debugging. Defaults to None.
+        """
+        super().__init__(temperature = temperature,
+                         ion_props = ion_props.copy(),
+                         activities = activities.copy(),
+                         layer_width = layer_width,
+                         gamma_1 = 5.5,
+                         gamma_2 = 5.5,
+                         gamma_3 = 5.5,
+                         qi = 0.,
+                         potential_0 = potential_0,
+                         potential_stern = potential_stern,
+                         potential_zeta = potential_zeta,
+                         potential_r = potential_r,
+                         charge_0 = charge_0,
+                         charge_stern = charge_stern,
+                         charge_diffuse = charge_diffuse,
+                         xd = xd,
+                         cond_stern_plus_edl = cond_stern_plus_edl,
+                         logger = logger,)

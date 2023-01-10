@@ -24,7 +24,7 @@ import math
 
 from matplotlib import pyplot as plt
 import numpy as np
-from minerals import Phyllosilicate
+from phyllosilicate import Phyllosilicate, Smectite, Kaolinite
 import constants as const
 
 def create_logger(i, fpth="./debug.txt"):
@@ -81,14 +81,10 @@ def revil_reloy_fig3():
         kaolinite.calc_cond_infdiffuse()
         kaolinite_cond_ls.append(kaolinite.m_cond_stern_plus_edl)
         # Smectite
-        smectite = Phyllosilicate(temperature = temperature,
+        smectite = Smectite(temperature = temperature,
                                    ion_props = ion_props,
                                    activities = activities,
                                    layer_width = 1.14e-9,
-                                   gamma_1 = 0.,
-                                   gamma_2 = 5.5,
-                                   gamma_3 = 5.5,
-                                   qi = -1.,
                                    xd = None,
                                    convergence_condition = 1.0e-9,
                                    iter_max = 10000,
@@ -124,8 +120,8 @@ def goncalves_fig6():
             activities["Cl"] = cna
             activities["H"] = ch
             activities["OH"] = 1.0e-14 / ch
-            smectite = Phyllosilicate(ion_props=ion_props,
-                                    layer_width = _r/2.)
+            smectite = Smectite(ion_props=ion_props,
+                                       layer_width = _r/2.)
             xn = smectite.calc_potentials_and_charges_truncated()
             print(f"xn: {xn}") #!
             _dct.setdefault(_r, smectite.m_potential_zeta)
@@ -165,14 +161,10 @@ def get_kaolinite_init_params():
             activities["OH"] = 1.0e-14 / ch
             activities["Na"] = cna
             activities["Cl"] = cna
-            kaolinite = Phyllosilicate(temperature = temperature,
+            kaolinite = Kaolinite(temperature = temperature,
                                     ion_props = ion_props,
                                     activities = activities,
                                     layer_width = 0.,
-                                    gamma_1 = 5.5,
-                                    gamma_2 = 5.5,
-                                    gamma_3 = 5.5,
-                                    qi = 0.,
                                     xd = None,
                                     logger = None,
                                     )
@@ -230,14 +222,10 @@ def get_smectite_init_params_inf():
             activities["OH"] = 1.0e-14 / ch
             activities["Na"] = cna
             activities["Cl"] = cna
-            smectite = Phyllosilicate(temperature = temperature,
+            smectite = Smectite(temperature = temperature,
                                       ion_props = ion_props,
                                       activities = activities,
                                       layer_width = 1.14e-9,
-                                      gamma_1 = 0,
-                                      gamma_2 = 5.5,
-                                      gamma_3 = 5.5,
-                                      qi = -1.,
                                       xd = None,
                                       logger = None,
                                       )
@@ -426,14 +414,10 @@ def test_single_condition():
               -0.6686304135871336,
               0.6685515350060947,
               7.887858103894404e-05]
-    smectite = Phyllosilicate(temperature = 293.15,
+    smectite = Smectite(temperature = 293.15,
                               ion_props = ion_props,
                               activities = activities,
                               layer_width = _r,
-                              gamma_1 = 0,
-                              gamma_2 = 5.5,
-                              gamma_3 = 5.5,
-                              qi = -1.,
                               )
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
     # # _x = [i for i in range(1, len(history) + 1)]

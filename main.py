@@ -1,3 +1,4 @@
+# TODO: docker化化
 # 比較する実験データ：
 # Revil and Leroy (1998)のFig.3 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
 # Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
@@ -17,7 +18,7 @@ import pickle
 
 from matplotlib import pyplot as plt
 import numpy as np
-from minerals import Phyllosilicate
+from phyllosilicate import Phyllosilicate
 import constants as const
 
 def create_logger(i, fpth="./debug.txt"):

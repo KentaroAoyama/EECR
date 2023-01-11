@@ -8,13 +8,9 @@
 # Leroy and Revil (2004)のFig.8下 (スメクタイトにおける, pHとゼータ電位の関係)
 # Leroy and Revil (2004)のFig.9 (カオリナイトにおける, ゼータ電位とSpecific conductivityの関係)
 # Leroy and Revil (2004)のFig.10 (スメクタイト & カオリナイトにおける, イオン濃度とSpecific conductivity, 間隙水の導電率とNormalized conductivityの関係)
-# Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
+# (Done): Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
 # 1. ポテンシャル：
 #  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
-# TODO: 下記で初期値が定まっていない問題をfix
-# CH: 1.0476157527896662e-11, CNa: 4.691986824612529以上
-# CH: 1.9179102616724927e-11, CNa 4.112以上
-# 2.5950242113997427e-11, 3.603992840801795
 from typing import List, Dict
 from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
@@ -103,9 +99,10 @@ def revil_reloy_fig3():
 
 def goncalves_fig6():
     cna = 1.0e-3
-    ch_ls = [1.0e-7, 1.0e-5, 1.0e-4, 1.0e-3, 1.0e-1]
+    ch_ls = [1.0e-7, 1.0e-5, 1.0e-4, 1.0e-3]
     ch_r_zeta: Dict = {}
     for ch in ch_ls:
+        print(f"_ch: {ch}")
         _dct = ch_r_zeta.setdefault(ch, {})
         r_ls = [2.0e-9 * i for i in range(1, 6)]
         for _r in r_ls:
@@ -282,6 +279,7 @@ def get_smectite_init_params_inf():
     print(f"elasped time to load pickle: {end-start}") #!
 
 def get_smectite_init_params_truncated():
+    # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
     temperature = 298.15
     ch_ls = np.logspace(-14, -1, 100, base=10.).tolist()
     r_ls = [i * 2.0e-9 for i in range(1, 6)]
@@ -420,27 +418,14 @@ def test_single_condition():
                               layer_width = _r,
                               )
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
-    # # _x = [i for i in range(1, len(history) + 1)]
-    # fig, ax = plt.subplots()
-    # # ax.plot(_x, history)
-    # fig.savefig("./tmp.png", bbox_inches = "tight") #!
-    # print(f"xn: {xn}") #!
 
 
 def main():
     return
 
 if __name__ == "__main__":
-    # with open("./smectite_truncated_init.pkl", "rb") as pkf:
-    #     _dct = pickle.load(pkf)
-    # print(f"_dct: {_dct}")
-    # for _ph, _cna_dct in _dct.items():
-    #     for _cna, _ls in _cna_dct.items():
-    #         for _f in _ls:
-    #             if not isinstance(_f, float):
-    #                 print(f"_ls: {_ls}") #!
-    get_kaolinite_init_params()
-    get_smectite_init_params_inf()
+    # get_kaolinite_init_params()
+    # get_smectite_init_params_inf()
     # get_smectite_init_params_truncated()
-    test_single_condition()
-    # goncalves_fig6()
+    # test_single_condition()
+    goncalves_fig6()

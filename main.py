@@ -1,14 +1,4 @@
-# TODO: docker化化
-# 比較する実験データ：
-# Revil and Leroy (1998)のFig.3 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
-# Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
-# Leroy and Revil (2004)のFig.5 (カオリナイトにおける, pHとゼータ電位の関係 & ゼータ電位とSpecific conductivityの関係)
-# Leroy and Revil (2004)のFig.8下 (スメクタイトにおける, pHとゼータ電位の関係)
-# Leroy and Revil (2004)のFig.9 (カオリナイトにおける, ゼータ電位とSpecific conductivityの関係)
-# Leroy and Revil (2004)のFig.10 (スメクタイト & カオリナイトにおける, イオン濃度とSpecific conductivity, 間隙水の導電率とNormalized conductivityの関係)
-# Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
-# 1. ポテンシャル：
-#  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
+# TODO: docker化
 # TODO: pyrite実装する
 
 from typing import List, Dict

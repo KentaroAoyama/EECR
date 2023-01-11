@@ -940,14 +940,20 @@ class Phyllosilicate:
         if self.m_xd is None:
             self.calc_xd()
         if x_init is None:
+            r_ls = list(smectite_trun_init_params.keys())
+            _r = self.m_layer_width
+            _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
+            print(f"idx: {_idx}") #!
+            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
             _ch = self.m_ion_props["H"]["Concentration"]
             _cna = self.m_ion_props["Na"]["Concentration"]
-            ch_ls = list(smectite_trun_init_params.keys())
+            ch_ls = list(ch_cna_dict.keys())
             _idx = np.argmin(np.square((np.array(ch_ls, dtype=np.float64) - _ch)))
-            cna_dct: Dict = smectite_trun_init_params[ch_ls[_idx]]
+            cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
             cna_ls = list(cna_dct.keys())
             _idx = np.argmin(np.square((np.array(cna_ls, dtype=np.float64) - _cna)))
             x_init = cna_dct[cna_ls[_idx]]
+            print(f"x_init: {x_init}") #!
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]

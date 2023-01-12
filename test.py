@@ -196,7 +196,41 @@ def Leroy_Revil_2004_fig8():
     _pth = path.join(test_dir(), "Leroy_Revil_2004_fig8.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
     return
- 
+
+def Leroy_Revil_2004_fig9():
+    # pH vs zeta potential for smectite
+    # Qi以外Fig.8の定数に変更したところ、よく整合した.
+    pH_ls = [3, 4, 5, 6, 7, 8, 9, 10, 11]
+    cnacl = 2.0e-3
+    potential_zeta_ls = []
+    specific_cond_ls = []
+    for ph in pH_ls:
+        print(f"pH: {ph}") #!
+        ion_props = const.ion_props_default.copy()
+        activities = const.activities_default.copy()
+        ch = 10. ** ((-1.) * ph)
+        ion_props["H"]["Concentration"] = ch
+        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+        ion_props["Na"]["Concentration"] = cnacl
+        ion_props["Cl"]["Concentration"] = cnacl
+        activities["H"] = ch
+        activities["OH"] = 1.0e-14 / ch
+        activities["Na"] = cnacl
+        activities["Cl"] = cnacl
+        kaolinite = Kaolinite(ion_props = ion_props,
+                             activities = activities,
+                            )
+        kaolinite.calc_potentials_and_charges_inf()
+        potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.)
+        specific_cond_ls.append(kaolinite.calc_specific_surface_cond_inf()[0])
+    # plot
+    fig, ax = plt.subplots()
+    ax.plot(potential_zeta_ls, specific_cond_ls)
+    ax.invert_xaxis()
+    _pth = path.join(test_dir(), "Leroy_Revil_2004_fig9.png")
+    fig.savefig(_pth, dpi=200, bbox_inches="tight")
+    return
+
 def goncalves_fig6():
     # layer width vs zeta potential
     print("test: Goncalves et al., fig6")
@@ -469,11 +503,12 @@ def main():
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    # get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
     # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
     # Leroy_Revil_2004_fig8()
+    Leroy_Revil_2004_fig9()
     # goncalves_fig6()

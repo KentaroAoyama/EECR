@@ -1178,7 +1178,7 @@ class Phyllosilicate:
         _conc = 1000. * prop_na["Concentration"]
         _v = prop_na["Valence"]
         _mobility = prop_na["Mobility_InfDiffuse"]
-        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
+        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)))
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 

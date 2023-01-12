@@ -20,16 +20,50 @@ AVOGADRO_CONST = 6.0221408e+23
 GAS_CONST = 8.31446262
 
 # 平衡定数 (at 25℃)
-k_aloh = 1.0e-10 # Leroy and Revil, 2003, table 1
-k_sioh = 1.3e-6 # Gonçalvès et al., 2007, table 1
-k_xh = 1.0e-2 # Gonçalvès et al., 2007, table 1
-k_xna = 0.95 # Gonçalvès et al., 2007, table 1
+# Smectite & inf
+k_aloh_smec_inf = 1.0e-10 # Leroy and Revil, 2004, table 1
+k_sioh_smec_inf = 1.3e-6 # Leroy and Revil, 2004, Fig. 8
+k_xh_smec_inf = 1.0e-2 # Leroy and Revil, 2004, table 1
+k_xna_smec_inf = 0.033 # Gonçalvès et al., 2007, Fig. 8
+c1_smec_inf = 2.09 # Leroy and Revil, 2004, Fig. 8
+c2_smec_inf = 0.2 # Leroy and Revil, 2004, table 1
+
+# Smectite & truncated
+k_aloh_smec_trun = 1.0e-10 # Leroy and Revil, 2004, table 1
+k_sioh_smec_trun = 1.3e-6 # Gonçalvès et al., 2007, table 1
+k_xh_smec_trun = 1.0e-2 # Gonçalvès et al., 2007, table 1
+k_xna_smec_trun = 0.95 # Gonçalvès et al., 2007, table 1
+c1_smec_trun = 2.09 # Gonçalvès et al., 2007, table 1
+c2_smec_trun = 0.55 # Gonçalvès et al., 2007, table 1
+
+# Kaolinite (inf only)
+k_aloh_kaol = 1.0e-10 # Leroy and Revil, 2004, table 1
+k_sioh_kaol = 4.95e-6 # Leroy and Revil, 2004, table 2
+k_xh_kaol = 1.0e-2 # Leroy and Revil, 2004, table 1
+k_xna_kaol = 5.04e-2 # Leroy and Revil, 2004, table 2
+c1_kaol = 1.49 # Leroy and Revil, 2004, table 2
+c2_kaol = 0.2 # Leroy and Revil, 2004, table 1
+
 
 # 標準ギブスエネルギー
-dg_aloh = calc_standard_gibbs_energy(k_aloh)
-dg_sioh = calc_standard_gibbs_energy(k_sioh)
-dg_xh = calc_standard_gibbs_energy(k_xh)
-dg_xna = calc_standard_gibbs_energy(k_xna)
+# Smectite & inf
+dg_aloh_smec_inf = calc_standard_gibbs_energy(k_aloh_smec_inf)
+dg_sioh_smec_inf = calc_standard_gibbs_energy(k_sioh_smec_inf)
+dg_xh_smec_inf = calc_standard_gibbs_energy(k_xh_smec_inf)
+dg_xna_smec_inf = calc_standard_gibbs_energy(k_xna_smec_inf)
+
+# Smectite & truncated
+dg_aloh_smec_trun = calc_standard_gibbs_energy(k_aloh_smec_trun)
+dg_sioh_smec_trun = calc_standard_gibbs_energy(k_sioh_smec_trun)
+dg_xh_smec_trun = calc_standard_gibbs_energy(k_xh_smec_trun)
+dg_xna_smec_trun = calc_standard_gibbs_energy(k_xna_smec_trun)
+
+# Kaolinite (inf only)
+dg_aloh_kaol = calc_standard_gibbs_energy(k_aloh_kaol)
+dg_sioh_kaol = calc_standard_gibbs_energy(k_sioh_kaol)
+dg_xh_kaol = calc_standard_gibbs_energy(k_xh_kaol)
+dg_xna_kaol = calc_standard_gibbs_energy(k_xna_kaol)
+
 
 # http://apchem2.kanagawa-u.ac.jp/matsumotolab/Echem3.pdf
 # Mobility_TrunDiffuseは, Mobility_InfDiffuseの1/10と設定した.

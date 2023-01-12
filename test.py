@@ -2,10 +2,10 @@
 
 # TODO: テスト項目をまとめて, 関数に実装する
 # 比較する実験データ：
-# Revil and Glover (1998)のFig.2 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
-# Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
-# Leroy and Revil (2004)のFig.5 (カオリナイトにおける, pHとゼータ電位の関係 & ゼータ電位とSpecific conductivityの関係)
-# Leroy and Revil (2004)のFig.8下 (スメクタイトにおける, pHとゼータ電位の関係)
+# (Done) A. Revil, L. M. Cathles, S. LoshのFig.3 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
+# (Done) Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
+# (Done) Leroy and Revil (2004)のFig.5(a) (カオリナイトにおける, pHとゼータ電位の関係)
+# (Done) Leroy and Revil (2004)のFig.8 (スメクタイトにおける, pHとゼータ電位の関係)
 # Leroy and Revil (2004)のFig.9 (カオリナイトにおける, ゼータ電位とSpecific conductivityの関係)
 # Leroy and Revil (2004)のFig.10 (スメクタイト & カオリナイトにおける, イオン濃度とSpecific conductivity, 間隙水の導電率とNormalized conductivityの関係)
 # (Done): Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
@@ -20,7 +20,7 @@ import math
 
 from matplotlib import pyplot as plt
 import numpy as np
-from phyllosilicate import Phyllosilicate, Smectite, Kaolinite
+from phyllosilicate import Smectite, Kaolinite
 import constants as const
 
 def create_logger(i, fpth="./debug.txt"):
@@ -37,17 +37,22 @@ def test_dir():
     cwdpth = getcwd()
     return path.join(cwdpth, "test")
 
-def revil_reloy_fig3():
+def Revil_etal_1998_fig3():
+    # 流体の導電率 vs 粘土岩の導電率
+    print("test: Revil et al., 1998 fig3")
     # Revil and Glover (1998)のFig.2と出力が合っているかテストする
     # スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい
-    print("test: revil_reloy_fig3")
+    # Result: スメクタイトに関しては, 数倍スケーリングした形となっており, 傾向はあっている。異方性, 間隙率を考慮すれば, 改善すると考えられる
+    # inter layerが寄与する割合が高く, truncatedされているポテンシャル面を計算できちんと考慮できたからだと考えられる。
+    # カオリナイトに関しては, オーダー・傾向ともにあっていない. 拡散層が間隙水に占める割合は実際の岩石では非常に小さいのだと
+    # すると, この結果で説明がつく. コード側に不備は確認できなかった (23/01/11)
     temperature = 298.15
-    cnacl_interval = (5. - 0.01) / 100
+    cnacl_interval = (2.4 - 0.01) / 100
     cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
     kaolinite_cond_ls: List = []
     smectite_cond_ls: List = []
     for cnacl in cnacl_ls:
-        print(cnacl) #!
+        print(f"cnacl: {cnacl}") #!
         ion_props = const.ion_props_default.copy()
         activities = const.activities_default.copy()
         ch = 1.0e-7
@@ -60,44 +65,141 @@ def revil_reloy_fig3():
         activities["Na"] = cnacl
         activities["Cl"] = cnacl
         # Kaolinite
-        kaolinite = Phyllosilicate(temperature = temperature,
-                                   ion_props = ion_props,
-                                   activities = activities,
-                                   layer_width = 0.,
-                                   gamma_1 = 5.5,
-                                   gamma_2 = 5.5,
-                                   gamma_3 = 5.5,
-                                   qi = 0.,
-                                   xd = None,
-                                   convergence_condition = 1.0e-9,
-                                   iter_max = 10000,
-                                   logger = None,
-                                  )
+        kaolinite = Kaolinite(temperature = temperature,
+                              ion_props = ion_props,
+                              activities = activities,
+                              xd = None,
+                              logger = None,
+                             )
         kaolinite.calc_potentials_and_charges_inf()
         kaolinite.calc_cond_infdiffuse()
         kaolinite_cond_ls.append(kaolinite.m_cond_stern_plus_edl)
         # Smectite
         smectite = Smectite(temperature = temperature,
-                                   ion_props = ion_props,
-                                   activities = activities,
-                                   layer_width = 1.14e-9,
-                                   xd = None,
-                                   convergence_condition = 1.0e-9,
-                                   iter_max = 10000,
-                                   logger = None,
-                                  )
+                            ion_props = ion_props,
+                            activities = activities,
+                            layer_width = 1.14e-9,
+                            )
         smectite.calc_potentials_and_charges_truncated()
         smectite.calc_cond_interlayer()
         smectite_cond_ls.append(smectite.m_cond_stern_plus_edl)
     # plot
     fig, ax = plt.subplots()
-    ax.plot(cnacl_ls, smectite_cond_ls, label="Smectite")
-    ax.plot(cnacl_ls, kaolinite_cond_ls, label="kaolinite")
+    # TODO: cnaclを導電率に変換する
+    ax.plot(cnacl_ls, smectite_cond_ls, label="Smectite (Inter Layer)")
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    ax.plot(cnacl_ls, kaolinite_cond_ls, label="Kaolinite (Diffuse Layer)")
     ax.legend()
-    _pth = path.join(test_dir(), "Revil_Glover_1998_fig2.png")
+    _pth = path.join(test_dir(), "Revil_etal_1998_fig3.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+def Leroy_Revil_2004_fig4():
+    # Cnacl vs zeta potential
+    # c1, k2, k4をfixすれば合う (論文中のoptimized, KClでの実験値なので, 比較対象として不適かも)
+    print("test: Leroy & Revil, 2004 fig4")
+    temperature = 298.15
+    cnacl_interval = (0.1 - 0.001) / 100
+    cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
+    potential_zeta_ls: List = []
+    for cnacl in cnacl_ls:
+        print(f"cnacl: {cnacl}") #!
+        ion_props = const.ion_props_default.copy()
+        activities = const.activities_default.copy()
+        ch = 1.0e-8
+        ion_props["H"]["Concentration"] = ch
+        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+        ion_props["Na"]["Concentration"] = cnacl
+        ion_props["Cl"]["Concentration"] = cnacl
+        activities["H"] = ch
+        activities["OH"] = 1.0e-14 / ch
+        activities["Na"] = cnacl
+        activities["Cl"] = cnacl
+        kaolinite = Kaolinite(temperature = temperature,
+                              ion_props = ion_props,
+                              activities = activities,
+                             )
+        kaolinite.calc_potentials_and_charges_inf()
+        # cpnvert V → mV
+        potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.)
+    # plot
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, potential_zeta_ls, label="pH=8")
+    ax.set_xscale("log")
+    ax.invert_yaxis()
+    ax.legend()
+    _pth = path.join(test_dir(), "Leroy_Revil_2004_fig4.png")
+    fig.savefig(_pth, dpi=200, bbox_inches="tight")
+
+def Leroy_Revil_2004_fig5_a():
+    # pH vs zeta potential for kaolinite
+    # よく整合した
+    pH_ls = [4, 5, 6, 7, 8, 9, 10, 11]
+    cnacl = 2.0e-3
+    potential_zeta_ls = []
+    for ph in pH_ls:
+        print(f"pH: {ph}") #!
+        ion_props = const.ion_props_default.copy()
+        activities = const.activities_default.copy()
+        ch = 10. ** ((-1.) * ph)
+        ion_props["H"]["Concentration"] = ch
+        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+        ion_props["Na"]["Concentration"] = cnacl
+        ion_props["Cl"]["Concentration"] = cnacl
+        activities["H"] = ch
+        activities["OH"] = 1.0e-14 / ch
+        activities["Na"] = cnacl
+        activities["Cl"] = cnacl
+        kaolinite = Kaolinite(ion_props = ion_props,
+                              activities = activities,
+                             )
+        kaolinite.calc_potentials_and_charges_inf()
+        potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.)
+    # plot
+    fig, ax = plt.subplots()
+    ax.plot(pH_ls, potential_zeta_ls)
+    ax.invert_yaxis()
+    # ax.legend()
+    _pth = path.join(test_dir(), "Leroy_Revil_2004_fig5_a.png")
+    fig.savefig(_pth, dpi=200, bbox_inches="tight")
+    return
+
+def Leroy_Revil_2004_fig8():
+    # pH vs zeta potential for smectite
+    # Qi以外Fig.8の定数に変更したところ、よく整合した.
+    pH_ls = [2, 3, 4, 5, 6, 7, 8, 9, 10]
+    cnacl = 1.0e-2
+    potential_zeta_ls = []
+    for ph in pH_ls:
+        print(f"pH: {ph}") #!
+        ion_props = const.ion_props_default.copy()
+        activities = const.activities_default.copy()
+        ch = 10. ** ((-1.) * ph)
+        ion_props["H"]["Concentration"] = ch
+        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
+        ion_props["Na"]["Concentration"] = cnacl
+        ion_props["Cl"]["Concentration"] = cnacl
+        activities["H"] = ch
+        activities["OH"] = 1.0e-14 / ch
+        activities["Na"] = cnacl
+        activities["Cl"] = cnacl
+        smectite = Smectite(ion_props = ion_props,
+                            activities = activities,
+                            )
+        smectite.calc_potentials_and_charges_inf()
+        potential_zeta_ls.append(smectite.m_potential_zeta * 1000.)
+    # plot
+    fig, ax = plt.subplots()
+    ax.plot(pH_ls, potential_zeta_ls)
+    ax.invert_yaxis()
+    # ax.legend()
+    _pth = path.join(test_dir(), "Leroy_Revil_2004_fig8.png")
+    fig.savefig(_pth, dpi=200, bbox_inches="tight")
+    return
+ 
 def goncalves_fig6():
+    # layer width vs zeta potential
+    print("test: Goncalves et al., fig6")
     cna = 1.0e-3
     ch_ls = [1.0e-7, 1.0e-5, 1.0e-4, 1.0e-3]
     ch_r_zeta: Dict = {}
@@ -118,7 +220,7 @@ def goncalves_fig6():
             activities["H"] = ch
             activities["OH"] = 1.0e-14 / ch
             smectite = Smectite(ion_props=ion_props,
-                                       layer_width = _r/2.)
+                                layer_width = _r/2.)
             xn = smectite.calc_potentials_and_charges_truncated()
             print(f"xn: {xn}") #!
             _dct.setdefault(_r, smectite.m_potential_zeta)
@@ -134,7 +236,6 @@ def goncalves_fig6():
     _y_goncalves = [-0.159, -0.148, -0.145, -0.144, -0.1435]
     ax.plot(_x, _y_goncalves, label="Gonçalvès")
     ax.legend()
-    # ax.invert_yaxis()
     _pth = path.join(test_dir(), "Goncalves_fig6_zeta.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
@@ -200,6 +301,8 @@ def get_kaolinite_init_params():
 
 
 def get_smectite_init_params_inf():
+    # TODO: cna > 3Mで収束が悪い不具合をfix
+    # TODO: pH > 11の結果がないのでfix (continueしていた？)
     temperature = 298.15
     ch_ls = np.logspace(-14, -1, 100, base=10.).tolist()
     conc_ls = np.logspace(-5., 0.79, 100, base=10.).tolist()
@@ -220,12 +323,12 @@ def get_smectite_init_params_inf():
             activities["Na"] = cna
             activities["Cl"] = cna
             smectite = Smectite(temperature = temperature,
-                                      ion_props = ion_props,
-                                      activities = activities,
-                                      layer_width = 1.14e-9,
-                                      xd = None,
-                                      logger = None,
-                                      )
+                                ion_props = ion_props,
+                                activities = activities,
+                                layer_width = 1.14e-9,
+                                xd = None,
+                                logger = None,
+                                )
             if i == 0 and ch < 1.0e-13:
                 xn = [-0.6005853427020252, -0.3106730922533564, -0.2495833767391809, -0.6088157259422048, 0.5750331132628657, 0.03378261267933904]
             elif i == 0 and 1.0e-13 <= ch < 1.0e-12:
@@ -290,14 +393,11 @@ def get_smectite_init_params_truncated():
         ch_cna_dct: Dict = r_ch_cna_init_dict.setdefault(_r, {})
         for ch in ch_ls:
             cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
-            if ch < 6.428073117284319e-11:
-                continue
             print(f"ch: {ch}") #!
             for j, cna in enumerate(conc_ls):
                 print(f"cna: {cna}") #!
                 ion_props = const.ion_props_default.copy()
                 activities = const.activities_default.copy()
-                ch = ch
                 ion_props["H"]["Concentration"] = ch
                 ion_props["OH"]["Concentration"] = 1.0e-14 / ch
                 ion_props["Na"]["Concentration"] = cna
@@ -306,71 +406,14 @@ def get_smectite_init_params_truncated():
                 activities["OH"] = 1.0e-14 / ch
                 activities["Na"] = cna
                 activities["Cl"] = cna
-                smectite = Phyllosilicate(temperature = temperature,
-                                        ion_props = ion_props,
-                                        activities = activities,
-                                        layer_width = _r,
-                                        gamma_1 = 0,
-                                        gamma_2 = 5.5,
-                                        gamma_3 = 5.5,
-                                        qi = -1.,
-                                        )
-                # if math.isclose(ch, 1.0476157527896662e-11, abs_tol=1.0e-12) and cna > 4.691:
-                #     continue
-                # if math.isclose(ch, 1.9179102616724927e-11, abs_tol=1.0e-12) and cna > 4.112:
-                #     continue
-                # if math.isclose(ch, 2.5950242113997427e-11, abs_tol=1.0e-12) and cna > 3.60:
-                #     continue
-                # if math.isclose(ch, 4.750810162102813e-11, abs_tol=1.0e-12) and cna > 3.37:
-                #     continue
-                # if math.isclose(ch, 6.428073117284319e-11, abs_tol=1.0e-12) and cna > 3.158:
-                #     continue
-                # if math.isclose(ch, 8.697490026177835e-11, abs_tol=1.0e-12) and cna > 2.957:
-                #     continue
-                if ch < 1.0e-13:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-13 <= ch < 1.0e-12:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-12 <= ch < 1.0e-11:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-11 <= ch < 1.0e-10:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-10 <= ch < 1.0e-8:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-8 <= ch < 1.0e-7:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-7 <= ch < 1.0e-5:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-5 <= ch < 1.0e-4:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-4 <= ch < 1.0e-2:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                elif 1.0e-2 <= ch < 1.0e-1:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
-                else:
-                    if j == 0:
-                        xn = smectite.calc_potentials_and_charges_inf()
-                        xn.insert(3, xn[2] / 2.)
+                smectite = Smectite(temperature = temperature,
+                                    ion_props = ion_props,
+                                    activities = activities,
+                                    layer_width = _r,
+                                    )
+                if j == 0:
+                    xn = smectite.calc_potentials_and_charges_inf()
+                    xn.insert(3, xn[2] / 2.)
 
                 smectite.calc_potentials_and_charges_inf()
                 xn = smectite.calc_potentials_and_charges_truncated(xn)
@@ -413,9 +456,9 @@ def test_single_condition():
               0.6685515350060947,
               7.887858103894404e-05]
     smectite = Smectite(temperature = 293.15,
-                              ion_props = ion_props,
-                              activities = activities,
-                              layer_width = _r,
+                        ion_props = ion_props,
+                        activities = activities,
+                        layer_width = _r,
                               )
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
 
@@ -426,6 +469,11 @@ def main():
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    # get_smectite_init_params_truncated()
+    get_smectite_init_params_truncated()
     # test_single_condition()
-    goncalves_fig6()
+
+    # Revil_etal_1998_fig3()
+    # Leroy_Revil_2004_fig4()
+    # Leroy_Revil_2004_fig5_a()
+    # Leroy_Revil_2004_fig8()
+    # goncalves_fig6()

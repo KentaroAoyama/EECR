@@ -992,16 +992,15 @@ class Phyllosilicate:
         assert 0. < beta < 1.
         assert lamda > 1.
 
+        # obtain init values based on infinity developed diffuse layer
+        # phi0, phib, phid, phir, q0, qb, qs
+        if not self._check_if_calculated_electrical_params_inf():
+            self.calc_potentials_and_charges_inf()
         # TODO: Currently, it is assumed that this function is called only in the case of
         # smectite. If we want to calculate the electrochemical properties of another clay
         # mineral, such as vermiculite, we should modify this function.
         if not self.__check_constant_as_smectite_truncated():
             self.__set_constant_for_smectite_truncated()
-
-        # obtain init values based on infinity developed diffuse layer
-        # phi0, phib, phid, phir, q0, qb, qs
-        if not self._check_if_calculated_electrical_params_inf():
-            self.calc_potentials_and_charges_inf()
         if self.m_xd is None:
             self.calc_xd()
         if x_init is None:
@@ -1178,7 +1177,7 @@ class Phyllosilicate:
         _conc = 1000. * prop_na["Concentration"]
         _v = prop_na["Valence"]
         _mobility = prop_na["Mobility_InfDiffuse"]
-        _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)))
+        _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
@@ -1296,8 +1295,7 @@ class Phyllosilicate:
         prop_na: Dict = self.m_ion_props["Na"]
         _conc = 1000. * prop_na["Concentration"]
         _v = prop_na["Valence"] # 1
-        # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-        _mobility = prop_na["Mobility_InfDiffuse"] * 0.5
+        _mobility = prop_na["Mobility_Stern"]
         _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
@@ -1459,33 +1457,36 @@ class Phyllosilicate:
             self.m_logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
         return cond, _err1 + _err2
 
-    def calc_specific_surface_cond_inf(self) -> float:
+    def calc_specific_surface_cond_inf(self, cond_fluid: float) -> Tuple[float]:
         """ Calculate specific surface conductivity of infinite diffuse layer
             Specific surface conductivity is defined as eq.(26) in Leroy and Revil (2004)
             Prepared for the purpose of comparison with Fig. 9, Fig. 10 (a) of Leroy & Revil, 2004
 
+        Args:
+            cond_fluid (float): conductivity of the fluid
+
         Returns:
-            float: Specific surface conductivity
+            Tuple[float]: Specific surface conductivity, integral error
         """
         # Leroy & Revil, 2004のFig.9, Fig10 (a)と比較するために作成した関数
-        assert self._check_if_calculated_electrical_params_inf(), \
-            "Before calculating the specific surface conductivity of" \
-            "inffinite diffuse layer, we should obtain electrical" \
-            "parameters for infinite diffuse layer case"
+        if not self._check_if_calculated_electrical_params_inf():
+            self.calc_potentials_and_charges_inf()
         if self.m_xd is None:
             self.calc_xd()
         if self.m_kappa_stern is None:
             self.__calc_kappa_stern()
         _xdl = self.m_xd + 1. / self.m_kappa
-        cond_ohmic_diffuse, _err1 = quad(self.__calc_specific_cond_at_x_inf_diffuse,
-                                        self.m_xd,
-                                        _xdl)
-        cond_ohmic_stern, _err2 = quad(self.__calc_specific_cond_at_x_stern_inf,
-                                      0.,
-                                      self.m_xd)
+        cond_ohmic_diffuse, _err1 = quad(self.__calc_cond_at_x_inf_diffuse,
+                                         self.m_xd,
+                                         _xdl,)
+        cond_ohmic_stern, _err2 = quad(self.__calc_cond_at_x_stern_inf,
+                                       0.,
+                                       self.m_xd)
+        cond_ohmic_fluid = cond_fluid * _xdl
+        cond_specific = cond_ohmic_diffuse + cond_ohmic_stern - cond_ohmic_fluid
         # In the dynamic stern layer assumtion, stern layer has surtain
         # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
-        return cond_ohmic_diffuse + cond_ohmic_stern, _err1 + _err2
+        return cond_specific, _err1 + _err2
 
     def calc_cond_tensor_with_sq_oxyz(self, edge_length: float) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned

@@ -1,13 +1,12 @@
 # pylint: disable=import-error
 
-# TODO: テスト項目をまとめて, 関数に実装する
 # 比較する実験データ：
 # (Done) A. Revil, L. M. Cathles, S. LoshのFig.3 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
 # (Done) Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
 # (Done) Leroy and Revil (2004)のFig.5(a) (カオリナイトにおける, pHとゼータ電位の関係)
 # (Done) Leroy and Revil (2004)のFig.8 (スメクタイトにおける, pHとゼータ電位の関係)
-# Leroy and Revil (2004)のFig.9 (カオリナイトにおける, ゼータ電位とSpecific conductivityの関係)
-# Leroy and Revil (2004)のFig.10 (スメクタイト & カオリナイトにおける, イオン濃度とSpecific conductivity, 間隙水の導電率とNormalized conductivityの関係)
+# (TODO:) Leroy and Revil (2004)のFig.9 (カオリナイトにおける, ゼータ電位とSpecific conductivityの関係)
+# (TODO:) Leroy and Revil (2004)のFig.10 (スメクタイト & カオリナイトにおける, イオン濃度とSpecific conductivity, 間隙水の導電率とNormalized conductivityの関係)
 # (Done): Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
 # 1. ポテンシャル：
 #  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
@@ -16,12 +15,12 @@ from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
 import pickle
 from os import path, getcwd
-import math
 
 from matplotlib import pyplot as plt
 import numpy as np
 from phyllosilicate import Smectite, Kaolinite
 import constants as const
+from fluid import NaCl
 
 def create_logger(i, fpth="./debug.txt"):
     # create logger
@@ -222,14 +221,15 @@ def Leroy_Revil_2004_fig9():
                             )
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.)
-        specific_cond_ls.append(kaolinite.calc_specific_surface_cond_inf()[0])
+        nacl = NaCl()
+        cond_fluid = nacl.sen_and_goode_1992(298.15, 1.0e5, cnacl)
+        specific_cond_ls.append(kaolinite.calc_specific_surface_cond_inf(cond_fluid)[0])
     # plot
     fig, ax = plt.subplots()
     ax.plot(potential_zeta_ls, specific_cond_ls)
     ax.invert_xaxis()
     _pth = path.join(test_dir(), "Leroy_Revil_2004_fig9.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
-    return
 
 def goncalves_fig6():
     # layer width vs zeta potential
@@ -255,8 +255,7 @@ def goncalves_fig6():
             activities["OH"] = 1.0e-14 / ch
             smectite = Smectite(ion_props=ion_props,
                                 layer_width = _r/2.)
-            xn = smectite.calc_potentials_and_charges_truncated()
-            print(f"xn: {xn}") #!
+            smectite.calc_potentials_and_charges_truncated()
             _dct.setdefault(_r, smectite.m_potential_zeta)
     # plot
     fig, ax = plt.subplots()
@@ -265,7 +264,7 @@ def goncalves_fig6():
         for _r, _zeta in _dct.items():
             _x.append(_r)
             _y.append(_zeta)
-        _x = [i / 2. for i in _x] # 論文中のrはlayer_widthの半分で定義されている
+        _x = [i / 2. for i in _x]
         ax.plot(_x, _y, label=f"pH: {(-1.) * np.log10(ch)}")
     _y_goncalves = [-0.159, -0.148, -0.145, -0.144, -0.1435]
     ax.plot(_x, _y_goncalves, label="Gonçalvès")
@@ -510,5 +509,5 @@ if __name__ == "__main__":
     # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
     # Leroy_Revil_2004_fig8()
-    Leroy_Revil_2004_fig9()
-    # goncalves_fig6()
+    # Leroy_Revil_2004_fig9()
+    goncalves_fig6()

@@ -10,7 +10,6 @@ rock.py
 smectite_init.pkl
 smectite_init_inf.pkl
 smectite_truncated_init.pkl
-solver.py
 test/_temp.png
 test/Goncalves2007_fig6_phid.png
 test/Goncalves2007_fig6_qs.png

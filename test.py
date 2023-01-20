@@ -166,6 +166,7 @@ def Leroy_Revil_2004_fig5_a():
 def Leroy_Revil_2004_fig8():
     # pH vs zeta potential for smectite
     # Qi以外Fig.8の定数に変更したところ、よく整合した.
+    # -10mVずれてしまった. このcommitでおかしくなった：https://github.com/KentaroAoyama/EECR/commit/d455854b3b21b2de4411e700bc78805c3c1da992
     pH_ls = [2, 3, 4, 5, 6, 7, 8, 9, 10]
     cnacl = 1.0e-2
     potential_zeta_ls = []
@@ -500,14 +501,14 @@ def main():
     return
 
 if __name__ == "__main__":
-    get_kaolinite_init_params()
-    get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    # get_kaolinite_init_params()
+    # get_smectite_init_params_inf()
+    # get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
     # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
-    # Leroy_Revil_2004_fig8()
+    Leroy_Revil_2004_fig8()
     # Leroy_Revil_2004_fig9()
     # goncalves_fig6()

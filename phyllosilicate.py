@@ -37,6 +37,7 @@ kaolinite_init_pth: PathLike = path.join(path.dirname(__file__),
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
+
 class Phyllosilicate:
     """
     Phyllosilicate Class
@@ -184,6 +185,7 @@ class Phyllosilicate:
                 _msg = f"name: {name}, value: {value}"
                 self.m_logger.debug(_msg)
 
+
     def init_default(self) -> None:
         """Calculate constants and parameters commonly used when computing
         electrical parameters
@@ -212,6 +214,7 @@ class Phyllosilicate:
         bottom = self.m_dielec_water * _kb * self.m_temperature
         self.m_kappa = np.sqrt(top / bottom)
 
+
     def __set_constant_for_kaolinite(self) -> None:
         """Set the constants for the case of kaolinite and infinite diffuse layer
         """
@@ -221,6 +224,7 @@ class Phyllosilicate:
         self.m_k4: float = const.calc_equibilium_const(const.dg_xna_kaol, self.m_temperature)
         self.m_c1: float = const.c1_kaol
         self.m_c2: float = const.c2_kaol
+
 
     def __set_constant_for_smectite_inf(self) -> None:
         """Set the constants for the case of smectite and infinite diffuse layer
@@ -232,6 +236,7 @@ class Phyllosilicate:
         self.m_c1: float = const.c1_smec_inf
         self.m_c2: float = const.c2_smec_inf
 
+
     def __set_constant_for_smectite_truncated(self) -> None:
         """Set the constants for the case of smectite and midway truncation of the diffuse layer
         """
@@ -241,6 +246,7 @@ class Phyllosilicate:
         self.m_k4: float = const.calc_equibilium_const(const.dg_xna_smec_trun, self.m_temperature)
         self.m_c1: float = const.c1_smec_trun
         self.m_c2: float = const.c2_smec_trun
+
 
     def __check_constant_as_smectite_truncated(self) -> bool:
         """ Check if it is equal to the value in Table 1 of Gonçalvès et al., 2007.
@@ -271,6 +277,7 @@ class Phyllosilicate:
             flag = False
         return flag
 
+
     def __calc_f1(self, phi0: float, q0: float) -> float:
         """ Calculate eq.(16) of Gonçalvès et al. (2004)
 
@@ -293,6 +300,7 @@ class Phyllosilicate:
         f1 = q0 - _e * 0.5 * 1.0e18 * (right1 + right2 - right3) - self.m_qi
         return f1
 
+
     def __calc_f2(self, phib: float, qb: float) -> float:
         """ Calculate eq.(17) of Gonçalvès et al. (2004)
 
@@ -313,6 +321,7 @@ class Phyllosilicate:
             (ch / self.m_k3 + cna / self.m_k4) * np.exp(x) * 1.0e18
         return f2
 
+
     def __calc_f3(self, q0: float, qb: float, qs: float) -> float:
         """ Calculate eq.(18) of Gonçalvès et al. (2004)
 
@@ -324,6 +333,7 @@ class Phyllosilicate:
             float: left side of eq.(18) minus right side
         """
         return q0 + qb + qs
+
 
     def __calc_f4(self, phi0: float, phib: float, q0: float) -> float:
         """ Calculate eq.(19) of Gonçalvès et al. (2004)
@@ -337,6 +347,7 @@ class Phyllosilicate:
         """
         return phi0 - phib - q0 / self.m_c1
 
+
     def __calc_f5(self, phib: float, phid: float, qs: float) -> float:
         """ Calculate eq.(20) of Gonçalvès et al. (2004)
 
@@ -348,6 +359,7 @@ class Phyllosilicate:
             float: left side of eq.(20) minus right side
         """
         return phib - phid + qs / self.m_c2
+
 
     def __calc_f6(self, phid: float, qs: float) -> float:
         """ Calculate eq.(21) of Gonçalvès et al. (2004)
@@ -366,6 +378,7 @@ class Phyllosilicate:
         coeff = np.sqrt(8.0e3 * _na * self.m_ionic_strength * dielec * kb * self.m_temperature)
         f6 = qs - coeff * np.sinh(-x)
         return f6
+
 
     def __calc_f6_truncated(self, phid: float, phir: float, qs: float) -> float:
         """ Calculate eq.(32) of Gonçalvès et al. (2004)
@@ -388,6 +401,7 @@ class Phyllosilicate:
         right1 = np.cosh(c * phid)
         right2 = np.cosh(c * phir)
         return qs - coeff * np.sqrt(right1 - right2)
+
 
     def __calc_f7_truncated(self, phid: float, phir: float) -> float:
         """ Calculate eq.(33) of Gonçalvès et al. (2004)
@@ -417,6 +431,7 @@ class Phyllosilicate:
         right3_2 = np.sinh(2. * c * phir) * (xd - _r)**4
         right3 = right3_1 * right3_2
         return phid - phir - right2 - right3
+
 
     def _calc_Goncalves_jacobian(self, phi0: float, phib: float, phid: float) -> np.ndarray:
         """ Calculate jacobians of f1 to f6.
@@ -455,6 +470,7 @@ class Phyllosilicate:
         jacobian[5][2] = f6_phid
         jacobian[5][5] = f6_qs
         return jacobian
+
 
     def _calc_Goncalves_jacobian_truncated(self,
                                            phi0: float,
@@ -505,6 +521,7 @@ class Phyllosilicate:
         jacobian[6][3] = f7_phir
         return jacobian
 
+
     def __calc_f1_phi0(self, phi0: float) -> float:
         """ Calculate ∂f1/∂phi0
 
@@ -537,6 +554,7 @@ class Phyllosilicate:
         bottom = bottom1 * bottom2 * bottom3
         return coeff * top / bottom
 
+
     def __calc_f2_phib(self, phib: float) -> float:
         """ Calculate ∂f2/∂phib
 
@@ -562,6 +580,7 @@ class Phyllosilicate:
         bottom2 = exp + b + c
         return top / (bottom1 * bottom2)
 
+
     def __calc_f6_phid(self, phid: float) -> float:
         """ Calculate ∂f6/∂phid
 
@@ -581,6 +600,7 @@ class Phyllosilicate:
         coeff = np.sqrt(8.0e3 * _na * _i * _dielec * kb * _t)
         cosh = a * np.cosh(a * phid)
         return coeff * cosh
+
 
     def __calc_f6_phid_truncated(self, phid: float, phir: float) -> float:
         """ Calculate ∂f6/∂phid for truncated case
@@ -609,6 +629,7 @@ class Phyllosilicate:
             return float_info.max
         return top / bottom
 
+
     def __calc_f6_phir_truncated(self, phid: float, phir: float) -> float:
         """ Calculate ∂f6/∂phir for truncated case
 
@@ -634,6 +655,7 @@ class Phyllosilicate:
         if bottom == 0.:
             return float_info.max
         return top / bottom
+
 
     def __calc_f7_phir_truncated(self, phir: float) -> float:
         """ Calculate ∂f7/∂phir for truncated case
@@ -661,6 +683,7 @@ class Phyllosilicate:
         _2 = -2. * c * d * np.cosh(2. * c * phir) * (xd - _r)**4
         return -1. + _1 + _2
 
+
     def __calc_A(self, phi0: float) -> float:
         """ Calculate eq.(22) of Gonçalvès et al. (2004)
 
@@ -677,6 +700,7 @@ class Phyllosilicate:
         k1 = self.m_k1
         return 1. + ch / k1 * np.exp(-_e * phi0 / (kb * t))
 
+
     def __calc_B(self, phi0: float) -> float:
         """ Calculate eq.(23) of Gonçalvès et al. (2004)
 
@@ -692,6 +716,7 @@ class Phyllosilicate:
         ch = self.m_activities["H"]
         k2 = self.m_k2
         return 1. + ch / k2 * np.exp(-_e * phi0 / (kb * t))
+
 
     def __calc_C(self, phib: float) -> float:
         """ Calculate eq.(24) of Gonçalvès et al. (2004)
@@ -710,6 +735,7 @@ class Phyllosilicate:
         k3 = self.m_k3
         k4 = self.m_k4
         return 1. + (ch / k3 + cna / k4) * np.exp(-_e * phib / (kb * t))
+
 
     def __calc_functions_inf(self, xn: np.ndarray) -> np.ndarray:
         """ Calculate functions 1 to 6 for infinite diffuse layer version
@@ -734,6 +760,7 @@ class Phyllosilicate:
         f6 = self.__calc_f6(xn[2][0], xn[5][0])
         fn = np.array([f1, f2, f3, f4, f5, f6]).reshape(-1, 1)
         return fn
+
 
     def __calc_functions_truncated(self, xn: np.ndarray) -> np.ndarray:
         """ Calculate functions 1 to 7 for truncated version
@@ -761,6 +788,7 @@ class Phyllosilicate:
         fn = np.array([f1, f2, f3, f4, f5, f6, f7]).reshape(-1, 1)
         return fn
 
+
     def __calc_qs_inf(self, _x: float) -> float:
         """Calculate the amount of charge (C/m3) at _x distance from the
         surface in the case of infinite diffuse layer development
@@ -777,6 +805,7 @@ class Phyllosilicate:
         return self.m_qs_coeff1_inf * np.sinh(self.m_qs_coeff2_inf \
             * np.exp((-1.) * self.m_kappa * _x))
 
+
     def __calc_qs_coeff_inf(self) -> None:
         """Amount of charge in an infinitely developing diffuse layer.
         """
@@ -789,6 +818,7 @@ class Phyllosilicate:
              * self.m_ion_props["Na"]["Concentration"]
         self.m_qs_coeff2_inf = -_e * self.m_potential_zeta / \
              (const.BOLTZMANN_CONST * self.m_temperature)
+
 
     def __check_if_calculated_qs_coeff(self) -> bool:
         """Find out if the coefficients for calculating Qs
@@ -803,6 +833,7 @@ class Phyllosilicate:
         if self.m_qs_coeff2_inf is None:
             flag = False
         return flag
+
 
     def calc_xd(self) -> Tuple[float]:
         """ Calculate the distance from the surface to the zeta plane (xd)
@@ -839,6 +870,7 @@ class Phyllosilicate:
         _err = err_ls[_idx]
         assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.m_xd, _err
+
 
     def calc_potentials_and_charges_inf(self,
                                         x_init: List = None,
@@ -958,6 +990,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"m_charge_stern: {self.m_charge_stern}")
             self.m_logger.debug(f"m_charge_diffuse: {self.m_charge_diffuse}")
         return xn
+
 
     def calc_potentials_and_charges_truncated(self,
                                               x_init: List = None,
@@ -1081,6 +1114,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"m_charge_diffuse: {self.m_charge_diffuse}")
         return xn
 
+
     def _check_if_calculated_electrical_params_inf(self) -> bool:
         """ Check if the electrical properties for infinite diffuse layer
          has already been calculated
@@ -1102,6 +1136,7 @@ class Phyllosilicate:
         if self.m_charge_diffuse is None:
             flag = False
         return flag
+
 
     def _check_if_calculated_electrical_params_truncated(self) -> bool:
         """ Check if the electrical properties for truncated diffuse layer
@@ -1128,6 +1163,7 @@ class Phyllosilicate:
         if self.m_xd is None:
             flag = False
         return flag
+
 
     def __calc_cond_at_x_inf_diffuse(self, _x: float) -> float:
         """Calculate the conductivity of the infinite diffuse layer.
@@ -1156,6 +1192,7 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
+
     def __calc_specific_cond_at_x_inf_diffuse(self, _x: float) -> float:
         """Calculate the specific conductivity of the infinite diffuse layer.
         Specific conductivity is defined as eq.(26) in Leroy and Revil (2004)
@@ -1180,6 +1217,7 @@ class Phyllosilicate:
         _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
+
 
     def __calc_cond_at_x_truncated_diffuse(self, _x: float) -> float:
         """ Calculate the conductivity of the inter layer.
@@ -1211,6 +1249,7 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
+
     def __calc_specific_cond_at_x_truncated_diffuse(self, _x: float) -> float:
         """Calculate the specific conductivity of the truncated diffuse layer.
 
@@ -1237,6 +1276,7 @@ class Phyllosilicate:
         _conc = _conc * (np.exp((-1.) * _v * _e * potential / (kb * _t)) - 1.)
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
+
 
     def __calc_cond_at_x_stern_inf(self, _x: float) -> float:
         """ Calculate the conductivity of the inter layer.
@@ -1272,6 +1312,7 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
+
     def __calc_specific_cond_at_x_stern_inf(self, _x: float) -> float:
         """ Calculate specific conductivity in the stern layer at a point _x away
         from the surface for the infinite diffuse layer case.
@@ -1299,6 +1340,7 @@ class Phyllosilicate:
         _conc = _conc * np.exp((-1.) * _v * _e * potential / (kb * _t))
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
+
 
     def __calc_cond_at_x_stern_truncated(self, _x: float) -> float:
         """ Calculate the conductivity of the inter layer.
@@ -1331,6 +1373,7 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
+
     def __calc_specific_cond_at_x_stern_truncated(self, _x: float) -> float:
         """ Calculate specific conductivity in the stern layer at a point _x away
         from the surface for the truncated diffuse layer case.
@@ -1362,6 +1405,7 @@ class Phyllosilicate:
         _cond = _e * abs(_v) * _mobility * _na  * _conc
         return _cond
 
+
     def __calc_kappa_truncated(self) -> None:
         """Calculate the kappa of the potential (instead of Eq. 11
          of Gonçalvès et al., 2004) when the diffuse layer is truncated
@@ -1370,6 +1414,7 @@ class Phyllosilicate:
         self.m_kappa_truncated = 1. / _r \
             * np.log(self.m_potential_zeta / self.m_potential_r)
 
+
     def __calc_kappa_stern(self) -> None:
         """Calculate the rate of decay (kappa) of the potential in
          the stern layer. Assume the thickness of the stern layer is
@@ -1377,6 +1422,7 @@ class Phyllosilicate:
         """
         self.m_kappa_stern = 1. / self.m_xd \
             * np.log(self.m_potential_stern / self.m_potential_zeta)
+
 
     def calc_cond_interlayer(self) -> Tuple[float]:
         """Calculate the Stern + EDL conductivity of the inter layer
@@ -1420,6 +1466,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
         return cond, _err1 + _err2
 
+
     def calc_cond_infdiffuse(self) -> Tuple[float]:
         """Calculate the Stern + EDL conductivity for the inifinite diffuse
          layer case.
@@ -1457,6 +1504,7 @@ class Phyllosilicate:
             self.m_logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
         return cond, _err1 + _err2
 
+
     def calc_specific_surface_cond_inf(self, cond_fluid: float) -> Tuple[float]:
         """ Calculate specific surface conductivity of infinite diffuse layer
             Specific surface conductivity is defined as eq.(26) in Leroy and Revil (2004)
@@ -1488,6 +1536,7 @@ class Phyllosilicate:
         # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
         return cond_specific, _err1 + _err2
 
+
     def calc_cond_tensor_with_sq_oxyz(self, edge_length: float) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned
          perpendicular to the z-plane. The T-O-T plane is assumed to be an
@@ -1513,6 +1562,7 @@ class Phyllosilicate:
                                 dtype=np.float64)
         return cond_tensor
 
+
     def get_logger(self) -> Logger:
         """ Getter for the logging.Logger
 
@@ -1520,6 +1570,7 @@ class Phyllosilicate:
             Logger: Logger containing debugging information
         """
         return self.m_logger
+
 
 # pylint: disable=dangerous-default-value
 class Smectite(Phyllosilicate):
@@ -1580,6 +1631,7 @@ class Smectite(Phyllosilicate):
                          xd = xd,
                          cond_stern_plus_edl = cond_stern_plus_edl,
                          logger = logger,)
+
 
 # pylint: disable=dangerous-default-value
 class Kaolinite(Phyllosilicate):

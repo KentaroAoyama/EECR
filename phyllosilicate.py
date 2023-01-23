@@ -1,3 +1,5 @@
+"""Calculate electrical properties of phillosillicate"""
+
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -6,6 +8,7 @@ from logging import Logger
 from sys import float_info
 from os import path, PathLike
 import math
+from copy import deepcopy
 import pickle
 
 import numpy as np
@@ -13,13 +16,14 @@ from scipy.integrate import quad
 
 import constants as const
 
+
 ion_props_default = const.ion_props_default.copy()
 activities_default = const.activities_default.copy()
 # Load global parameters
 # for smectite, infinite diffuse layer case
 smectite_inf_init_pth: PathLike = path.join(path.dirname(__file__),
-                                        "params",
-                                        "smectite_inf_init.pkl")
+                                            "params",
+                                            "smectite_inf_init.pkl")
 with open(smectite_inf_init_pth, "rb") as pkf:
     smectite_inf_init_params = pickle.load(pkf)
 
@@ -87,6 +91,8 @@ class Phyllosilicate:
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
         # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
         # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
+        # TODO: external_propsクラス (or Dict)を引数としてメンバ変数を減らす
+        # TODO: fluidクラスからion_propsとactivitiesを読み込む仕様とする
         """ Initialize Phyllosilicate class.
 
         Args:
@@ -162,6 +168,9 @@ class Phyllosilicate:
         self.m_kappa_stern = None
         self.m_qs_coeff1_inf = None
         self.m_qs_coeff2_inf = None
+        self.m_cond_tensor = None
+        self.m_cond_infdiffuse = None
+        self.m_double_layer_length = None
 
         ####################################################
         # DEBUG LOGGER
@@ -1486,22 +1495,24 @@ class Phyllosilicate:
         if self.m_kappa_stern is None:
             self.__calc_kappa_stern()
         # End of the diffuse layer
-        _xdl = self.m_xd + 1. / self.m_kappa
+        xdl = self.m_xd + 1. / self.m_kappa
         cond_ohmic_diffuse, _err1 = quad(self.__calc_cond_at_x_inf_diffuse,
                                          self.m_xd,
-                                         _xdl)
+                                         xdl)
         cond_ohmic_stern, _err2 = quad(self.__calc_cond_at_x_stern_inf,
                                        0.,
                                        self.m_xd)
         # Based on eq.(26) of Leroy & Revil (2004), we assume that Na
         # ions are densely charged on the surface
-        cond = (cond_ohmic_diffuse + cond_ohmic_stern) / _xdl
+        cond = (cond_ohmic_diffuse + cond_ohmic_stern) / xdl
         self.m_cond_stern_plus_edl = cond
         if self.m_logger is not None:
             self.m_logger.info("Finished the calculation of infinite diffuse "\
                 "layer conductivity")
             self.m_logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
             self.m_logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
+        self.m_cond_infdiffuse = cond
+        self.m_double_layer_length = xdl
         return cond, _err1 + _err2
 
 
@@ -1537,10 +1548,11 @@ class Phyllosilicate:
         return cond_specific, _err1 + _err2
 
 
-    def calc_cond_tensor_with_sq_oxyz(self, edge_length: float) -> np.ndarray:
+    def calc_cond_tensor_cube_oxyz(self, edge_length: float) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned
          perpendicular to the z-plane. The T-O-T plane is assumed to be an
-         insulator, following Watanabe (2005).
+         insulator, following Watanabe (2005). The T-O-T plane is the xy-plane,
+         and perpendicular to it is the z-axis.
 
         Args:
             edge_length (float): Lengths of the edges of the cube's cells
@@ -1555,12 +1567,13 @@ class Phyllosilicate:
         assert sigma_intra is not None, "Before calculating the conductivity" \
             "of the smectite cell, we should calculate interlayer conductivity"
         sigma_h = sigma_intra * self.m_layer_width / edge_length
-        sigma_v = 0.
+        sigma_v = 0. # assumed to be an insulator
         cond_tensor = np.array([[sigma_h, 0. ,0.],
                                 [0., sigma_h ,0.],
                                 [0., 0., sigma_v]],
                                 dtype=np.float64)
-        return cond_tensor
+        self.m_cond_tensor = cond_tensor
+        return self.m_cond_tensor.copy()
 
 
     def get_logger(self) -> Logger:
@@ -1570,6 +1583,35 @@ class Phyllosilicate:
             Logger: Logger containing debugging information
         """
         return self.m_logger
+
+
+    def get_cond_tensor(self) -> np.ndarray or None:
+        """ Getter for the conductivity tensor
+
+        Returns:
+            np.ndarray: Conductivity tensor with 3 rows and 3 columns
+        """
+        if self.m_cond_tensor is not None:
+            return deepcopy(self.m_cond_tensor)
+        return self.m_cond_tensor
+
+
+    def get_cond_infdiffuse(self) -> float or None:
+        """Getter for the stern potential
+
+        Returns:
+            float: Conductivity of the stern layer (Unit: S/m)
+        """
+        return self.m_cond_infdiffuse
+
+
+    def get_double_layer_length(self) -> float or None:
+        """Getter for the double layer length (surface to the end of the diffuse layer)
+
+        Returns:
+            float or None: Length of the electrical double layer
+        """
+        return self.m_double_layer_length
 
 
 # pylint: disable=dangerous-default-value
@@ -1590,7 +1632,7 @@ class Smectite(Phyllosilicate):
                  cond_stern_plus_edl: float = None,
                  logger: Logger = None):
         """ Inherited classes from Philosilicate. Number density of
-            reactors on the surface and fixing the layer charge for 
+            reactors on the surface and fixing the layer charge for
             smectite case.
 
         Args:
@@ -1651,7 +1693,7 @@ class Kaolinite(Phyllosilicate):
                  cond_stern_plus_edl: float = None,
                  logger: Logger = None,):
         """ Inherited classes from Philosilicate. Number density of
-            reactors on the surface and fixing the layer charge for 
+            reactors on the surface and fixing the layer charge for
             kaolinite case.
 
         Args:

@@ -1,6 +1,12 @@
-import numpy as np
+"""Create input to be passed to the solver class"""
+
 from copy import deepcopy
-from typing import List, Dict
+from typing import List, Dict, Tuple
+from math import isclose
+import random
+
+import numpy as np
+
 
 # pylint: disable=invalid-name
 # TODO: debug追加
@@ -16,19 +22,21 @@ class FEM_Input_Cube:
                         (Accessed January 20, 2023)
     """
     def __init__(self,
-                 mesh: np.ndarray = None,
+                 pix_tensor: np.ndarray = None,
                  dk: np.ndarray = None,
                  sigma: List = None,
                  ib: List = None,
                  pix: List = None,
                  ex: float = None,
                  ey: float = None,
-                 ez: float = None
+                 ez: float = None,
+                 b: np.ndarray = None,
+                 c: float = None
                  ):
         """ Initialize FEM_Input_Cube class.
 
         Args:
-            mesh (np.ndarray): 3d array of mesh. Each index indicate node. First index increases
+            pix_tensor (np.ndarray): 5d array of pix. Each index indicate node. First index increases
                 along z direction and second index increases along y direction, and third index
                 increases along z direction.
             dk (np.ndarray): Stiffness matrix described at pp.8 in Garboczi (1998). First index
@@ -40,22 +48,24 @@ class FEM_Input_Cube:
             ib (List): 2d list of neighbor labelling described at pp.8 to 11 in Garboczi (1998).
                 First index indicates one dimensional labbeling scheme (m) and second index
                 indicates neighbor node index of m'th node. m is calculated as follows:
-                m=nx*ny*(k-1)+nx*(j-1)+i
-                where nx, ny, and nz are mesh size of x, y, and z direction. And i, j, and k
+                    m=nx*ny*(k-1)+nx*(j-1)+i
+                where nx, ny, and nz are pix size of x, y, and z direction. And i, j, and k
                 are the indexes of x, y, and z direction.
             pix (List): 1d list to get the first index of sigma described at pp.8 in in
                 Garboczi (1998). Index indicates one dimensional labbeling scheme (m).
             ex (float): Electrical field of x direction. Note that the unit is volt/Δx (Δx is
-                the mesh size of x direction), which is somewhat differnt from the description
+                the pix size of x direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998).
             ey (float): Electrical field of y direction. Note that the unit is volt/Δy (Δy is
-                the mesh size of y direction), which is somewhat differnt from the description
+                the pix size of y direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998).
             ez (float): Electrical field of z direction. Note that the unit is volt/Δz (Δz is
-                the mesh size of z direction), which is somewhat differnt from the description
+                the pix size of z direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998).
+            b (np.ndarray): TODO: write docstring
+            c (float): TODO: write docstring
         """
-        self.m_mesh: np.ndarray = mesh
+        self.m_pix_tensor: np.ndarray = pix_tensor
         self.m_dk: np.ndarray = dk
         self.m_sigma: List = sigma
         self.m_ib: List = ib
@@ -63,9 +73,10 @@ class FEM_Input_Cube:
         self.m_ex: float = ex
         self.m_ey: float = ey
         self.m_ez: float = ez
-        self.m_b: np.ndarray = None
-        self.m_c: float = None
+        self.m_b: np.ndarray = b
+        self.m_c: float = c
         self.__init_default()
+        self.m_rotation_angle: List = None
 
 
     def __init_default(self) -> None:
@@ -79,22 +90,115 @@ class FEM_Input_Cube:
             self.m_ez = np.float64(1.)
 
 
-    def create_mesh_by_macro_variable(self,
-                                      shape: str = "cube",
-                                      volume_frac_dict: Dict = {},
-                                      rotation_setting = None,
-                                      ):
+    def create_pixel_by_macro_variable(self,
+                                       shape: Tuple[int] = (100, 100, 100),
+                                       edge_length: float = 1.0e-6,
+                                       volume_frac_dict: Dict = {},
+                                       rotation_setting: str or Tuple[float] = "random",
+                                       ) -> None:
+        """Create a pixel based on macroscopic physical properties such as porosity and mineral
+        mass fractions.
+
+        Args:
+            shape (Tuple[int]): Pixel size of (nz, ny, nx).
+            edge_length (float): Length of a edge of a cube pixel.
+            volume_frac_dict (Dict): Dictionary whose key is the class of the mineral or fluid
+                and value is the volume fraction.
+            rotation_setting (str or Tuple): Argument that control the rotation of the
+                conductivity tensor of each element. If you set as "rondom", conductivity tensor
+                are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
+                conductivity tensor are rotated based on these angles (Defaults to ).
+        """
+        # Check to see if the volume fractions sum to 1
+        _sum = 0.
+        for _, frac in volume_frac_dict.items():
+            _sum += frac
+        assert isclose(_sum, 1.0, abs_tol=1.0e-10)
+
+        # Check to see if the values in shape are valid
+        for n in shape:
+            assert isinstance(n, int) and n > 0
+
+        # first create pixel as 3d list
+        instance_ls: List = []
+        frac_ls: List = []
+        for instance, frac in volume_frac_dict.items():
+            get_cond_tensor = getattr(instance, "get_cond_tensor", None)
+            assert get_cond_tensor is not None,\
+                f"{instance.__name__} should have get_cond_tensor method"
+            instance_ls.append(instance)
+            frac_ls.append(frac)
+
+        # conductivity tensor will be stored for each element
+        pix_tensor: List = np.zeros(shape=shape, dtype=np.float64).tolist()
+        # rotation angles (x, y, z) will be stored for each element
+        rotation_angle_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
+        # instance will be stored for each element
+        instance_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
+        _seed = 42
+        np.random.seed(_seed)
+        # set rotated conductivity tensor for each element
+        for k, pixel_yx in enumerate(pix_tensor):
+            for j, pixel_x in enumerate(pixel_yx):
+                for i, _ in enumerate(pixel_x):
+                    instance = np.random.choice(instance_ls, frac_ls)
+                    tensor_center = getattr(instance, "get_cond_tensor", None)()
+                    assert tensor_center is not None
+                    if rotation_setting == "random":
+                        _rot_mat = calc_rotation_matrix(seed=_seed)
+                    elif isinstance(rotation_setting, tuple):
+                        assert len(rotation_setting) == 3
+                        _x, _y, _z = rotation_setting
+                        _rot_mat = calc_rotation_matrix(_x, _y, _z)
+                    else:
+                        raise RuntimeError("rotation_setting argument is not valid")
+                    rotation_angle_ls[k][j][i] = _rot_mat
+                    instance_ls[k][j][i] = instance
+                    tensor_center = np.matmul(_rot_mat, tensor_center)
+                    pixel_x[i] = tensor_center
+        self.m_rotation_angle = rotation_angle_ls
+        
+        # TODO: Check whether the elements are assigned to satisfy the volume_frac_dict and
+        # correct it if the error is too large.
+
+        # If the cell is a fluid and there are minerals next to it, add the conductivities of
+        # the Stern and diffusion layers.
+        for k, pixel_yx in enumerate(pix_tensor):
+            for j, pixel_x in enumerate(pixel_yx):
+                for i, tensor in enumerate(pixel_x):
+                    # Checks whether instance has an attribute for the electric double layer.
+                    get_cond_infdiffuse = getattr(instance_ls[k][j][i], "get_cond_infdiffuse", None)
+                    get_double_layer_length = getattr(instance_ls[k][j][i], "get_double_layer_length", None)
+                    if None not in [get_cond_infdiffuse, get_double_layer_length]:
+                        self.__sum_double_layer_cond(pix_tensor,
+                                                     instance_ls,
+                                                     i,
+                                                     j,
+                                                     k)
+                        # TODO: 
+
         # set below variables
-        # self.m_mesh
+        # self.m_pix_tensor
         # self.m_sigma
         # self.m_pix
+        pass
+
+    
+    def __sum_double_layer_cond(self, pix_tensor: List, instance_ls: List, i: int, j: int, k: int,
+                                inc: int):
+        # instance_ls[k][j][i]は鉱物であるという想定
+        #
+        instance = instance_ls[k][j][i]
+        cond_infdiffuse = getattr(instance_ls[k][j][i], "get_cond_infdiffuse")()
+        get_double_layer_length  = getattr(instance_ls[k][j][i], "get_double_layer_length")()
+        
         return
 
 
     def set_ib(self) -> None:
-        """ set member variable of m_ib based on m_mesh.
+        """ set member variable of m_ib based on m_pix.
         """
-        assert self.m_mesh is not None
+        assert self.m_pix_tensor is not None
         # Construct the neighbor table, ib(m,n)
         # First construct 27 neighbor table in terms of delta i, delta j, delta k
         # (See Table 3 in manual)
@@ -137,7 +241,7 @@ class FEM_Input_Cube:
         _kn[25] = 1
         _kn[26] = 0
 
-        nx, ny, nz = self.m_mesh.shape
+        nz, ny, nx, _, _ = self.m_pix_tensor.shape
         nxy = nx * ny
         nxyz = nxy * nz
         ib = np.zeros(shape=(nxyz, 27)).tolist()
@@ -164,13 +268,13 @@ class FEM_Input_Cube:
 
 
     def femat(self) -> None:
-        """ Subroutine that sets up the stiffness matrices, linear term in 
-            voltages, and constant term C that appear in the total energy due 
+        """ Subroutine that sets up the stiffness matrices, linear term in
+            voltages, and constant term C that appear in the total energy due
             to the periodic boundary conditions.
         """ 
         # TODO?: ex, ey, ezは、ΔV/nx, ΔV/ny, ΔV/nzで定義されているので, v/mの単位になるよう修正したほうがいいかも
         assert self.m_sigma is not None
-        assert self.m_mesh is not None
+        assert self.m_pix_tensor is not None
         assert self.m_ib is not None
         assert self.m_pix is not None
         assert self.m_ex is not None
@@ -253,12 +357,12 @@ class FEM_Input_Cube:
                                              * es[ll][jj]
                                 dk[ijk][ii][jj] += g[i][j][k] * _sum / 216.
 
-        # Set up vector for linear term, b, and constant term, C, 
+        # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,
         # and the periodic terms in the applied field that come in at the boundary
         # pixels via the periodic boundary conditions and the condition that
         # an applied macroscopic field exists (see Sec. 2.2 in manual).
-        nx, ny, nz = self.m_mesh.shape
+        nz, ny, nx, _, _ = self.m_pix_tensor.shape
         nxy = nx * ny
         ns = nxy * nz
         b: List = np.zeros(ns).tolist()
@@ -411,18 +515,18 @@ class FEM_Input_Cube:
         self.m_c = np.float64(c)
 
 
-    def get_mesh(self) -> np.ndarray or None:
-        """ Getter for the mesh in 3d shape.
+    def get_pix_tensor(self) -> np.ndarray or None:
+        """ Getter for the pix in 5d shape.
 
         Returns:
-            np.ndarray or None: 3d array of mesh. Each index indicate node. First index increases
-                along z direction and second index increases along y direction, and
-                third index increases along z direction. If the mesh is not created,
-                return None.
+            np.ndarray or None: 5d array of conductivity tensor. Each index indicate node.
+                First index increases along z direction and second index increases along y
+                direction, and third index increases along z direction. If the pix is not
+                created, return None.
         """
-        if self.m_mesh is not None:
-            return deepcopy(self.m_mesh)
-        return self.m_mesh
+        if self.m_pix_tensor is not None:
+            return deepcopy(self.m_pix_tensor)
+        return self.m_pix_tensor
 
 
     def get_dk(self) -> np.ndarray or None:
@@ -463,7 +567,7 @@ class FEM_Input_Cube:
                 and second index indicates neighbor node index of m'th node. m is
                 calculated as follows:
                     m=nx*ny*(k-1)+nx*(j-1)+i
-                where nx, ny, and nz are mesh size of x, y, and z direction. And i,
+                where nx, ny, and nz are pix_tensor size of x, y, and z direction. And i,
                 j, and k are the indexes of x, y, and z direction. If the conductivity
                 tensor is not calculated, return None.
         """
@@ -491,7 +595,7 @@ class FEM_Input_Cube:
 
         Returns:
             np.float64 or None: Electrical field of x direction. Note that the unit is volt/Δx (Δx is
-                the mesh size of x direction), which is somewhat differnt from the description
+                the pix size of x direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998). If the ex is not set, return None.
         """
         return self.m_ex
@@ -502,7 +606,7 @@ class FEM_Input_Cube:
 
         Returns:
             np.float64 or None: Electrical field of y direction. Note that the unit is volt/Δy (Δy is
-                the mesh size of y direction), which is somewhat differnt from the description
+                the pix size of y direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998). If the ey is not set, return None.
         """
         return self.m_ey
@@ -513,7 +617,7 @@ class FEM_Input_Cube:
 
         Returns:
             np.float64 or None: Electrical field of z direction. Note that the unit is volt/Δz (Δz is
-                the mesh size of z direction), which is somewhat differnt from the description
+                the pix size of z direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998). If the ez is not set, return None.
         """
         return self.m_ez
@@ -551,10 +655,51 @@ def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
         i (int): Index of x direction.
         j (int): Index of y direction.
         k (int): Index of z direction.
-        nx (int): Mesh size of x direction.
-        ny (int): Mesh size of y direction.
+        nx (int): pix size of x direction.
+        ny (int): pix size of y direction.
 
     Returns:
         int: One dimensional labbeling index (m)
     """
     return nx * ny * k + nx * j + i
+
+
+def calc_rotation_matrix(_x: float = None,
+                         _y: float = None,
+                         _z: float = None,
+                         seed: int = None) -> np.ndarray:
+    """Calculate rotation matrix
+
+    Args:
+        _x (float): Rotation angle around x-axis
+        _y (float): Rotation angle around y-axis
+        _z (float): Rotation angle around z-axis
+        seed (int): Seed of the random number
+
+    Returns:
+        np.ndarray: 3d rotation matrix with 3 rows and 3 columns
+    """
+    if None in (_x, _y, _z):
+        if seed is None:
+            seed = 42
+        random.seed(seed)
+        _x: float = random.uniform(0., 2.0 * np.pi)
+        _y: float = random.uniform(0., 2.0 * np.pi)
+        _z: float = random.uniform(0., 2.0 * np.pi)
+    # around x-axis
+    _x_rot = np.array([[1., 0., 0.],
+                       [0., np.cos(_x), -1. * np.sin(_x)],
+                       [0., np.sin(_x), np.cos(_x)]],
+                       dtype=np.float64)
+    # around y-axis
+    _y_rot = np.array([[np.cos(_y), 0., np.sin(_y)],
+                       [0., 1., 0.],
+                       [-1. * np.sin(_y), 0., np.cos(_y)]],
+                       dtype=np.float64)
+    # around z-axis
+    _z_rot = np.array([[np.cos(_z), -1. * np.sin(_z), 0.],
+                       [np.sin(_z), np.cos(_z), 0.],
+                       [0., 0., 1.]],
+                       dtype=np.float64)
+    _rot = np.mamul(np.matmul(_x_rot, _y_rot), _z_rot)
+    return _rot

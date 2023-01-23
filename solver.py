@@ -51,11 +51,11 @@ class FEM_Cube():
                 self.m_h (np.ndarray): Conjugate gradient vector (shape is m).
         """
         # m_u
-        mesh: np.ndarray = self.fem_input.get_mesh()
+        pix_tensor: np.ndarray = self.fem_input.get_pix_tensor()
         ex: np.float64 = self.fem_input.get_ex()
         ey: np.float64 = self.fem_input.get_ey()
         ez: np.float64 = self.fem_input.get_ez()
-        nx, ny, nz = mesh.shape
+        nz, ny, nx, _, _ = pix_tensor.shape
         nxyz = nx * ny * nz
         u: List = [None for _ in range(nxyz)]
         for k in range(nz):
@@ -102,10 +102,10 @@ class FEM_Cube():
             gtest (float): Threshold used to determine convergence. When the squared value of
                 the L2 norm of gradient exceeds this value, the calculation is aborted.
         """
-        mesh = self.fem_input.get_mesh()
+        pix_tensor = self.fem_input.get_pix_tensor()
         # Solve with conjugate gradient method
         if gtest is None:
-            nx, ny, nz = mesh.shape
+            nz, ny, nx, _, _ = pix_tensor.shape
             ns = nx * ny * nz
             gtest = 1.0e-16 * ns
         cou = 0
@@ -158,7 +158,7 @@ class FEM_Cube():
         a[m][24] = dk[pix[ib_m[13]][6][2]] + dk[pix[ib_m[12]][7][3]] + dk[pix[ib_m[14]][5][1]] + dk[pix[ib_m[24]][4][0]]
         a[m][25] = dk[pix[ib_m[5]][2][6]] + dk[pix[ib_m[4]][3][7]] + dk[pix[ib_m[26]][0][4]] + dk[pix[ib_m[6]][1][5]]
         a[m][26] = dk[pix[ib_m[26]][0][0]] + dk[pix[ib_m[6]][1][1]] + dk[pix[ib_m[5]][2][2]] + dk[pix[ib_m[4]][3][3]] \
-                    + dk[pix[ib_m[24]][4][4]] + dk[pix[ib_m[14]][5][5]] + dk[pix[ib_m[13]][6][6]] + dk[pix[ib_m[12]][7][7]]  
+                    + dk[pix[ib_m[24]][4][4]] + dk[pix[ib_m[14]][5][5]] + dk[pix[ib_m[13]][6][6]] + dk[pix[ib_m[12]][7][7]]
 
 
     def __set_u_m(self, u_expanded: List, m: int) -> None:
@@ -191,8 +191,8 @@ class FEM_Cube():
         """Calculate the gradient (self.m_gb), the amount of electrostatic energy (self.m_u_tot),
         and the square value of the step width (self.m_gg), and update the these member variables.
         """
-        mesh = self.fem_input.get_mesh()
-        nx, ny, nz = mesh.shape
+        pix_tensor = self.fem_input.get_pix_tensor()
+        nz, ny, nx, _, _ = pix_tensor.shape
         nxyz = nx * ny * nz
 
         # expand potential array for fast calculation
@@ -225,7 +225,7 @@ class FEM_Cube():
         Args:
             ldemb (int): Maximum number of conjugate gradient iterations.
         """
-        nx, ny, nz = self.fem_input.get_mesh().shape
+        nz, ny, nx, _, _ = self.fem_input.get_pix_tensor().shape
         nxyz = nx * ny * nz
         # Conjugate gradient loop
         for _ in range(ldemb):
@@ -288,12 +288,13 @@ class FEM_Cube():
         af[2][7] = -0.25
 
         # now compute current in each pixel
-        nx, ny, nz = self.fem_input.get_mesh().shape
+        pix = self.fem_input.get_pix()
+        pix_tensor = self.fem_input.get_pix_tensor()
+        nz, ny, nx, _, _ = pix_tensor.shape
         ib = self.fem_input.get_ib()
         ex = self.fem_input.get_ex()
         ey = self.fem_input.get_ey()
         ez = self.fem_input.get_ez()
-        pix = self.fem_input.get_pix()
         sigma = self.fem_input.get_sigma()
         currx_m: List = []
         curry_m: List = []

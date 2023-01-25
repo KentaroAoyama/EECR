@@ -6,6 +6,7 @@ from math import isclose
 import random
 
 import numpy as np
+from fluid import Fluid
 
 
 # pylint: disable=invalid-name
@@ -31,7 +32,7 @@ class FEM_Input_Cube:
                  ey: float = None,
                  ez: float = None,
                  b: np.ndarray = None,
-                 c: float = None
+                 c: float = None,
                  ):
         """ Initialize FEM_Input_Cube class.
 
@@ -90,6 +91,7 @@ class FEM_Input_Cube:
             self.m_ez = np.float64(1.)
 
 
+    # pylint: disable=dangerous-default-value
     def create_pixel_by_macro_variable(self,
                                        shape: Tuple[int] = (100, 100, 100),
                                        edge_length: float = 1.0e-6,
@@ -138,9 +140,10 @@ class FEM_Input_Cube:
         _seed = 42
         np.random.seed(_seed)
         # set rotated conductivity tensor for each element
-        for k, pixel_yx in enumerate(pix_tensor):
-            for j, pixel_x in enumerate(pixel_yx):
-                for i, _ in enumerate(pixel_x):
+        nz, ny, nx = shape
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
                     instance = np.random.choice(instance_ls, frac_ls)
                     tensor_center = getattr(instance, "get_cond_tensor", None)()
                     assert tensor_center is not None
@@ -155,48 +158,90 @@ class FEM_Input_Cube:
                     rotation_angle_ls[k][j][i] = _rot_mat
                     instance_ls[k][j][i] = instance
                     tensor_center = np.matmul(_rot_mat, tensor_center)
-                    pixel_x[i] = tensor_center
+                    pix_tensor[k][j][i]: np.ndarray = tensor_center
         self.m_rotation_angle = rotation_angle_ls
         
-        # TODO: Check whether the elements are assigned to satisfy the volume_frac_dict and
-        # correct it if the error is too large.
+        # TODO: Check whether the elements are assigned to satisfy the volume_frac_dict and correct
+        # it if the error is too large.
+        for instance, frac in volume_frac_dict.items():
+            # first, get the volume fraction of each phase
+            # second modify the fraction
+            pass
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
-        for k, pixel_yx in enumerate(pix_tensor):
-            for j, pixel_x in enumerate(pixel_yx):
-                for i, tensor in enumerate(pixel_x):
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
                     # Checks whether instance has an attribute for the electric double layer.
                     get_cond_infdiffuse = getattr(instance_ls[k][j][i], "get_cond_infdiffuse", None)
                     get_double_layer_length = getattr(instance_ls[k][j][i], "get_double_layer_length", None)
                     if None not in [get_cond_infdiffuse, get_double_layer_length]:
+                        cond_infdiffuse: float = get_cond_infdiffuse()
+                        double_layer_length: float = get_double_layer_length()
+                        # TODO: __sum_double_layer_condをdouble_layer_length >= edge_lengthに使えるように拡張して, 以下のassertionを消す
+                        assert double_layer_length < edge_length
                         self.__sum_double_layer_cond(pix_tensor,
                                                      instance_ls,
                                                      i,
                                                      j,
-                                                     k)
-                        # TODO: 
-
-        # set below variables
-        # self.m_pix_tensor
-        # self.m_sigma
-        # self.m_pix
-        pass
+                                                     k,
+                                                     edge_length,
+                                                     cond_infdiffuse,
+                                                     double_layer_length)
+        self.m_pix_tensor = pix_tensor
+        
+        # construct self.m_sigma and self.m_pix
+        sigma_ls: List = []
+        pix_ls: List = []
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    m = calc_m(i, j, k, nx, ny)
+                    sigma_ls.append(self.m_pix_tensor[k][j][i])
+                    pix_ls.append(m) # TODO: remove pix
+        self.m_sigma = sigma_ls
+        self.m_pix = pix_ls
 
     
-    def __sum_double_layer_cond(self, pix_tensor: List, instance_ls: List, i: int, j: int, k: int,
-                                inc: int):
-        # instance_ls[k][j][i]は鉱物であるという想定
-        #
-        instance = instance_ls[k][j][i]
-        cond_infdiffuse = getattr(instance_ls[k][j][i], "get_cond_infdiffuse")()
-        get_double_layer_length  = getattr(instance_ls[k][j][i], "get_double_layer_length")()
-        
-        return
+    def __sum_double_layer_cond(self,
+                                pix_tensor: List,
+                                instance_ls: List,
+                                i: int,
+                                j: int,
+                                k: int,
+                                edge_length: float,
+                                cond_infdiffuse: float,
+                                double_layer_length: float,
+                                ) -> None:
+        """Add the conductivity of the electric double layer to the pixels in contact with the
+        surface.
+
+        Args:
+            pix_tensor (List): 3d list containing the 2d conductivity tensor
+            instance_ls (List): 3d list containing instance of fluid or mineral
+            i (int): Index of X direction
+            j (int): Index of Y direction
+            k (int): Index of Z direction
+            edge_length (float): Pixel edge length (unit: m)
+            cond_infdiffuse (float): Conductivity of the electrical double layer developped in
+                the infinite diffuse layer
+            double_layer_length (float): Length of the electrical double layer (from surface to
+                the end of the diffuse layer).
+        """
+        ratio_edl: float = double_layer_length / edge_length
+        ratio_fluid: float = 1.0 - ratio_edl
+        for ktmp in (k-1, k+1):
+            for jtmp in (j-1,  j+1):
+                for itmp in (i-1, i+1):
+                    instance = instance_ls[ktmp][jtmp][itmp]
+                    if instance.__class__.__base__ is Fluid:
+                        pix_tensor[ktmp][jtmp][itmp] = ratio_edl * cond_infdiffuse + \
+                                                       ratio_fluid * pix_tensor[ktmp][jtmp][itmp]
 
 
     def set_ib(self) -> None:
-        """ set member variable of m_ib based on m_pix.
+        """ set member variable of m_ib based on m_pix_tensor.
         """
         assert self.m_pix_tensor is not None
         # Construct the neighbor table, ib(m,n)
@@ -679,13 +724,16 @@ def calc_rotation_matrix(_x: float = None,
     Returns:
         np.ndarray: 3d rotation matrix with 3 rows and 3 columns
     """
-    if None in (_x, _y, _z):
-        if seed is None:
-            seed = 42
+    if seed is None:
+        seed = 42
         random.seed(seed)
+    if _x is None:
         _x: float = random.uniform(0., 2.0 * np.pi)
+    if _y is None:
         _y: float = random.uniform(0., 2.0 * np.pi)
+    if _z is None:
         _z: float = random.uniform(0., 2.0 * np.pi)
+
     # around x-axis
     _x_rot = np.array([[1., 0., 0.],
                        [0., np.cos(_x), -1. * np.sin(_x)],

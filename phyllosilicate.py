@@ -1616,6 +1616,12 @@ class Phyllosilicate:
 
 # pylint: disable=dangerous-default-value
 class Smectite(Phyllosilicate):
+    """Inherited class of Phyllosilicate, with surface adsorption site density and layer
+    charge fixed to the physical properties of smectite
+
+    Args:
+        Phyllosilicate: Phyllosilicate class
+    """
     def __init__(self,
                  temperature: float = 298.15,
                  ion_props: Dict = ion_props_default.copy(),
@@ -1677,6 +1683,12 @@ class Smectite(Phyllosilicate):
 
 # pylint: disable=dangerous-default-value
 class Kaolinite(Phyllosilicate):
+    """Inherited class of Phyllosilicate, with surface adsorption site density and layer
+    charge fixed to the physical properties of kaolinite
+
+    Args:
+        Phyllosilicate: Phyllosilicate class
+    """
     def __init__(self,
                  temperature: float = 298.15,
                  ion_props: Dict = ion_props_default.copy(),

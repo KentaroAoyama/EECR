@@ -1,5 +1,6 @@
 """Calculate electrical properties of fluid"""
 
+# pylint: disable=import-error
 from typing import Dict
 from copy import deepcopy
 
@@ -12,7 +13,11 @@ import constants as const
 ion_props_default = const.ion_props_default.copy()
 
 
-class NaCl:
+class Fluid:
+    pass
+
+
+class NaCl(Fluid):
     # TODO: external_propsクラス (or Dict)をメンバ変数とする
     # TODO: ion_propsとactivitiesをメンバ変数に追加する
     # TODO: ion_propsとactivitiesを統合する

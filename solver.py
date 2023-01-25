@@ -78,15 +78,15 @@ class FEM_Cube():
                 executor.submit(self.__set_a_m, a=a, m=m)
         assert None not in a
         self.m_a = np.array(a, dtype=np.float64)
-        
+
         self.__calc_energy()
-        
+
         # m_h (conjugate direction vector)
         # Initialize the conjugate direction vector on first call to dembx only.
         # For calls to dembx after the first, we want to continue using the
         # value fo h determined in the previous call.  Of course, if npooints
         # is greater than 1, then this initialization step will be run every
-        # a new microstructure is used, as kkk will be reset to 1 every time 
+        # a new microstructure is used, as kkk will be reset to 1 every time
         # the counter micro is increased.
         self.m_h = self.m_gb.copy()
 
@@ -241,7 +241,7 @@ class FEM_Cube():
             lamda = self.m_gg / hah
             # update u
             self.m_u -= lamda * self.m_h
-            
+
             # update gb
             self.m_gb -= lamda * ah
 
@@ -342,7 +342,7 @@ class FEM_Cube():
                     currx_m[m] = cur1
                     curry_m[m] = cur2
                     currz_m[m] = cur3
-        
+
         self.m_currx_m = currx_m
         self.m_curry_m = curry_m
         self.m_currz_m = currz_m

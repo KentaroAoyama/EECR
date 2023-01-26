@@ -218,8 +218,8 @@ def Leroy_Revil_2004_fig9():
         activities["Na"] = cnacl
         activities["Cl"] = cnacl
         kaolinite = Kaolinite(ion_props = ion_props,
-                             activities = activities,
-                            )
+                              activities = activities,
+                              )
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.)
         nacl = NaCl()

@@ -1,9 +1,11 @@
 # TODO: debug追加
 # pylint: disable=no-name-in-module
+# pylint: disable=import-error
 from typing import List
-
+from copy import deepcopy
 from concurrent import futures
 import numpy as np
+from tqdm import tqdm
 from solver_input import FEM_Input_Cube, calc_m
 
 class FEM_Cube():
@@ -17,7 +19,8 @@ class FEM_Cube():
                         [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
                         (Accessed January 20, 2023)
     """
-    def __init__(self, fem_input: FEM_Input_Cube):
+    def __init__(self, fem_input: FEM_Input_Cube = None):
+        assert fem_input is not None
         self.fem_input: FEM_Input_Cube = fem_input
         self.m_u: np.ndarray = None
         self.m_a: np.ndarray = None
@@ -55,7 +58,7 @@ class FEM_Cube():
         ex: np.float64 = self.fem_input.get_ex()
         ey: np.float64 = self.fem_input.get_ey()
         ez: np.float64 = self.fem_input.get_ez()
-        nz, ny, nx, _, _ = pix_tensor.shape
+        nz, ny, nx, _, _ = np.array(pix_tensor).shape
         nxyz = nx * ny * nz
         u: List = [None for _ in range(nxyz)]
         for k in range(nz):
@@ -72,13 +75,16 @@ class FEM_Cube():
 
         # m_a (2d array contains nxyz rows and 27 columns)
         a: List = [None for _ in range(nxyz)]
-        # TODO: max_workersの設定方法を改良する
+        ib = self.fem_input.get_ib()
+        dk = self.fem_input.get_dk()
+        pix = self.fem_input.get_pix()
+        print("Setting the global matrix A...")
         with futures.ThreadPoolExecutor() as executor:
-            for m in range(nxyz):
-                executor.submit(self.__set_a_m, a=a, m=m)
+            for m in tqdm(range(nxyz)):
+                executor.submit(self.__set_a_m, a=a, m=m, ib=ib, dk=dk, pix=pix)
         assert None not in a
         self.m_a = np.array(a, dtype=np.float64)
-
+        # set self.m_gb, self.m_u_tot
         self.__calc_energy()
 
         # m_h (conjugate direction vector)
@@ -89,6 +95,8 @@ class FEM_Cube():
         # a new microstructure is used, as kkk will be reset to 1 every time
         # the counter micro is increased.
         self.m_h = self.m_gb.copy()
+        # gg is the norm squared of the gradient (gg=gb*gb)
+        self.m_gg: np.ndarray = np.dot(self.m_gb, self.m_gb)
 
 
     def run(self, kmax: int, ldemb: int, gtest: float = None) -> None:
@@ -103,120 +111,128 @@ class FEM_Cube():
                 the L2 norm of gradient exceeds this value, the calculation is aborted.
         """
         pix_tensor = self.fem_input.get_pix_tensor()
-        # Solve with conjugate gradient method
         if gtest is None:
-            nz, ny, nx, _, _ = pix_tensor.shape
+            nz, ny, nx, _, _ = np.array(pix_tensor).shape
             ns = nx * ny * nz
             gtest = 1.0e-16 * ns
+        # Solve with conjugate gradient method
         cou = 0
+        print("Start conjugate gradient calculation")
         while self.m_gg > gtest:
             self.__calc_dembx(ldemb)
+            # Call energy to compute energy after dembx call. If gg < gtest, this
+            # will be the final energy. If gg is still larger than gtest, then this
+            # will give an intermediate energy with which to check how the relaxation 
+            # process is coming along.
+            # update self.m_gb, self.m_u_tot
+            self.__calc_energy()
             cou += 1
             if cou > kmax:
                 print(f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}, gtest: {gtest}")
                 # TODO: もしloggerを受け取っていれば, ここで出力する
                 break
+            print(cou) #!
+            print(f"gg: {self.m_gg}")
         self.__calc_current_and_cond()
 
 
-    def __set_a_m(self, a: List, m: int) -> None:
+    def __set_a_m(self, a: List, m: int, ib: List, dk: List, pix: List) -> List:
         """ Set self.m_a[m] value
 
         Args:
             a (List): 1d list to be expanded to 2d in this function.
             m (int): Global 1d labelling index.
+        Returns:
+            List: 1d list of a[m]
         """
-        ib = self.fem_input.get_ib()
-        dk = self.fem_input.get_dk()
-        pix = self.fem_input.get_pix()
-        a[m] = [0 for _ in range(27)]
         ib_m: List = ib[m]
-        a[m][0] = dk[pix[ib_m[26]][0][3]] + dk[pix[ib_m[6][1][2]]] + dk[pix[ib_m[24]][4][7]] + dk[pix[ib_m[14]][5][6]]
-        a[m][1] = dk[pix[ib_m[26]][0][2]] + dk[pix[ib_m[24]][4][6]]
-        a[m][2] = dk[pix[ib_m[26]][0][1]] + dk[pix[ib_m[4]][3][2]] + dk[pix[ib_m[12]][7][6]] + dk[pix[ib_m[24]][4][5]]
-        a[m][3] = dk[pix[ib_m[4]][3][1]] + dk[pix[ib_m[12]][7][5]]
-        a[m][4] = dk[pix[ib_m[5]][2][1]] + dk[pix[ib_m[4]][3][0]] + dk[pix[ib_m[13]][5][6]] + dk[pix[ib_m[12]][7][4]]
-        a[m][5] = dk[pix[ib_m[5]][2][0]] + dk[pix[ib_m[13]][6][4]]
-        a[m][6] = dk[pix[ib_m[5]][2][3]] + dk[pix[ib_m[6]][1][0]] + dk[pix[ib_m[13]][6][7]] + dk[pix[ib_m[14]][5][4]]
-        a[m][7] = dk[pix[ib_m[6]][1][3]] + dk[pix[ib_m[14]][5][7]]
-        a[m][8] = dk[pix[ib_m[24]][4][3]] + dk[pix[ib_m[14]][5][2]]
-        a[m][9] = dk[pix[ib_m[24]][4][2]]
-        a[m][10] = dk[pix[ib_m[12]][7][2]] + dk[pix[ib_m[24]][4][1]]
-        a[m][11] = dk[pix[ib_m[12]][7][1]]
-        a[m][12] = dk[pix[ib_m[12]][7][0]] + dk[pix[ib_m[12]][6][1]]
-        a[m][13] = dk[pix[ib_m[13]][6][0]]
-        a[m][14] = dk[pix[ib_m[13]][6][3]] + dk[pix[ib_m[14]][5][0]]
-        a[m][15] = dk[pix[ib_m[14]][5][3]]
-        a[m][16] = dk[pix[ib_m[26]][0][7]] + dk[pix[ib_m[6]][1][6]]
-        a[m][17] = dk[pix[ib_m[26]][0][6]]
-        a[m][18] = dk[pix[ib_m[26]][0][5]] + dk[pix[ib_m[4]][3][6]]
-        a[m][19] = dk[pix[ib_m[4]][3][5]]
-        a[m][20] = dk[pix[ib_m[4]][3][4]] + dk[pix[ib_m[5]][2][5]]
-        a[m][21] = dk[pix[ib_m[5]][2][4]]
-        a[m][22] = dk[pix[ib_m[5]][2][7]] + dk[pix[ib_m[6]][1][4]]
-        a[m][23] = dk[pix[ib_m[6]][1][7]]
-        a[m][24] = dk[pix[ib_m[13]][6][2]] + dk[pix[ib_m[12]][7][3]] + dk[pix[ib_m[14]][5][1]] + dk[pix[ib_m[24]][4][0]]
-        a[m][25] = dk[pix[ib_m[5]][2][6]] + dk[pix[ib_m[4]][3][7]] + dk[pix[ib_m[26]][0][4]] + dk[pix[ib_m[6]][1][5]]
-        a[m][26] = dk[pix[ib_m[26]][0][0]] + dk[pix[ib_m[6]][1][1]] + dk[pix[ib_m[5]][2][2]] + dk[pix[ib_m[4]][3][3]] \
-                    + dk[pix[ib_m[24]][4][4]] + dk[pix[ib_m[14]][5][5]] + dk[pix[ib_m[13]][6][6]] + dk[pix[ib_m[12]][7][7]]
+        am: List = [0. for _ in range(27)]
+        am[0] = dk[pix[ib_m[26]]][0][3] + dk[pix[ib_m[6]]][1][2] + dk[pix[ib_m[24]]][4][7] + dk[pix[ib_m[14]]][5][6]
+        am[1] = dk[pix[ib_m[26]]][0][2] + dk[pix[ib_m[24]]][4][6]
+        am[2] = dk[pix[ib_m[26]]][0][1] + dk[pix[ib_m[4]]][3][2] + dk[pix[ib_m[12]]][7][6] + dk[pix[ib_m[24]]][4][5]
+        am[3] = dk[pix[ib_m[4]]][3][1] + dk[pix[ib_m[12]]][7][5]
+        am[4] = dk[pix[ib_m[5]]][2][1] + dk[pix[ib_m[4]]][3][0] + dk[pix[ib_m[13]]][5][6] + dk[pix[ib_m[12]]][7][4]
+        am[5] = dk[pix[ib_m[5]]][2][0] + dk[pix[ib_m[13]]][6][4]
+        am[6] = dk[pix[ib_m[5]]][2][3] + dk[pix[ib_m[6]]][1][0] + dk[pix[ib_m[13]]][6][7] + dk[pix[ib_m[14]]][5][4]
+        am[7] = dk[pix[ib_m[6]]][1][3] + dk[pix[ib_m[14]]][5][7]
+        am[8] = dk[pix[ib_m[24]]][4][3] + dk[pix[ib_m[14]]][5][2]
+        am[9] = dk[pix[ib_m[24]]][4][2]
+        am[10] = dk[pix[ib_m[12]]][7][2] + dk[pix[ib_m[24]]][4][1]
+        am[11] = dk[pix[ib_m[12]]][7][1]
+        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[12]]][6][1]
+        am[13] = dk[pix[ib_m[13]]][6][0]
+        am[14] = dk[pix[ib_m[13]]][6][3] + dk[pix[ib_m[14]]][5][0]
+        am[15] = dk[pix[ib_m[14]]][5][3]
+        am[16] = dk[pix[ib_m[26]]][0][7] + dk[pix[ib_m[6]]][1][6]
+        am[17] = dk[pix[ib_m[26]]][0][6]
+        am[18] = dk[pix[ib_m[26]]][0][5] + dk[pix[ib_m[4]]][3][6]
+        am[19] = dk[pix[ib_m[4]]][3][5]
+        am[20] = dk[pix[ib_m[4]]][3][4] + dk[pix[ib_m[5]]][2][5]
+        am[21] = dk[pix[ib_m[5]]][2][4]
+        am[22] = dk[pix[ib_m[5]]][2][7] + dk[pix[ib_m[6]]][1][4]
+        am[23] = dk[pix[ib_m[6]]][1][7]
+        am[24] = dk[pix[ib_m[13]]][6][2] + dk[pix[ib_m[12]]][7][3] + dk[pix[ib_m[14]]][5][1] + dk[pix[ib_m[24]]][4][0]
+        am[25] = dk[pix[ib_m[5]]][2][6] + dk[pix[ib_m[4]]][3][7] + dk[pix[ib_m[26]]][0][4] + dk[pix[ib_m[6]]][1][5]
+        am[26] = dk[pix[ib_m[26]]][0][0] + dk[pix[ib_m[6]]][1][1] + dk[pix[ib_m[5]]][2][2] + dk[pix[ib_m[4]]][3][3] \
+                    + dk[pix[ib_m[24]]][4][4] + dk[pix[ib_m[14]]][5][5] + dk[pix[ib_m[13]]][6][6] + dk[pix[ib_m[12]]][7][7]
+        a[m] = am
 
 
-    def __set_u_m(self, u_expanded: List, m: int) -> None:
+    def __set_u_m(self, u_expanded: List, m: int, ib: List) -> None:
         """ Set self.m_u[m] value.
 
         Args:
             u_expanded (List): 1d list to be expanded 2d in this function.
             m (int): Global 1d lablling index.
         """
-        ib = self.fem_input.get_ib()
-        u_expanded[m] = [0 for _ in range(27)]
+        um = [0 for _ in range(27)]
         for i in range(27):
-            u_expanded[m][i] = self.m_u[ib[m][i]]
+            um[i] = self.m_u[ib[m][i]]
+        u_expanded[m] = um
 
 
-    def __set_h_m(self, h_expanded: List, m: int) -> None:
+    def __set_h_m(self, h_expanded: List, m: int, ib: List) -> None:
         """ Set self.m_h[m] value.
 
         Args:
             h_expanded (List): 1d list to be expanded 2d in this function.
             m (int): Global 1d lablling index.
         """
-        ib = self.fem_input.get_ib()
-        h_expanded[m] = [0 for _ in range(27)]
+        hm = [0 for _ in range(27)]
         for i in range(27):
-            h_expanded[m][i] = self.m_h[ib[m][i]]
+            hm[i] = self.m_h[ib[m][i]]
+        h_expanded[m] = hm
 
 
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.m_gb), the amount of electrostatic energy (self.m_u_tot),
         and the square value of the step width (self.m_gg), and update the these member variables.
         """
+        assert self.m_u is not None
+
         pix_tensor = self.fem_input.get_pix_tensor()
-        nz, ny, nx, _, _ = pix_tensor.shape
+        b = self.fem_input.get_b()
+        c = self.fem_input.get_c()
+        ib = self.fem_input.get_ib()
+        nz, ny, nx, _, _ = np.array(pix_tensor).shape
         nxyz = nx * ny * nz
 
         # expand potential array for fast calculation
         u_2d: List = [None for _ in range(nxyz)]
         with futures.ThreadPoolExecutor() as executor:
             for m in range(nxyz):
-                executor.submit(self.__set_u_m, u_expanded=u_2d, m=m)
+                executor.submit(self.__set_u_m, u_expanded=u_2d, m=m, ib=ib)
         assert None not in u_2d
-        u_2d = np.array(u_2d, dtype=np.float64)
-    
+        u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
+
         # m_gb (1d array for gradient)
         # Hadamard product
         gb: np.ndarray = np.sum(self.m_a * u_2d, axis=1)
-        self.m_gb = gb
+        self.m_gb = gb + b
 
         # m_u_tot (total electrical energy)
-        b = self.fem_input.get_b()
-        c = self.fem_input.get_c()
         u_tot = 0.5 * np.dot(self.m_u, self.m_gb) + np.dot(b, self.m_u) + c
-        self.m_u_tot = np.float64(u_tot)
-
-        # m_gg
-        gg = np.sum(np.square(gb))
-        self.m_gg = gg
+        self.m_u_tot = u_tot
 
 
     def __calc_dembx(self, ldemb: int) -> None:
@@ -225,20 +241,22 @@ class FEM_Cube():
         Args:
             ldemb (int): Maximum number of conjugate gradient iterations.
         """
-        nz, ny, nx, _, _ = self.fem_input.get_pix_tensor().shape
+        nz, ny, nx, _, _ = np.array(self.fem_input.get_pix_tensor()).shape
+        ib = self.fem_input.get_ib()
         nxyz = nx * ny * nz
         # Conjugate gradient loop
         for _ in range(ldemb):
             # expand h
-            h_2d = list(range(nxyz))
+            h_2d: List = self.m_h.tolist()
             with futures.ThreadPoolExecutor() as executor:
                 for m in range(nxyz):
-                    executor.submit(self.__set_h_m, u_expanded=h_2d, m=m)
-            h_2d = np.array(h_2d)
+                    executor.submit(self.__set_h_m, h_expanded=h_2d, m=m, ib=ib)
+            h_2d: np.ndarray = np.array(h_2d, dtype=np.float64)
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
-            ah: np.ndarray = np.sum(self.m_a * h_2d, axis=1)
-            hah = np.dot(self.m_h, ah)
+            ah: np.ndarray = np.sum(self.m_a * h_2d, axis=1) # 1d
+            hah: float = np.dot(self.m_h, ah)
             lamda = self.m_gg / hah
+
             # update u
             self.m_u -= lamda * self.m_h
 
@@ -247,7 +265,7 @@ class FEM_Cube():
 
             # update gg
             gglast = self.m_gg
-            self.m_gg = np.dot(self.m_gb, self.m_gb)
+            self.m_gg: float = np.dot(self.m_gb, self.m_gb)
 
             # update h
             gamma = self.m_gg / gglast
@@ -290,15 +308,16 @@ class FEM_Cube():
         # now compute current in each pixel
         pix = self.fem_input.get_pix()
         pix_tensor = self.fem_input.get_pix_tensor()
-        nz, ny, nx, _, _ = pix_tensor.shape
+        nz, ny, nx, _, _ = np.array(pix_tensor).shape
+        ns = nx * ny * nz
         ib = self.fem_input.get_ib()
         ex = self.fem_input.get_ex()
         ey = self.fem_input.get_ey()
         ez = self.fem_input.get_ez()
         sigma = self.fem_input.get_sigma()
-        currx_m: List = []
-        curry_m: List = []
-        currz_m: List = []
+        currx_m: List = list(range(ns))
+        curry_m: List = list(range(ns))
+        currz_m: List = list(range(ns))
         uu: List = list(range(8))
         for k in range(nz):
             for j in range(ny):

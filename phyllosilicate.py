@@ -1548,7 +1548,7 @@ class Phyllosilicate:
         return cond_specific, _err1 + _err2
 
 
-    def calc_cond_tensor_cube_oxyz(self, edge_length: float) -> np.ndarray:
+    def calc_smec_cond_tensor_cube_oxyz(self, edge_length: float) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned
          perpendicular to the z-plane. The T-O-T plane is assumed to be an
          insulator, following Watanabe (2005). The T-O-T plane is the xy-plane,
@@ -1572,8 +1572,34 @@ class Phyllosilicate:
                                 [0., sigma_h ,0.],
                                 [0., 0., sigma_v]],
                                 dtype=np.float64)
-        self.m_cond_tensor = cond_tensor
-        return self.m_cond_tensor.copy()
+        return cond_tensor
+
+
+    def calc_kaol_cond_tensor_cube_oxyz(self) -> np.ndarray:
+        """Calculate conductivity tensor in kaolinite.
+
+        Args:
+            edge_length (float): Lengths of the edges of the cube's cells
+
+        Returns:
+            np.ndarray: 3 rows and 3 columns condutivity tensor
+        """
+        
+        cond_tensor = np.zeros(shape=(3,3), dtype=np.float64)
+        return cond_tensor
+
+
+    def calc_cond_tensor(self, edge_length: float = None) -> None:
+        """Calculate conductivity tensor. Separate cases by smectite and kaolinite.
+
+        Args:
+            edge_length (float): Length of one side of a cube cell (unit: m)
+        """
+        if self.m_qi < 0. and self.m_gamma_1 == 0.:
+            tensor = self.calc_smec_cond_tensor_cube_oxyz(edge_length)
+        else:
+            tensor = self.calc_kaol_cond_tensor_cube_oxyz()
+        self.m_cond_tensor = tensor
 
 
     def get_logger(self) -> Logger:
@@ -1683,8 +1709,8 @@ class Smectite(Phyllosilicate):
 
 # pylint: disable=dangerous-default-value
 class Kaolinite(Phyllosilicate):
-    """Inherited class of Phyllosilicate, with surface adsorption site density and layer
-    charge fixed to the physical properties of kaolinite
+    """Inherited class of Phyllosilicate, with surface adsorption site density, layer
+    charge, and layer width fixed to the physical properties of kaolinite
 
     Args:
         Phyllosilicate: Phyllosilicate class

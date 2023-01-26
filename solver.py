@@ -99,7 +99,7 @@ class FEM_Cube():
         self.m_gg: np.ndarray = np.dot(self.m_gb, self.m_gb)
 
 
-    def run(self, kmax: int, ldemb: int, gtest: float = None) -> None:
+    def run(self, kmax: int = 40, ldemb: int = 50, gtest: float = None) -> None:
         """ Calculate the distribution of electrical potentials that minimize the electrical
         energy of the system using the conjugate gradient method.
 
@@ -119,10 +119,10 @@ class FEM_Cube():
         cou = 0
         print("Start conjugate gradient calculation")
         while self.m_gg > gtest:
-            self.__calc_dembx(ldemb)
+            self.__calc_dembx(ldemb, gtest)
             # Call energy to compute energy after dembx call. If gg < gtest, this
             # will be the final energy. If gg is still larger than gtest, then this
-            # will give an intermediate energy with which to check how the relaxation 
+            # will give an intermediate energy with which to check how the relaxation
             # process is coming along.
             # update self.m_gb, self.m_u_tot
             self.__calc_energy()
@@ -191,7 +191,7 @@ class FEM_Cube():
         u_expanded[m] = um
 
 
-    def __set_h_m(self, h_expanded: List, m: int, ib: List) -> None:
+    def __set_h_m(self, h_2d: List, m: int, ib: List) -> None:
         """ Set self.m_h[m] value.
 
         Args:
@@ -201,7 +201,7 @@ class FEM_Cube():
         hm = [0 for _ in range(27)]
         for i in range(27):
             hm[i] = self.m_h[ib[m][i]]
-        h_expanded[m] = hm
+        h_2d[m] = hm
 
 
     def __calc_energy(self) -> None:
@@ -235,7 +235,7 @@ class FEM_Cube():
         self.m_u_tot = u_tot
 
 
-    def __calc_dembx(self, ldemb: int) -> None:
+    def __calc_dembx(self, ldemb: int, gtest: float) -> None:
         """ Function that carries out the conjugate gradient relaxation process.
 
         Args:
@@ -250,7 +250,7 @@ class FEM_Cube():
             h_2d: List = self.m_h.tolist()
             with futures.ThreadPoolExecutor() as executor:
                 for m in range(nxyz):
-                    executor.submit(self.__set_h_m, h_expanded=h_2d, m=m, ib=ib)
+                    executor.submit(self.__set_h_m, h_2d=h_2d, m=m, ib=ib)
             h_2d: np.ndarray = np.array(h_2d, dtype=np.float64)
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
             ah: np.ndarray = np.sum(self.m_a * h_2d, axis=1) # 1d
@@ -266,6 +266,8 @@ class FEM_Cube():
             # update gg
             gglast = self.m_gg
             self.m_gg: float = np.dot(self.m_gb, self.m_gb)
+            if self.m_gg < gtest:
+                return
 
             # update h
             gamma = self.m_gg / gglast

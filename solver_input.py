@@ -612,7 +612,7 @@ class FEM_Input_Cube:
             if i8 == 7:
                 xn[i8] = -1. * self.m_ey * ny - self.m_ez * nz
             if i8 == 5:
-                xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny
+                xn[i8] = -1. * self.m_ex * nx - self.m_ez * nz
             if i == 2:
                 xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny
             if i == 6:

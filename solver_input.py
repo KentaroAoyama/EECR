@@ -1,5 +1,6 @@
 """Create input to be passed to the solver class"""
 
+# pylint: disable=no-name-in-module
 from copy import deepcopy
 from typing import List, Dict, Tuple
 from math import isclose
@@ -96,6 +97,7 @@ class FEM_Input_Cube:
                                        shape: Tuple[int] = (100, 100, 100),
                                        edge_length: float = 1.0e-6,
                                        volume_frac_dict: Dict = {},
+                                       seed: int = 42,
                                        rotation_setting: str or Tuple[float] = "random",
                                        ) -> None:
         """Create a pixel based on macroscopic physical properties such as porosity and mineral
@@ -137,8 +139,7 @@ class FEM_Input_Cube:
         rotation_angle_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
         # instance will be stored for each element
         instance_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
-        _seed = 42
-        np.random.seed(_seed)
+        np.random.seed(seed)
         # set rotated conductivity tensor for each element
         nz, ny, nx = shape
         for k in range(nz):
@@ -148,7 +149,7 @@ class FEM_Input_Cube:
                     tensor_center = getattr(instance, "get_cond_tensor", None)()
                     assert tensor_center is not None
                     if rotation_setting == "random":
-                        _rot_mat = calc_rotation_matrix(seed=_seed)
+                        _rot_mat = calc_rotation_matrix(seed=seed)
                     elif isinstance(rotation_setting, tuple):
                         assert len(rotation_setting) == 3
                         _x, _y, _z = rotation_setting
@@ -161,12 +162,52 @@ class FEM_Input_Cube:
                     pix_tensor[k][j][i]: np.ndarray = tensor_center
         self.m_rotation_angle = rotation_angle_ls
         
-        # TODO: Check whether the elements are assigned to satisfy the volume_frac_dict and correct
+        # Check whether the elements are assigned to satisfy the volume_frac_dict and correct
         # it if the error is too large.
-        for instance, frac in volume_frac_dict.items():
+        instance_set_ls: List = list(volume_frac_dict.keys())
+        for cou, instance in enumerate(instance_set_ls):
+            cond_tensor = getattr(instance, "get_cond_tensor", None)()
+            cond_tensor_next = getattr(instance_ls[cou + 1], "get_cond_tensor", None)()
+            frac_targ = volume_frac_dict[instance]
             # first, get the volume fraction of each phase
+            ns = nx * ny * nz
+            frac_unit = 1. / ns
+            frac_asigned: float = 0.
+            m_ls: List = []
+            for k in range(nz):
+                for j in range(ny):
+                    for i in range(nx):
+                        if instance_ls[k][j][i] is instance:
+                            frac_asigned += 1. / frac_unit
+                            m_ls.append(calc_m(i, j, k, nx, ny))
+            lower, upper = frac_targ - frac_unit, frac_targ + frac_unit
             # second modify the fraction
-            pass
+            # If the requirements are met
+            if lower <= frac_asigned <= upper:
+                continue
+            # If more than the target value
+            if frac_asigned > upper:
+                num_delete: int = int((upper - frac_asigned) / frac_unit)
+                m_delete_ls: List = random.choices(m_ls, k=num_delete)
+                for m in m_delete_ls:
+                    i, j, k = calc_ijk(m, nx, ny)
+                    # Re-set instance
+                    instance_ls[k][j][i] = instance_set_ls[cou + 1]
+                    # Re-set conductivity tensor
+                    rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
+                    pix_tensor[k][j][i] = np.matmul(rot_mat, cond_tensor_next)
+            # If less than the target value
+            if frac_asigned < lower:
+                num_add: int = int((frac_asigned - lower) / frac_unit)
+                _m_all: set = set([m for m in range(nx * ny * (nz - 1) + nx * (ny - 1) + nx - 1)])
+                m_add_ls: List = random.choices(list(_m_all.difference(set(m_ls))), k=num_add)
+                for m in m_add_ls:
+                    i, j, k = calc_ijk(m, nx, ny)
+                    # Re-set instance
+                    instance_ls[k][j][i] = instance_set_ls[cou + 1]
+                    # Re-set conductivity tensor
+                    rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
+                    pix_tensor[k][j][i] = np.matmul(rot_mat, cond_tensor)
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
@@ -190,7 +231,7 @@ class FEM_Input_Cube:
                                                      cond_infdiffuse,
                                                      double_layer_length)
         self.m_pix_tensor = pix_tensor
-        
+
         # construct self.m_sigma and self.m_pix
         sigma_ls: List = []
         pix_ls: List = []
@@ -708,6 +749,22 @@ def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
     """
     return nx * ny * k + nx * j + i
 
+
+def calc_ijk(m: int, nx: int, ny: int) -> tuple(int, int, int):
+    """Find the index, i, j, k of a 3-dimensional list from m
+
+    Args:
+        m (int): One dimensional labbeling index (m)
+        nx (int): pix size of x direction.
+        ny (int): pix size of y direction.
+        nz (int): pix size of z direction.
+
+    Returns:
+        int: i, j, k of a 3-dimensional list
+    """
+    _m, i = divmod(m, nx)
+    k, j = divmod(_m, ny)
+    return i, j, k
 
 def calc_rotation_matrix(_x: float = None,
                          _y: float = None,

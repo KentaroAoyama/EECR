@@ -178,29 +178,29 @@ class FEM_Cube():
         a[m] = am
 
 
-    def __set_u_m(self, u_expanded: List, m: int, ib: List) -> None:
+    def __set_u_m(self, u_1d: List, u_2d: List, m: int, ib: List) -> None:
         """ Set self.m_u[m] value.
-
+        # TODO: 完成したらdocstring書く
         Args:
             u_expanded (List): 1d list to be expanded 2d in this function.
             m (int): Global 1d lablling index.
         """
         um = [0 for _ in range(27)]
         for i in range(27):
-            um[i] = self.m_u[ib[m][i]]
-        u_expanded[m] = um
+            um[i] = u_1d[ib[m][i]]
+        u_2d[m] = um
 
 
-    def __set_h_m(self, h_2d: List, m: int, ib: List) -> None:
+    def __set_h_m(self, h_1d: List, h_2d: List, m: int, ib: List) -> None:
         """ Set self.m_h[m] value.
-
+        # TODO: 完成したらdocstring書く
         Args:
             h_expanded (List): 1d list to be expanded 2d in this function.
             m (int): Global 1d lablling index.
         """
         hm = [0 for _ in range(27)]
         for i in range(27):
-            hm[i] = self.m_h[ib[m][i]]
+            hm[i] = h_1d[ib[m][i]]
         h_2d[m] = hm
 
 
@@ -218,10 +218,15 @@ class FEM_Cube():
         nxyz = nx * ny * nz
 
         # expand potential array for fast calculation
-        u_2d: List = [None for _ in range(nxyz)]
+        u_1d: List = self.m_u
+        u_2d: List = [None for _ in range(len(u_1d))]
         with futures.ThreadPoolExecutor() as executor:
             for m in range(nxyz):
-                executor.submit(self.__set_u_m, u_expanded=u_2d, m=m, ib=ib)
+                executor.submit(self.__set_u_m,
+                                u_1d = u_1d.copy(),
+                                u_2d = u_2d,
+                                m = m,
+                                ib = deepcopy(ib))
         assert None not in u_2d
         u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
 
@@ -247,10 +252,16 @@ class FEM_Cube():
         # Conjugate gradient loop
         for _ in range(ldemb):
             # expand h
-            h_2d: List = self.m_h.tolist()
+            h_1d = self.m_h.tolist()
+            h_2d: List = [None for _ in range(nxyz)]
             with futures.ThreadPoolExecutor() as executor:
                 for m in range(nxyz):
-                    executor.submit(self.__set_h_m, h_2d=h_2d, m=m, ib=ib)
+                    executor.submit(self.__set_h_m,
+                                    h_1d = h_1d.copy(),
+                                    h_2d = h_2d,
+                                    m = m,
+                                    ib = deepcopy(ib))
+            # print(f"h_2d: {h_2d}") #!
             h_2d: np.ndarray = np.array(h_2d, dtype=np.float64)
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
             ah: np.ndarray = np.sum(self.m_a * h_2d, axis=1) # 1d

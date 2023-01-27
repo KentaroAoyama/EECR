@@ -291,6 +291,7 @@ class FEM_Input_Cube:
         nz, ny, nx = np.array(instance_ls).shape
         ratio_edl: float = double_layer_length / edge_length
         ratio_fluid: float = 1.0 - ratio_edl
+        # TODO: fix index & 異方性
         for ktmp in (k-1, k+1):
             for jtmp in (j-1,  j+1):
                 for itmp in (i-1, i+1):

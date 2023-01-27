@@ -56,7 +56,7 @@ class NaCl(Fluid):
         left = (5.6 + 0.27 * temperature - 1.5 * 1.0e-4 * temperature**2) * _m
         right = (2.36 + 0.099 * temperature) / (1.0 + 0.214 * _m**0.5) * _m**1.5
         self.m_conductivity = left - right
-        return deepcopy(self.m_conductivity)
+        return self.m_conductivity
 
 
     def calc_cond_tensor_cube_oxyz(self) -> np.ndarray:

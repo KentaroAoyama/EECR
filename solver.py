@@ -3,7 +3,6 @@
 # pylint: disable=import-error
 from typing import List
 from copy import deepcopy
-from concurrent import futures
 import numpy as np
 from tqdm import tqdm
 from solver_input import FEM_Input_Cube, calc_m
@@ -23,11 +22,13 @@ class FEM_Cube():
         assert fem_input is not None
         self.fem_input: FEM_Input_Cube = fem_input
         self.m_u: np.ndarray = None
+        self.m_u2d: np.ndarray = None
         self.m_a: np.ndarray = None
         self.m_gb: np.ndarray = None
         self.m_u_tot = np.float64 = None
         self.m_gg: np.float64 = None
         self.m_h: np.ndarray = None
+        self.m_h2d: np.ndarray = None
         self.__init_default()
         self.m_currx_m: List = None
         self.m_curry_m: List = None
@@ -55,6 +56,7 @@ class FEM_Cube():
         """
         # m_u
         pix_tensor: np.ndarray = self.fem_input.get_pix_tensor()
+        ib: List = self.fem_input.get_ib()
         ex: np.float64 = self.fem_input.get_ex()
         ey: np.float64 = self.fem_input.get_ey()
         ez: np.float64 = self.fem_input.get_ez()
@@ -73,18 +75,28 @@ class FEM_Cube():
         assert None not in u
         self.m_u: np.ndarray = np.array(u, dtype=np.float64)
 
+        # m_u2d
+        u_2d: List = [None for _ in range(self.m_u.shape[0])]
+        for m in range(nxyz):
+            self.__expand_2d(deepcopy(self.m_u),
+                             u_2d,
+                             m,
+                             deepcopy(ib))
+        assert None not in u_2d
+        u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
+        self.m_u2d = u_2d
+
         # m_a (2d array contains nxyz rows and 27 columns)
         a: List = [None for _ in range(nxyz)]
-        ib = self.fem_input.get_ib()
         dk = self.fem_input.get_dk()
         pix = self.fem_input.get_pix()
         print("Setting the global matrix A...")
-        with futures.ThreadPoolExecutor() as executor:
-            for m in tqdm(range(nxyz)):
-                executor.submit(self.__set_a_m, a=a, m=m, ib=ib, dk=dk, pix=pix)
+        for m in tqdm(range(nxyz)):
+            self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
         assert None not in a
         self.m_a = np.array(a, dtype=np.float64)
-        # set self.m_gb, self.m_u_tot
+
+        # m_gb and u_tot
         self.__calc_energy()
 
         # m_h (conjugate direction vector)
@@ -94,7 +106,18 @@ class FEM_Cube():
         # is greater than 1, then this initialization step will be run every
         # a new microstructure is used, as kkk will be reset to 1 every time
         # the counter micro is increased.
-        self.m_h = self.m_gb.copy()
+        self.m_h = deepcopy(self.m_gb)
+
+        # h_2d
+        h_2d: List = [None for _ in range(nxyz)]
+        for m in range(nxyz):
+            self.__expand_2d(deepcopy(self.m_h),
+                             h_2d,
+                             m,
+                             deepcopy(ib))
+        assert None not in h_2d
+        self.m_h2d = np.array(h_2d, dtype=np.float64)
+
         # gg is the norm squared of the gradient (gg=gb*gb)
         self.m_gg: np.ndarray = np.dot(self.m_gb, self.m_gb)
 
@@ -105,7 +128,7 @@ class FEM_Cube():
 
         Args:
             kmax (int): Maximum number to call __calc_dembx. Total number to conjugate gradient
-                calculation is kmax*ldemb
+                calculation is kmax*ldemb.
             ldemb (int): Maximum number of conjugate gradient iterations.
             gtest (float): Threshold used to determine convergence. When the squared value of
                 the L2 norm of gradient exceeds this value, the calculation is aborted.
@@ -119,6 +142,8 @@ class FEM_Cube():
         cou = 0
         print("Start conjugate gradient calculation")
         while self.m_gg > gtest:
+            print(cou) #!
+            print(f"gg: {self.m_gg}") #!
             self.__calc_dembx(ldemb, gtest)
             # Call energy to compute energy after dembx call. If gg < gtest, this
             # will be the final energy. If gg is still larger than gtest, then this
@@ -131,8 +156,6 @@ class FEM_Cube():
                 print(f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}, gtest: {gtest}")
                 # TODO: もしloggerを受け取っていれば, ここで出力する
                 break
-            print(cou) #!
-            print(f"gg: {self.m_gg}")
         self.__calc_current_and_cond()
 
 
@@ -140,8 +163,11 @@ class FEM_Cube():
         """ Set self.m_a[m] value
 
         Args:
-            a (List): 1d list to be expanded to 2d in this function.
+            a (List): 2d list of global matrix A.
             m (int): Global 1d labelling index.
+            ib (List): Neighbor labeling 1d list.
+            dk (List): Stiffness matrix (nphase, 8, 8)
+            pix (List): 1d list identifying conductivity tensors
         Returns:
             List: 1d list of a[m]
         """
@@ -178,66 +204,39 @@ class FEM_Cube():
         a[m] = am
 
 
-    def __set_u_m(self, u_1d: List, u_2d: List, m: int, ib: List) -> None:
-        """ Set self.m_u[m] value.
-        # TODO: 完成したらdocstring書く
-        Args:
-            u_expanded (List): 1d list to be expanded 2d in this function.
-            m (int): Global 1d lablling index.
-        """
-        um = [0 for _ in range(27)]
-        for i in range(27):
-            um[i] = u_1d[ib[m][i]]
-        u_2d[m] = um
+    def __expand_2d(self, ls1d: List, ls2d: List, m: int, ib: List) -> None:
+        """ Convert a 1d list with m elements to an m x 27 2d list
 
-
-    def __set_h_m(self, h_1d: List, h_2d: List, m: int, ib: List) -> None:
-        """ Set self.m_h[m] value.
-        # TODO: 完成したらdocstring書く
         Args:
-            h_expanded (List): 1d list to be expanded 2d in this function.
+            ls1d (List): 1d list
+            h_2d (List): 2d list. 27 values adjacent to m are stored in the second dimension
             m (int): Global 1d lablling index.
+            ib (List): Neighbor labeling list
         """
-        hm = [0 for _ in range(27)]
+        hm = [0. for _ in range(27)]
         for i in range(27):
-            hm[i] = h_1d[ib[m][i]]
-        h_2d[m] = hm
+            hm[i] = ls1d[ib[m][i]]
+        ls2d[m] = hm
 
 
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.m_gb), the amount of electrostatic energy (self.m_u_tot),
         and the square value of the step width (self.m_gg), and update the these member variables.
         """
-        assert self.m_u is not None
+        assert isinstance(self.m_u, np.ndarray)
+        assert isinstance(self.m_u2d, np.ndarray)
+        assert isinstance(self.m_a, np.ndarray)
 
-        pix_tensor = self.fem_input.get_pix_tensor()
         b = self.fem_input.get_b()
         c = self.fem_input.get_c()
-        ib = self.fem_input.get_ib()
-        nz, ny, nx, _, _ = np.array(pix_tensor).shape
-        nxyz = nx * ny * nz
+        assert isinstance(b, np.ndarray)
+        assert isinstance(c, float)
 
-        # expand potential array for fast calculation
-        u_1d: List = self.m_u
-        u_2d: List = [None for _ in range(len(u_1d))]
-        with futures.ThreadPoolExecutor() as executor:
-            for m in range(nxyz):
-                executor.submit(self.__set_u_m,
-                                u_1d = u_1d.copy(),
-                                u_2d = u_2d,
-                                m = m,
-                                ib = deepcopy(ib))
-        assert None not in u_2d
-        u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
-
-        # m_gb (1d array for gradient)
-        # Hadamard product
-        gb: np.ndarray = np.sum(self.m_a * u_2d, axis=1)
-        self.m_gb = gb + b
-
-        # m_u_tot (total electrical energy)
-        u_tot = 0.5 * np.dot(self.m_u, self.m_gb) + np.dot(b, self.m_u) + c
+        # m_gb (1d array for gradient), m_u_tot
+        gb: np.ndarray = np.sum(self.m_a * self.m_u2d, axis=1)
+        u_tot = 0.5 * np.dot(self.m_u, gb) + np.dot(b, self.m_u) + c
         self.m_u_tot = u_tot
+        self.m_gb = gb + b
 
 
     def __calc_dembx(self, ldemb: int, gtest: float) -> None:
@@ -246,30 +245,27 @@ class FEM_Cube():
         Args:
             ldemb (int): Maximum number of conjugate gradient iterations.
         """
-        nz, ny, nx, _, _ = np.array(self.fem_input.get_pix_tensor()).shape
+        nxyz = self.m_u.shape[0]
         ib = self.fem_input.get_ib()
-        nxyz = nx * ny * nz
+
         # Conjugate gradient loop
         for _ in range(ldemb):
+
             # expand h
-            h_1d = self.m_h.tolist()
+            h_1d: List = self.m_h.tolist()
             h_2d: List = [None for _ in range(nxyz)]
-            with futures.ThreadPoolExecutor() as executor:
-                for m in range(nxyz):
-                    executor.submit(self.__set_h_m,
-                                    h_1d = h_1d.copy(),
-                                    h_2d = h_2d,
-                                    m = m,
-                                    ib = deepcopy(ib))
-            # print(f"h_2d: {h_2d}") #!
-            h_2d: np.ndarray = np.array(h_2d, dtype=np.float64)
+            for m in range(nxyz):
+                self.__expand_2d(h_1d, h_2d, m, ib)
+            assert None not in h_2d
+
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
-            ah: np.ndarray = np.sum(self.m_a * h_2d, axis=1) # 1d
+            ah: np.ndarray = np.sum(self.m_a * self.m_h2d, axis=1) # 1d
             hah: float = np.dot(self.m_h, ah)
-            lamda = self.m_gg / hah
+            lamda = np.dot(self.m_gb, self.m_h) / hah
 
             # update u
             self.m_u -= lamda * self.m_h
+            self.m_u2d -= lamda * self.m_h2d
 
             # update gb
             self.m_gb -= lamda * ah

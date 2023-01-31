@@ -215,6 +215,7 @@ class FEM_Input_Cube:
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
                     pix_tensor[k][j][i] = np.matmul(rot_mat, cond_tensor)
+        # TODO: ここのassertionに行く場合があるので修正する
         # final check for fraction
         for instance in instance_set_ls:
             frac = 0.
@@ -261,6 +262,19 @@ class FEM_Input_Cube:
                     pix_ls.append(m) # TODO: remove pix
         self.m_sigma = sigma_ls
         self.m_pix = pix_ls
+
+
+    def create_from_file(fpth: str):
+        nx = ny = 20
+        idx_tensor_map: Dict = {1: np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=np.float64),
+                                2: np.array([[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]], dtype=np.float64)}
+        pix_tensor = np.zeros(shape=len(idx_tensor_map), )
+        with open(fpth, "w") as f:
+            for m, _l in enumerate(f.readlines()):
+                cidx = np.float64(_l.replace("\n", ""))
+                i, j, k = calc_ijk(m, nx, ny)
+
+        pass
 
 
     def __sum_double_layer_cond(self,
@@ -365,16 +379,22 @@ class FEM_Input_Cube:
                         i1 = i + _in[n]
                         j1 = j + _jn[n]
                         k1 = k + _kn[n]
+                        if i1 == -1:
+                            i1 += nx
                         if i1 == nx:
                             i1 -= nx
+                        if j1 == -1:
+                            j1 += ny
                         if j1 == ny:
                             j1 -= ny
+                        if k1 == -1:
+                            k1 += nz
                         if k1 == nz:
                             k1 -= nz
-                        assert i1 < nx
-                        assert j1 < ny
-                        assert k1 < nz
-                        m1 = nxy * k1 + nx * j1 + i1
+                        assert -1 < i1 < nx
+                        assert -1 < j1 < ny
+                        assert -1 < k1 < nz
+                        m1 = calc_m(i1, j1, k1, nx, ny)
                         ib[m][n] = m1
         self.m_ib = ib
 
@@ -394,8 +414,7 @@ class FEM_Input_Cube:
         assert self.m_ez is not None
         n_phase: int = len(self.m_sigma)
         # initialize stiffness matrices
-        dk = np.zeros(shape=(n_phase, 8, 8),
-                      dtype=np.float64)
+        dk = np.zeros(shape=(n_phase, 8, 8)).tolist()
         # set up Simpson's rule integration weight vector
         g = np.zeros(shape=(3, 3, 3)).tolist()
         for k in range(3):
@@ -408,7 +427,8 @@ class FEM_Input_Cube:
                         nm += 1
                     if k == 1:
                         nm += 1
-                    g[k][j][i] = 4.0**nm
+                    g[i][j][k] = 4.0**nm
+
         # loop over the nphase kinds of pixels and Simpson's rule quadrature
         # points in order to compute the stiffness matrices.  Stiffness matrices
         # of trilinear finite elements are quadratic in x, y, and z, so that
@@ -425,7 +445,7 @@ class FEM_Input_Cube:
                         # matrix N (see manual, Sec. 2.2), dndy, dndz are similar.
                         dndx: List = [0. for _ in range(8)]
                         dndy: List = deepcopy(dndx)
-                        dndz = deepcopy(dndx)
+                        dndz: List = deepcopy(dndx)
                         # set dndx
                         dndx[0] = - (1.0 - y) * (1.0 - z)
                         dndx[1]= (1.0 - y) * (1.0 - z)
@@ -469,7 +489,7 @@ class FEM_Input_Cube:
                                         _sum += es[kk][ii] * self.m_sigma[ijk][kk][ll] \
                                              * es[ll][jj]
                                 dk[ijk][ii][jj] += g[i][j][k] * _sum / 216.
-        self.m_dk = dk
+        self.m_dk = np.array(dk, dtype=np.float64)
 
         # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,

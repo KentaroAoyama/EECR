@@ -67,7 +67,7 @@ def run():
     print("set solver input")
     solver_input = FEM_Input_Cube()
     print("create_pixel_by_macro_variable")
-    solver_input.create_pixel_by_macro_variable(shape=(10, 10, 10),
+    solver_input.create_pixel_by_macro_variable(shape=(3, 3, 3),
                                                 edge_length=edge_length,
                                                 volume_frac_dict = {smectite: 0.5,
                                                                     kaolinite: 0.4,

@@ -66,14 +66,16 @@ def run():
     # set solver input
     print("set solver input")
     solver_input = FEM_Input_Cube()
-    print("create_pixel_by_macro_variable")
-    solver_input.create_pixel_by_macro_variable(shape=(3, 3, 3),
-                                                edge_length=edge_length,
-                                                volume_frac_dict = {smectite: 0.5,
-                                                                    kaolinite: 0.4,
-                                                                    nacl: 0.1},
-                                                seed=42,
-                                                rotation_setting="random")
+    # print("create_pixel_by_macro_variable")
+    # solver_input.create_pixel_by_macro_variable(shape=(3, 3, 3),
+    #                                             edge_length=edge_length,
+    #                                             volume_frac_dict = {smectite: 0.5,
+    #                                                                 kaolinite: 0.4,
+    #                                                                 nacl: 0.1},
+    #                                             seed=42,
+    #                                             rotation_setting="random")
+    print("create_from_file")
+    solver_input.create_from_file("./microstructure.dat")
     print("set_ib")
     solver_input.set_ib()
     print("femat")

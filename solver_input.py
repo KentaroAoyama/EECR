@@ -264,17 +264,28 @@ class FEM_Input_Cube:
         self.m_pix = pix_ls
 
 
-    def create_from_file(fpth: str):
-        nx = ny = 20
+    def create_from_file(self, fpth: str) -> None:
+        """Create 3d cubic elements from file
+
+        Args:
+            fpth (str): File path to be read
+        """
+        nx = ny = nz = 20
         idx_tensor_map: Dict = {1: np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=np.float64),
                                 2: np.array([[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]], dtype=np.float64)}
-        pix_tensor = np.zeros(shape=len(idx_tensor_map), )
-        with open(fpth, "w") as f:
+        pix_tensor = np.zeros(shape=(nz, ny, nx)).tolist()
+        signa: List = []
+        pix_ls: List = []
+        with open(fpth, "r", encoding="utf-8") as f:
             for m, _l in enumerate(f.readlines()):
-                cidx = np.float64(_l.replace("\n", ""))
+                cidx = int(_l.replace("\n", ""))
                 i, j, k = calc_ijk(m, nx, ny)
-
-        pass
+                pix_tensor[k][j][i] = idx_tensor_map[cidx]
+                signa.append(idx_tensor_map[cidx])
+                pix_ls.append(m)
+        self.m_pix_tensor = pix_tensor
+        self.m_sigma = signa
+        self.m_pix = pix_ls
 
 
     def __sum_double_layer_cond(self,
@@ -322,6 +333,7 @@ class FEM_Input_Cube:
 
 
     def set_ib(self) -> None:
+        # TODO: 入力をnx, ny, nzとしたほうがいいかも. 要検証
         """ set member variable of m_ib based on m_pix_tensor.
         """
         assert self.m_pix_tensor is not None

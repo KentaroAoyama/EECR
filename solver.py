@@ -98,7 +98,6 @@ class FEM_Cube():
 
         # m_gb and u_tot
         self.__calc_energy()
-
         # m_h (conjugate direction vector)
         # Initialize the conjugate direction vector on first call to dembx only.
         # For calls to dembx after the first, we want to continue using the
@@ -107,7 +106,6 @@ class FEM_Cube():
         # a new microstructure is used, as kkk will be reset to 1 every time
         # the counter micro is increased.
         self.m_h = deepcopy(self.m_gb)
-
         # h_2d
         h_2d: List = [None for _ in range(nxyz)]
         for m in range(nxyz):
@@ -142,8 +140,6 @@ class FEM_Cube():
         cou = 0
         print("Start conjugate gradient calculation")
         while self.m_gg > gtest:
-            print(cou) #!
-            print(f"gg: {self.m_gg}") #!
             self.__calc_dembx(ldemb, gtest)
             # Call energy to compute energy after dembx call. If gg < gtest, this
             # will be the final energy. If gg is still larger than gtest, then this
@@ -185,7 +181,7 @@ class FEM_Cube():
         am[9] = dk[pix[ib_m[24]]][4][2]
         am[10] = dk[pix[ib_m[12]]][7][2] + dk[pix[ib_m[24]]][4][1]
         am[11] = dk[pix[ib_m[12]]][7][1]
-        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[12]]][6][1]
+        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[13]]][6][1]
         am[13] = dk[pix[ib_m[13]]][6][0]
         am[14] = dk[pix[ib_m[13]]][6][3] + dk[pix[ib_m[14]]][5][0]
         am[15] = dk[pix[ib_m[14]]][5][3]
@@ -214,8 +210,9 @@ class FEM_Cube():
             ib (List): Neighbor labeling list
         """
         hm = [0. for _ in range(27)]
+        ib_m: List = ib[m]
         for i in range(27):
-            hm[i] = ls1d[ib[m][i]]
+            hm[i] = ls1d[ib_m[i]]
         ls2d[m] = hm
 
 
@@ -250,18 +247,19 @@ class FEM_Cube():
 
         # Conjugate gradient loop
         for _ in range(ldemb):
-
+            print(_) #!
             # expand h
             h_1d: List = self.m_h.tolist()
             h_2d: List = [None for _ in range(nxyz)]
             for m in range(nxyz):
                 self.__expand_2d(h_1d, h_2d, m, ib)
             assert None not in h_2d
+            self.m_h2d = np.array(h_2d, dtype=np.float64)
 
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
             ah: np.ndarray = np.sum(self.m_a * self.m_h2d, axis=1) # 1d
             hah: float = np.dot(self.m_h, ah)
-            lamda = np.dot(self.m_gb, self.m_h) / hah
+            lamda = self.m_gg / hah
 
             # update u
             self.m_u -= lamda * self.m_h
@@ -279,6 +277,7 @@ class FEM_Cube():
             # update h
             gamma = self.m_gg / gglast
             self.m_h = self.m_gb + gamma * self.m_h
+            print(self.m_h) #!
 
 
     def __calc_current_and_cond(self):

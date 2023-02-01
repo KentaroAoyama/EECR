@@ -166,7 +166,7 @@ class FEM_Input_Cube:
                     tensor_center = np.matmul(_rot_mat, tensor_center)
                     pix_tensor[k][j][i]: np.ndarray = tensor_center
         self.m_rotation_angle = rotation_angle_ls
-        
+
         # Check whether the elements are assigned to satisfy the volume_frac_dict and correct
         # it if the error is too large.
         print("Modifying element assignments...")
@@ -270,21 +270,29 @@ class FEM_Input_Cube:
         Args:
             fpth (str): File path to be read
         """
-        nx = ny = nz = 20
-        idx_tensor_map: Dict = {1: np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=np.float64),
-                                2: np.array([[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]], dtype=np.float64)}
+        nx = 3
+        ny = 3
+        nz = 1
+        assert isinstance(nx, int) and nx > 0
+        assert isinstance(ny, int) and ny > 0
+        assert isinstance(nz, int) and nz > 0
+        idx_tensor_map: Dict = {0: np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=np.float64),
+                                1: np.array([[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]], dtype=np.float64)}
+        sigma: List = list(range(len(idx_tensor_map)))
+        _keys: List = list(idx_tensor_map.keys())
+        _keys.sort()
+        for cidx in _keys:
+            sigma[cidx] = idx_tensor_map[cidx]
         pix_tensor = np.zeros(shape=(nz, ny, nx)).tolist()
-        signa: List = []
         pix_ls: List = []
         with open(fpth, "r", encoding="utf-8") as f:
             for m, _l in enumerate(f.readlines()):
                 cidx = int(_l.replace("\n", ""))
                 i, j, k = calc_ijk(m, nx, ny)
                 pix_tensor[k][j][i] = idx_tensor_map[cidx]
-                signa.append(idx_tensor_map[cidx])
-                pix_ls.append(m)
+                pix_ls.append(cidx)
         self.m_pix_tensor = pix_tensor
-        self.m_sigma = signa
+        self.m_sigma = sigma
         self.m_pix = pix_ls
 
 
@@ -512,9 +520,10 @@ class FEM_Input_Cube:
         nxy = nx * ny
         ns = nxy * nz
         b: List = np.zeros(ns).tolist()
-        # For all cases, correspondence between 1-8 finite element node labels
-        # and 1-27 neighbor labels is:  1:ib(m,27),2:ib(m,3),3:ib(m,2),
-        # 4:ib(m,1),5:ib(m,26),6:ib(m,19),7:ib(m,18),8:ib(m,17)
+        c = 0.
+        # For all cases, correspondence between 0-7 finite element node labels
+        # and 0-26 neighbor labels is:  1:ib[m][26],2:ib[m][2],3:ib[m][1],
+        # 4:ib[m][0],5:ib[m][25],6:ib[m][18],7:ib[m][17],8:ib[m][16]
         # (see Table 4 in manual)
         _is: List = list(range(8))
         _is[0] = 26
@@ -526,7 +535,6 @@ class FEM_Input_Cube:
         _is[6] = 17
         _is[7] = 16
 
-        c = 0.
         xn: List = list(range(8))
         # x=nx face
         i = nx - 1
@@ -646,10 +654,11 @@ class FEM_Input_Cube:
                 xn[i8] = -1. * self.m_ey * ny - self.m_ez * nz
             if i8 == 5:
                 xn[i8] = -1. * self.m_ex * nx - self.m_ez * nz
-            if i == 2:
+            if i8 == 2:
                 xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny
-            if i == 6:
+            if i8 == 6:
                 xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny - self.m_ez * nz
+            print(xn[i8])
         m = calc_m(i, j, k, nx, ny)
         for mm in range(8):
             _sum = 0.
@@ -657,6 +666,7 @@ class FEM_Input_Cube:
                 _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                 c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
             b[self.m_ib[m][_is[mm]]] += _sum
+
         self.m_b = np.array(b, dtype=np.float64)
         self.m_c = np.float64(c)
 

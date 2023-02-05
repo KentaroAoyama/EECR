@@ -153,6 +153,7 @@ class FEM_Input_Cube:
                     instance = np.random.choice(instance_set_ls, p=frac_ls)
                     tensor_center = getattr(instance, "get_cond_tensor", None)()
                     assert tensor_center is not None
+                    _rot_mat = None
                     if rotation_setting == "random":
                         _rot_mat = calc_rotation_matrix(seed=seed)
                     elif isinstance(rotation_setting, tuple):
@@ -161,6 +162,7 @@ class FEM_Input_Cube:
                         _rot_mat = calc_rotation_matrix(_x, _y, _z)
                     else:
                         raise RuntimeError("rotation_setting argument is not valid")
+                    assert _rot_mat is not None
                     rotation_angle_ls[k][j][i] = _rot_mat
                     instance_ls[k][j][i] = instance
                     tensor_center = np.matmul(_rot_mat, tensor_center)
@@ -176,11 +178,12 @@ class FEM_Input_Cube:
             if cou == len(instance_set_ls) - 1:
                 break
             cond_tensor = getattr(instance, "get_cond_tensor", None)()
+            instance_next = instance_set_ls[cou + 1]
             cond_tensor_next = getattr(instance_set_ls[cou + 1], "get_cond_tensor", None)()
             frac_targ = volume_frac_dict[instance]
             # first, get the volume fraction of each phase
             frac_asigned: float = 0.
-            m_ls: List = []
+            m_ls: List[int] = []
             for k in range(nz):
                 for j in range(ny):
                     for i in range(nx):
@@ -192,30 +195,28 @@ class FEM_Input_Cube:
             # If the requirements are met
             if lower <= frac_asigned <= upper:
                 continue
+            num_diff: int = int(abs(frac_asigned - frac_targ) / frac_unit)
             # If more than the target value
             if frac_asigned > upper:
-                num_delete: int = int((frac_asigned - frac_targ) / frac_unit)
-                m_delete_ls: List = random.choices(m_ls, k=num_delete)
+                m_delete_ls: List = random.choices(m_ls, k=num_diff)
                 for m in m_delete_ls:
                     i, j, k = calc_ijk(m, nx, ny)
                     # Re-set instance
-                    instance_ls[k][j][i] = instance_set_ls[cou + 1]
+                    instance_ls[k][j][i] = instance_next
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
                     pix_tensor[k][j][i] = np.matmul(rot_mat, cond_tensor_next)
             # If less than the target value
             if frac_asigned < lower:
-                num_add: int = int((frac_targ - frac_asigned) / frac_unit)
                 _m_all: set = set([m for m in range(nx * ny * nz)])
-                m_add_ls: List = random.choices(list(_m_all.difference(set(m_ls))), k=num_add)
+                m_add_ls: List = random.choices(list(_m_all.difference(set(m_ls))), k=num_diff)
                 for m in m_add_ls:
                     i, j, k = calc_ijk(m, nx, ny)
                     # Re-set instance
-                    instance_ls[k][j][i] = instance_set_ls[cou + 1]
+                    instance_ls[k][j][i] = instance
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
                     pix_tensor[k][j][i] = np.matmul(rot_mat, cond_tensor)
-        # TODO: ここのassertionに行く場合があるので修正する
         # final check for fraction
         for instance in instance_set_ls:
             frac = 0.
@@ -224,7 +225,8 @@ class FEM_Input_Cube:
                     for i in range(nx):
                         if instance == instance_ls[k][j][i]:
                             frac += frac_unit
-            assert frac - frac_unit <  volume_frac_dict[instance] < frac + frac_unit
+            assert frac - frac_unit <  volume_frac_dict[instance] < frac + frac_unit, \
+                f"instance: {instance}, frac: {frac}"
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
@@ -265,7 +267,7 @@ class FEM_Input_Cube:
 
 
     def create_from_file(self, fpth: str) -> None:
-        """Create 3d cubic elements from file
+        """Create 3d cubic elements from file as in Garboczi (1998)
 
         Args:
             fpth (str): File path to be read
@@ -324,24 +326,93 @@ class FEM_Input_Cube:
         nz, ny, nx = np.array(instance_ls).shape
         ratio_edl: float = double_layer_length / edge_length
         ratio_fluid: float = 1.0 - ratio_edl
-        # TODO: fix index & 異方性
-        for ktmp in (k-1, k+1):
-            for jtmp in (j-1,  j+1):
-                for itmp in (i-1, i+1):
-                    if ktmp == nz:
-                        ktmp = 0
-                    if jtmp == ny:
-                        jtmp = 0
-                    if itmp == nx:
-                        itmp = 0
-                    instance = instance_ls[ktmp][jtmp][itmp]
-                    if instance.__class__.__base__ is Fluid:
-                        pix_tensor[ktmp][jtmp][itmp] = ratio_edl * cond_infdiffuse + \
-                                                       ratio_fluid * pix_tensor[ktmp][jtmp][itmp]
+        # x direction
+        for itmp in (i - 1, i + 1):
+            if itmp < 0:
+                itmp += nx
+            if itmp >= nx:
+                itmp -= nx
+            self.__add_adjacent_fluid_cell(pix_tensor,
+                                           instance_ls,
+                                           (itmp, j, k),
+                                           "x",
+                                           cond_infdiffuse,
+                                           ratio_edl,
+                                           ratio_fluid)
+        # y direction
+        for jtmp in (j - 1, j + 1):
+            if jtmp < 0:
+                jtmp += ny
+            if jtmp >= ny:
+                jtmp -= ny
+            self.__add_adjacent_fluid_cell(pix_tensor,
+                                           instance_ls,
+                                           (i, jtmp, k),
+                                           "y",
+                                           cond_infdiffuse,
+                                           ratio_edl,
+                                           ratio_fluid)
+        # z direction
+        for ktmp in (k - 1, k + 1):
+            if ktmp < 0:
+                ktmp += nz
+            if ktmp >= nz:
+                ktmp -= nz
+            self.__add_adjacent_fluid_cell(pix_tensor,
+                                           instance_ls,
+                                           (i, j, ktmp),
+                                           "z",
+                                           cond_infdiffuse,
+                                           ratio_edl,
+                                           ratio_fluid)
+
+
+    def __add_adjacent_fluid_cell(self,
+                                  pix_tensor: List,
+                                  instance_ls: List,
+                                  idx_adj: Tuple[int],
+                                  adj_axis: str,
+                                  cond_infdiffuse: float,
+                                  ratio_edl: float,
+                                  ratio_fluid: float) -> None:
+        """Add electrical double layer conductivity to adjacent cells
+
+        Args:
+            pix_tensor (List): 3d list containing the 2d conductivity tensor
+            instance_ls (List): 3d list containing instance of fluid or mineral
+            idx_adj (Tuple[int]): Adjacent cell index (k, j, i)
+            adj_axis (str): String indicating the direction of adjacent direction (x or y or z) 
+            cond_infdiffuse (float): Conductivity of the electrical double layer
+            ratio_edl (float): Ratio of the electrical double layer in the cell volume
+            ratio_fluid (float): Ratio of the fluid in the cell volume
+        """
+        iadj, jadj, kadj = idx_adj
+        instance = instance_ls[kadj][jadj][iadj]
+        if not instance.__class__.__base__ is Fluid:
+            return None
+        assert adj_axis in ("x", "y", "z"), f"adj_axis: {adj_axis}"
+        edl_tensor: np.ndarray = None
+        if adj_axis == "x":
+            edl_tensor = np.array([[0., 0., 0.],
+                                   [0., cond_infdiffuse, 0.],
+                                   [0., 0., cond_infdiffuse]],
+                                   dtype=np.float64)
+        if adj_axis == "y":
+            edl_tensor = np.array([[cond_infdiffuse, 0., 0.],
+                                   [0., 0., 0.],
+                                   [0., 0., cond_infdiffuse]],
+                                   dtype=np.float64)
+        if adj_axis == "z":
+            edl_tensor = np.array([[cond_infdiffuse, 0., 0.],
+                                   [0., cond_infdiffuse, 0.],
+                                   [0., 0., 0.]],
+                                   dtype=np.float64)
+        assert edl_tensor is not None
+        pix_tensor[kadj][jadj][iadj] = ratio_edl * edl_tensor + \
+                                       ratio_fluid * pix_tensor[kadj][jadj][iadj]
 
 
     def set_ib(self) -> None:
-        # TODO: 入力をnx, ny, nzとしたほうがいいかも. 要検証
         """ set member variable of m_ib based on m_pix_tensor.
         """
         assert self.m_pix_tensor is not None

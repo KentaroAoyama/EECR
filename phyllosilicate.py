@@ -19,7 +19,7 @@ import constants as const
 
 ion_props_default = const.ion_props_default.copy()
 activities_default = const.activities_default.copy()
-# Load global parameters
+# load global parameters
 # for smectite, infinite diffuse layer case
 smectite_inf_init_pth: PathLike = path.join(path.dirname(__file__),
                                             "params",
@@ -1567,7 +1567,7 @@ class Phyllosilicate:
         assert sigma_intra is not None, "Before calculating the conductivity" \
             "of the smectite cell, we should calculate interlayer conductivity"
         sigma_h = sigma_intra * self.m_layer_width / edge_length
-        sigma_v = 0. # assumed to be an insulator
+        sigma_v = 1.0e-12
         cond_tensor = np.array([[sigma_h, 0. ,0.],
                                 [0., sigma_h ,0.],
                                 [0., 0., sigma_v]],
@@ -1584,8 +1584,11 @@ class Phyllosilicate:
         Returns:
             np.ndarray: 3 rows and 3 columns condutivity tensor
         """
-        
-        cond_tensor = np.zeros(shape=(3,3), dtype=np.float64)
+        cond_silica = 1.0e-12
+        cond_tensor = np.array([[cond_silica, 0. ,0.],
+                                [0., cond_silica ,0.],
+                                [0., 0., cond_silica]],
+                                dtype=np.float64)
         return cond_tensor
 
 

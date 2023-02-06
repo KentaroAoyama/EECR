@@ -126,6 +126,8 @@ class FEM_Input_Cube:
         # Check to see if the values in shape are valid
         for n in shape:
             assert isinstance(n, int) and n > 0
+        nx, ny, nz = shape
+        shape = (nz, ny, nx) # change order
 
         # first create pixel as 3d list
         instance_set_ls: List = []
@@ -144,6 +146,7 @@ class FEM_Input_Cube:
         # instance will be stored for each element
         instance_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
         np.random.seed(seed)
+        random.seed(seed)
         # set rotated conductivity tensor for each element
         print("Setting rotated conductivity tensor for each element...")
         nz, ny, nx = shape
@@ -155,7 +158,7 @@ class FEM_Input_Cube:
                     assert tensor_center is not None
                     _rot_mat = None
                     if rotation_setting == "random":
-                        _rot_mat = calc_rotation_matrix(seed=seed)
+                        _rot_mat = calc_rotation_matrix()
                     elif isinstance(rotation_setting, tuple):
                         assert len(rotation_setting) == 3
                         _x, _y, _z = rotation_setting
@@ -165,13 +168,14 @@ class FEM_Input_Cube:
                     assert _rot_mat is not None
                     rotation_angle_ls[k][j][i] = _rot_mat
                     instance_ls[k][j][i] = instance
-                    tensor_center = np.matmul(_rot_mat, tensor_center)
+                    tensor_center = np.matmul(np.matmul(_rot_mat, tensor_center), _rot_mat.T)
                     pix_tensor[k][j][i]: np.ndarray = tensor_center
         self.m_rotation_angle = rotation_angle_ls
 
         # Check whether the elements are assigned to satisfy the volume_frac_dict and correct
         # it if the error is too large.
         print("Modifying element assignments...")
+        print(f"instance_set_ls: {instance_set_ls}") #!
         ns = nx * ny * nz
         frac_unit = 1. / ns
         for cou, instance in tqdm(enumerate(instance_set_ls), total=len(instance_set_ls) - 1):
@@ -260,7 +264,7 @@ class FEM_Input_Cube:
             for j in range(ny):
                 for i in range(nx):
                     m = calc_m(i, j, k, nx, ny)
-                    sigma_ls.append(self.m_pix_tensor[k][j][i])
+                    sigma_ls.append(self.m_pix_tensor[k][j][i].tolist())
                     pix_ls.append(m) # TODO: remove pix
         self.m_sigma = sigma_ls
         self.m_pix = pix_ls
@@ -278,8 +282,9 @@ class FEM_Input_Cube:
         assert isinstance(nx, int) and nx > 0
         assert isinstance(ny, int) and ny > 0
         assert isinstance(nz, int) and nz > 0
-        idx_tensor_map: Dict = {0: np.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]], dtype=np.float64),
-                                1: np.array([[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]], dtype=np.float64)}
+        # TODO: idx_tensor_mapは引数として与える仕様に変更する
+        idx_tensor_map: Dict = {0: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],
+                                1: [[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]]}
         sigma: List = list(range(len(idx_tensor_map)))
         _keys: List = list(idx_tensor_map.keys())
         _keys.sort()
@@ -525,51 +530,58 @@ class FEM_Input_Cube:
         # of trilinear finite elements are quadratic in x, y, and z, so that
         # Simpson's rule quadrature is exact.
         print("Setting the stiffness matrix...")
+        
+        # first calculate the derivative of shape functions
+        es: List = np.zeros(shape=(3, 3, 3), dtype=np.float64).tolist()
+        for k in range(3):
+            for j in range(3):
+                for i in range(3):
+                    x = float(i) / 2.
+                    y = float(j) / 2.
+                    z = float(k) / 2.
+                    # dndx means the negative derivative with respect to x of the shape 
+                    # matrix N (see manual, Sec. 2.2), dndy, dndz are similar.
+                    dndx: List = [0. for _ in range(8)]
+                    dndy: List = deepcopy(dndx)
+                    dndz: List = deepcopy(dndx)
+                    # set dndx
+                    dndx[0] = - (1.0 - y) * (1.0 - z)
+                    dndx[1]= (1.0 - y) * (1.0 - z)
+                    dndx[2] = y * (1.0 - z)
+                    dndx[3] = - y * (1.0 - z)
+                    dndx[4] = - (1.0 - y) * z
+                    dndx[5] = (1.0 - y) * z
+                    dndx[6] = y * z
+                    dndx[7] = - y * z
+                    # set dndy
+                    dndy[0] = - (1.0 - x) * (1.0 - z)
+                    dndy[1] = - x * (1.0 - z)
+                    dndy[2] = x * (1.0 - z)
+                    dndy[3] = (1.0 - x) * (1.0 - z)
+                    dndy[4] = - (1.0 - x) * z
+                    dndy[5] = - x * z
+                    dndy[6] = x * z
+                    dndy[7] = (1.0 - x) * z
+                    # set dndz
+                    dndz[0] = - (1.0 - x) * (1.0 - y)
+                    dndz[1] = - x * (1.0 - y)
+                    dndz[2] = - x * y
+                    dndz[3] = - (1.0 - x) * y
+                    dndz[4] = (1.0 - x) * (1.0 - y)
+                    dndz[5] = x * (1.0 - y)
+                    dndz[6] = x * y
+                    dndz[7] = (1.0 - x) * y
+                    # now build electric field matrix
+                    es[k][j][i] = [dndx, dndy, dndz]
+
+        # construct stiffness 
+        dk: List = [None for _ in range(n_phase)]
+        zeros_ls: List = np.zeros(shape=(8, 8), dtype=np.float64).tolist()
         for ijk in tqdm(range(n_phase)):
+            _ls = deepcopy(zeros_ls)
             for k in range(3):
                 for j in range(3):
                     for i in range(3):
-                        x = float(i) / 2.
-                        y = float(j) / 2.
-                        z = float(k) / 2.
-                        # dndx means the negative derivative with respect to x of the shape 
-                        # matrix N (see manual, Sec. 2.2), dndy, dndz are similar.
-                        dndx: List = [0. for _ in range(8)]
-                        dndy: List = deepcopy(dndx)
-                        dndz: List = deepcopy(dndx)
-                        # set dndx
-                        dndx[0] = - (1.0 - y) * (1.0 - z)
-                        dndx[1]= (1.0 - y) * (1.0 - z)
-                        dndx[2] = y * (1.0 - z)
-                        dndx[3] = - y * (1.0 - z)
-                        dndx[4] = - (1.0 - y) * z
-                        dndx[5] = (1.0 - y) * z
-                        dndx[6] = y * z
-                        dndx[7] = - y * z
-                        # set dndy
-                        dndy[0] = - (1.0 - x) * (1.0 - z)
-                        dndy[1] = - x * (1.0 - z)
-                        dndy[2] = x * (1.0 - z)
-                        dndy[3] = (1.0 - x) * (1.0 - z)
-                        dndy[4] = - (1.0 - x) * z
-                        dndy[5] = - x * z
-                        dndy[6] = x * z
-                        dndy[7] = (1.0 - x) * z
-                        # set dndz
-                        dndz[0] = - (1.0 - x) * (1.0 - y)
-                        dndz[1] = - x * (1.0 - y)
-                        dndz[2] = - x * y
-                        dndz[3] = - (1.0 - x) * y
-                        dndz[4] = (1.0 - x) * (1.0 - y)
-                        dndz[5] = x * (1.0 - y)
-                        dndz[6] = x * y
-                        dndz[7] = (1.0 - x) * y
-
-                        # now build electric field matrix
-                        es: List = list(range(3))
-                        es[0] = dndx
-                        es[1] = dndy
-                        es[2] = dndz
                         # now do matrix multiply to determine value at (x,y,z), multiply by
                         # proper weight, and sum into dk, the stiffness matrix
                         for ii in range(8):
@@ -577,9 +589,10 @@ class FEM_Input_Cube:
                                 _sum = 0.
                                 for kk in range(3):
                                     for ll in range(3):
-                                        _sum += es[kk][ii] * self.m_sigma[ijk][kk][ll] \
-                                             * es[ll][jj]
-                                dk[ijk][ii][jj] += g[i][j][k] * _sum / 216.
+                                        _sum += es[k][j][i][kk][ii] * self.m_sigma[ijk][kk][ll] \
+                                             * es[k][j][i][ll][jj]
+                                _ls[ii][jj] += g[i][j][k] * _sum / 216.
+            dk[ijk] = _ls
         self.m_dk = np.array(dk, dtype=np.float64)
 
         # Set up vector for linear term, b, and constant term, C,
@@ -729,7 +742,6 @@ class FEM_Input_Cube:
                 xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny
             if i8 == 6:
                 xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny - self.m_ez * nz
-            print(xn[i8])
         m = calc_m(i, j, k, nx, ny)
         for mm in range(8):
             _sum = 0.
@@ -816,25 +828,25 @@ class FEM_Input_Cube:
             return deepcopy(self.m_pix)
         return self.m_pix
 
-    
+
     def get_ex(self) -> np.float64 or None:
         """ Getter for the electric field in the x direction.
 
         Returns:
-            np.float64 or None: Electrical field of x direction. Note that the unit is volt/Δx (Δx is
-                the pix size of x direction), which is somewhat differnt from the description
-                at pp.7 in Garboczi (1998). If the ex is not set, return None.
+            np.float64 or None: Electrical field of x direction. The unit is volt/Δx
+                (Δx is the pix size of x direction), which is somewhat differnt from
+                the description at pp.7 in Garboczi (1998). If the ex is not set, return None.
         """
         return self.m_ex
 
-    
+
     def get_ey(self) -> np.float64 or None:
         """ Getter for the electric field in the y direction.
 
         Returns:
-            np.float64 or None: Electrical field of y direction. Note that the unit is volt/Δy (Δy is
-                the pix size of y direction), which is somewhat differnt from the description
-                at pp.7 in Garboczi (1998). If the ey is not set, return None.
+            np.float64 or None: Electrical field of y direction. The unit is volt/Δy
+                (Δy is the pix size of y direction), which is somewhat differnt from
+                the description at pp.7 in Garboczi (1998). If the ey is not set, return None.
         """
         return self.m_ey
 
@@ -843,9 +855,9 @@ class FEM_Input_Cube:
         """ Getter for the electric field in the z direction.
 
         Returns:
-            np.float64 or None: Electrical field of z direction. Note that the unit is volt/Δz (Δz is
-                the pix size of z direction), which is somewhat differnt from the description
-                at pp.7 in Garboczi (1998). If the ez is not set, return None.
+            np.float64 or None: Electrical field of z direction. Note that the unit is volt/Δz
+                (Δz is the pix size of z direction), which is somewhat differnt from the
+                description at pp.7 in Garboczi (1998). If the ez is not set, return None.
         """
         return self.m_ez
 
@@ -862,7 +874,7 @@ class FEM_Input_Cube:
             return deepcopy(self.m_b)
         return self.m_b
 
-    
+
     def get_c(self) -> np.float64 or None:
         """Getter for the constant of the energy loss at the boundery.
 
@@ -923,8 +935,7 @@ def calc_rotation_matrix(_x: float = None,
     Returns:
         np.ndarray: 3d rotation matrix with 3 rows and 3 columns
     """
-    if seed is None:
-        seed = 42
+    if seed is not None:
         random.seed(seed)
     if _x is None:
         _x: float = random.uniform(0., 2.0 * np.pi)

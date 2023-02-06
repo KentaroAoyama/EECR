@@ -3,6 +3,7 @@
 # pylint: disable=import-error
 from typing import List
 from copy import deepcopy
+import pickle
 import numpy as np
 from tqdm import tqdm
 from solver_input import FEM_Input_Cube, calc_m
@@ -25,7 +26,7 @@ class FEM_Cube():
         self.m_u2d: np.ndarray = None
         self.m_a: np.ndarray = None
         self.m_gb: np.ndarray = None
-        self.m_u_tot = np.float64 = None
+        self.m_u_tot: np.float64 = None
         self.m_gg: np.float64 = None
         self.m_h: np.ndarray = None
         self.m_h2d: np.ndarray = None
@@ -140,6 +141,7 @@ class FEM_Cube():
         cou = 0
         print("Start conjugate gradient calculation")
         while self.m_gg > gtest:
+            print(f"cou: {cou}, gg: {self.m_gg}") #!
             self.__calc_dembx(ldemb, gtest)
             # Call energy to compute energy after dembx call. If gg < gtest, this
             # will be the final energy. If gg is still larger than gtest, then this
@@ -247,7 +249,6 @@ class FEM_Cube():
 
         # Conjugate gradient loop
         for _ in range(ldemb):
-            print(_) #!
             # expand h
             h_1d: List = self.m_h.tolist()
             h_2d: List = [None for _ in range(nxyz)]
@@ -277,7 +278,6 @@ class FEM_Cube():
             # update h
             gamma = self.m_gg / gglast
             self.m_h = self.m_gb + gamma * self.m_h
-            print(self.m_h) #!
 
 
     def __calc_current_and_cond(self):
@@ -383,6 +383,9 @@ class FEM_Cube():
         self.m_currx_ave = currx_ave
         self.m_curry_ave = curry_ave
         self.m_currz_ave = currz_ave
-        self.m_cond_x = ex / currx_ave
-        self.m_cond_y = ey / curry_ave
-        self.m_cond_z = ez / currz_ave
+        self.m_cond_x = currx_ave / ex
+        self.m_cond_y = curry_ave / ey
+        self.m_cond_z = currz_ave / ez
+
+    def save(self, pth):
+        pass

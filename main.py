@@ -1,7 +1,7 @@
 # TODO: docker化
 # TODO: pyrite実装する
 
-# TODO: 大きくまとめた関数を並列化
+# TODO: loggerが重複するので修正する
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
 from os import path, getcwd, makedirs, listdir, cpu_count
@@ -108,7 +108,9 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity) -> Tuple:
     dirname += f"_cnacl-{cnacl}"
     dirname += f"_porosity-{porosity}"
     outdir_cond = path.join(getcwd(), "output", "pickle", dirname)
-    outdir = path.join(outdir_cond, str(datetime.now()).split()[0])
+    outdir = path.join(outdir_cond, str(datetime.now()).split()[0]) # TODO: seed追加
+    assert len(outdir) < 244
+
     makedirs(outdir, exist_ok=True)
     for dirname in listdir(outdir_cond):
         if len(listdir(path.join(outdir_cond, dirname))) > 1:

@@ -1,4 +1,5 @@
-# TODO: debug追加
+# TODO: msg to logger
+# TODO: getter作る
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from time import time
@@ -413,5 +414,7 @@ class FEM_Cube():
         self.m_cond_y = curry_ave / ey
         self.m_cond_z = currz_ave / ez
 
-    def save(self, pth):
+
+    def save(self, pth: str):
+        # TODO: networkx.Graph の write_gpickleを参考に書く
         pass

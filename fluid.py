@@ -33,7 +33,7 @@ class NaCl(Fluid):
         self.m_ion_props = ion_props
         self.m_conductivity = conductivity
         self.m_cond_tensor = cond_tensor
-    
+
 
     def sen_and_goode_1992(self,
                            temperature: float = 298.15,
@@ -72,7 +72,7 @@ class NaCl(Fluid):
         self.m_cond_tensor = cond_tensor
         return deepcopy(self.m_cond_tensor)
 
-    
+
     def get_cond_tensor(self) -> np.ndarray or None:
         """ Getter for the conductivity tensor
 

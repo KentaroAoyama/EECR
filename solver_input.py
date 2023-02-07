@@ -1,5 +1,6 @@
 """Create input to be passed to the solver class"""
-
+# TODO: msg to logger
+# TODO: loggerの重複を修正
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
@@ -84,6 +85,7 @@ class FEM_Input_Cube:
         self.m_c: float = c
         self.m_logger = logger
         self.__init_default()
+        self.m_instance_ls: List = None
         self.m_rotation_angle: List = None
 
 
@@ -210,7 +212,6 @@ class FEM_Input_Cube:
                 for m in m_delete_ls:
                     i, j, k = calc_ijk(m, nx, ny)
                     # Re-set instance
-                    print(instance_ls[k][j][i])
                     instance_ls[k][j][i] = instance_next
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
@@ -275,6 +276,7 @@ class FEM_Input_Cube:
                     pix_ls.append(m) # TODO: remove pix
         self.m_sigma = sigma_ls
         self.m_pix = pix_ls
+        self.m_instance_ls = instance_ls
 
         if self.m_logger is not None:
             self.m_logger.info("create_pixel_by_macro_variable done")

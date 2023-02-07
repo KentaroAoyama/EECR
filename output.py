@@ -70,28 +70,40 @@ def plot_curr_all(currx_ls: List,
 
     # start cross plot
     for k in range(ax0):
-        _val = currx_arr[k]
         title = None
         label_x, label_y = None, None
         fpth = None
         # x
         if axis == "x":
-            title = "Current (X)"
+            title = "YZ"
             label_x = "y"
             label_y = "z"
-            fpth = path.join(dir_x, f"{k}.png")
         # y
         if axis == "y":
-            title = "Current (Y)"
+            title = "XZ"
             label_x = "x"
             label_y = "z"
             fpth = path.join(dir_y, f"{k}.png")
         # z
         if axis == "z":
-            title = "Current (Z)"
+            title = "XY"
             label_x = "x"
             label_y = "y"
             fpth = path.join(dir_z, f"{k}.png")
+        
+        # currx
+        _val = currx_arr[k]
+        fpth = path.join(dir_x, f"{k}.png")
+        __plot_current_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
+
+        # curry
+        _val = curry_arr[k]
+        fpth = path.join(dir_y, f"{k}.png")
+        __plot_current_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
+
+        # currz
+        _val = currz_arr[k]
+        fpth = path.join(dir_z, f"{k}.png")
         __plot_current_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
 
 
@@ -102,13 +114,107 @@ def __plot_current_grid(grid_x: np.ndarray,
                         label_y: str,
                         title: str,
                         save_pth: str) -> None:
-    fig, ax = plt.subplots()    
+    fig, ax = plt.subplots()
     mappable = ax.pcolormesh([grid_x, grid_y], val)
     ax.set_xlabel(label_x)
     ax.set_ylabel(label_y)
 
     pp = fig.colorbar(mappable, ax=ax, orientation="vertical")
     pp.set_label("Electrical Current (A)")
+
+    ax.set_aspect("equal")
+    ax.set_title(title)
+    fig.savefig(save_pth, dpi=100, bbox_inches="tight")
+
+
+def plot_cond_all(condx_ls: List,
+                  condy_ls: List,
+                  condz_ls: List,
+                  axis: str,
+                  edge_length: float,
+                  out_dir: str,):
+    condx_arr: np.ndarray = np.array(condx_ls)
+    condy_arr: np.ndarray = np.array(condy_ls)
+    condz_arr: np.ndarray = np.array(condz_ls)
+    assert condx_arr.shape == condy_arr.shape == \
+        condz_arr.shape
+    assert axis in ("x", "y", "z")
+
+    # transpose
+    if axis == "x":
+        condx_arr = np.transpose(condx_arr, (2, 0, 1))
+        condy_arr = np.transpose(condy_arr, (2, 0, 1))
+        condz_arr = np.transpose(condz_arr, (2, 0, 1))
+    if axis == "y":
+        condx_arr = np.transpose(condx_arr, (1, 2, 0))
+        condy_arr = np.transpose(condy_arr, (1, 2, 0))
+        condz_arr = np.transpose(condz_arr, (1, 2, 0))
+
+    ax0, ax1, ax2 = condx_arr.shape
+    grid_x, grid_y = np.meshgrid(np.array([edge_length * i for i in range(ax1)]),
+                                 np.array([edge_length * i for i in range(ax2)]))
+
+    # path
+    dir_x: str = path.join(out_dir, "x")
+    dir_y: str = path.join(out_dir, "y")
+    dir_z: str = path.join(out_dir, "z")
+    makedirs(dir_x, exist_ok=True)
+    makedirs(dir_y, exist_ok=True)
+    makedirs(dir_z, exist_ok=True)
+
+    # start cross plot
+    for k in range(ax0):
+        title = None
+        label_x, label_y = None, None
+        fpth = None
+        # x
+        if axis == "x":
+            title = "YZ"
+            label_x = "y"
+            label_y = "z"
+        # y
+        if axis == "y":
+            title = "XZ"
+            label_x = "x"
+            label_y = "z"
+            fpth = path.join(dir_y, f"{k}.png")
+        # z
+        if axis == "z":
+            title = "XY"
+            label_x = "x"
+            label_y = "y"
+            fpth = path.join(dir_z, f"{k}.png")
+        
+        # condx
+        _val = condx_arr[k]
+        fpth = path.join(dir_x, f"{k}.png")
+        __plot_cond_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
+
+        # condy
+        _val = condy_arr[k]
+        fpth = path.join(dir_y, f"{k}.png")
+        __plot_cond_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
+
+        # condz
+        _val = condz_arr[k]
+        fpth = path.join(dir_z, f"{k}.png")
+        __plot_cond_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
+
+
+def __plot_cond_grid(grid_x: np.ndarray,
+                     grid_y: np.ndarray,
+                     val: np.ndarray,
+                     label_x: str,
+                     label_y: str,
+                     title: str,
+                     save_pth: str) -> None:
+    fig, ax = plt.subplots()
+    mappable = ax.pcolormesh([grid_x, grid_y], val)
+    ax.set_xlabel(label_x)
+    ax.set_ylabel(label_y)
+
+    pp = fig.colorbar(mappable, ax=ax, orientation="vertical")
+    pp.set_label("Electrical Conductivity (S/m)")
 
     ax.set_aspect("equal")
     ax.set_title(title)

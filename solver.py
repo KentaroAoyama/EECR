@@ -89,7 +89,7 @@ class FEM_Cube():
         # m_u2d
         print("Expand u 2d")
         u_2d: List = [None for _ in range(self.m_u.shape[0])]
-        for m in tqdm(range(nxyz)):
+        for m in range(nxyz):
             self.__expand_2d(deepcopy(self.m_u),
                              u_2d,
                              m,
@@ -103,7 +103,7 @@ class FEM_Cube():
         dk = self.fem_input.get_dk()
         pix = self.fem_input.get_pix()
         print("Setting the global matrix A...")
-        for m in tqdm(range(nxyz)):
+        for m in range(nxyz):
             self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
         assert None not in a
         self.m_a = np.array(a, dtype=np.float64)

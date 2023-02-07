@@ -154,7 +154,7 @@ class FEM_Input_Cube:
         # set rotated conductivity tensor for each element
         print("Setting rotated conductivity tensor for each element...")
         nz, ny, nx = shape
-        for k in tqdm(range(nz)):
+        for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
                     instance = np.random.choice(instance_set_ls, p=frac_ls)
@@ -182,7 +182,7 @@ class FEM_Input_Cube:
         print(f"instance_set_ls: {instance_set_ls}") #!
         ns = nx * ny * nz
         frac_unit = 1. / ns
-        for cou, instance in tqdm(enumerate(instance_set_ls), total=len(instance_set_ls) - 1):
+        for cou, instance in enumerate(instance_set_ls):
             if cou == len(instance_set_ls) - 1:
                 break
             cond_tensor = getattr(instance, "get_cond_tensor", None)()
@@ -242,7 +242,7 @@ class FEM_Input_Cube:
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
         print("Adding up the conductivity of the electrical double layer...")
-        for k in tqdm(range(nz)):
+        for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
                     # Checks whether instance has an attribute for the electric double layer.
@@ -590,7 +590,7 @@ class FEM_Input_Cube:
         # construct stiffness
         dk: List = [None for _ in range(n_phase)]
         zeros_ls: List = np.zeros(shape=(8, 8), dtype=np.float64).tolist()
-        for ijk in tqdm(range(n_phase)):
+        for ijk in range(n_phase):
             _ls = deepcopy(zeros_ls)
             for k in range(3):
                 for j in range(3):

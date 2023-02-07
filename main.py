@@ -100,20 +100,20 @@ def run():
     print(solver.m_cond_z)
 
 
-def exec_single_condition(smec_frac, temperature, cnacl, porosity) -> Tuple:
+def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> Tuple:
     # TODO: seedを複数作成してinstanceを作成する
     dirname = ""
     dirname += f"smec_frac-{smec_frac}"
     dirname += f"_temperature-{temperature}"
     dirname += f"_cnacl-{cnacl}"
     dirname += f"_porosity-{porosity}"
-    outdir_cond = path.join(getcwd(), "output", "pickle", dirname)
-    outdir = path.join(outdir_cond, str(datetime.now()).split()[0]) # TODO: seed追加
+    outdir_seed = path.join(getcwd(), "output", "pickle", dirname, str(seed))
+    outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
     makedirs(outdir, exist_ok=True)
-    for dirname in listdir(outdir_cond):
-        if len(listdir(path.join(outdir_cond, dirname))) > 1:
+    for dirname in listdir(outdir_seed):
+        if len(listdir(path.join(outdir_seed, dirname))) > 1:
             return None
 
     logger_pth = path.join(outdir, "log.txt")
@@ -166,7 +166,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity) -> Tuple:
     solver_input = FEM_Input_Cube(logger=logger)
     smec_frac_tol = (1.0 - porosity) * smec_frac
     siica_frac_tol = (1.0 - porosity) * (1.0 - smec_frac)
-    solver_input.create_pixel_by_macro_variable(shape=(20, 20, 20), #!
+    solver_input.create_pixel_by_macro_variable(shape=(10, 10, 10), #!
                                                 edge_length=edge_length,
                                                 volume_frac_dict = {nacl: porosity,
                                                                     smectite: smec_frac_tol,
@@ -196,6 +196,10 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity) -> Tuple:
     with open(solver_fpth, "wb") as pkf:
         pickle.dump(solver, pkf, pickle.HIGHEST_PROTOCOL)
 
+    # remove handler
+    for h in logger.handlers:
+        logger.removeHandler(h)
+
 
 # pylint: disable=unexpected-keyword-arg
 def experiment():
@@ -224,23 +228,28 @@ def experiment():
     if porosity_ls is None:
         porosity_ls = [0.2] # default value
 
+    # seed
+    seed_ls: List = [42, 1, 11]
+
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count())
     for smec_frac in smec_frac_ls:
         for temperature in temperature_ls:
             for cnacl in cnacl_ls:
                 for porosity in porosity_ls:
-                    print(f"smec_frac: {smec_frac}")
-                    print(f"temperature: {temperature}")
-                    print(f"cnacl: {cnacl}")
-                    print(f"porosity: {porosity}")
-                    future = pool.submit(exec_single_condition,
-                                         smec_frac=smec_frac,
-                                         temperature=temperature,
-                                         cnacl=cnacl,
-                                         porosity=porosity)
-                    print(future)
+                    for seed in seed_ls:
+                        print(f"smec_frac: {smec_frac}")
+                        print(f"temperature: {temperature}")
+                        print(f"cnacl: {cnacl}")
+                        print(f"porosity: {porosity}")
+                        future = pool.submit(exec_single_condition,
+                                            smec_frac=smec_frac,
+                                            temperature=temperature,
+                                            cnacl=cnacl,
+                                            porosity=porosity,
+                                            seed=seed
+                                            )
+                        print(future)
     pool.shutdown(wait=True)
-
 
 if __name__ == "__main__":
     experiment()

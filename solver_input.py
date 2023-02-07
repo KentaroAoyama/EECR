@@ -8,6 +8,7 @@ from logging import Logger
 from typing import List, Dict, Tuple
 from math import isclose
 import random
+from sys import float_info
 
 import numpy as np
 from tqdm import tqdm
@@ -143,6 +144,9 @@ class FEM_Input_Cube:
             assert get_cond_tensor is not None,\
                 f"{instance.__name__} don't have \"get_cond_tensor method\""
             instance_set_ls.append(instance)
+            # Prevent the probability p given to random.sample from becoming negative
+            if isclose(frac, 0., abs_tol=1.0e-10):
+                frac = float_info.min
             frac_ls.append(frac)
 
         # conductivity tensor will be stored for each element

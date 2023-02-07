@@ -1,0 +1,112 @@
+2023-02-07 01:06:39,091 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Initialize Phyllosilicate
+2023-02-07 01:06:39,091 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_temperature, value: 293.15
+2023-02-07 01:06:39,091 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_ion_props, value: {'Na': {'Concentration': 0.01, 'Mobility_InfDiffuse': 5.19e-08, 'Mobility_TrunDiffuse': 5.2e-09, 'Mobility_Stern': 2.59e-08, 'Valence': 1}, 'Cl': {'Concentration': 0.01, 'Mobility_InfDiffuse': 7.91e-08, 'Mobility_TrunDiffuse': 7.91e-09, 'Mobility_Stern': 3.95e-08, 'Valence': -1}, 'H': {'Concentration': 1e-07, 'Mobility_InfDiffuse': 3.63e-07, 'Mobility_TrunDiffuse': 1.6e-08, 'Valence': 1}, 'OH': {'Concentration': 1.0000000000000001e-07, 'Mobility_InfDiffuse': 2.05e-07, 'Mobility_TrunDiffuse': 2.05e-08, 'Valence': -1}}
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_activities, value: {'Na': 0.01, 'Cl': 0.01, 'H': 1e-07, 'OH': 1.0000000000000001e-07}
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_dielec_water, value: 7.114977409107323e-10
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_layer_width, value: 1.3e-09
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_gamma_1, value: 0.0
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_gamma_2, value: 5.5
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_gamma_3, value: 5.5
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_qi, value: -0.16021766299999998
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k1, value: 6.752099816116163e-11
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k2, value: 1.0316920773370797e-06
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k3, value: 0.009244592467486129
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k4, value: 0.9491692423603373
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_c1, value: 2.1
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_c2, value: 0.55
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_0, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_stern, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_zeta, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_r, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_charge_0, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_charge_stern, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_charge_diffuse, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_xd, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_cond_stern_plus_edl, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_ionic_strength, value: 0.0200001
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_kappa, value: 327663065.2969292
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_kappa_truncated, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_kappa_stern, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_qs_coeff1_inf, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_qs_coeff2_inf, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_cond_tensor, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_cond_infdiffuse, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_double_layer_length, value: None
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_logger, value: <Logger smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 (DEBUG)>
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Initialize Phyllosilicate
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_temperature, value: 293.15
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_ion_props, value: {'Na': {'Concentration': 0.01, 'Mobility_InfDiffuse': 5.19e-08, 'Mobility_TrunDiffuse': 5.2e-09, 'Mobility_Stern': 2.59e-08, 'Valence': 1}, 'Cl': {'Concentration': 0.01, 'Mobility_InfDiffuse': 7.91e-08, 'Mobility_TrunDiffuse': 7.91e-09, 'Mobility_Stern': 3.95e-08, 'Valence': -1}, 'H': {'Concentration': 1e-07, 'Mobility_InfDiffuse': 3.63e-07, 'Mobility_TrunDiffuse': 1.6e-08, 'Valence': 1}, 'OH': {'Concentration': 1.0000000000000001e-07, 'Mobility_InfDiffuse': 2.05e-07, 'Mobility_TrunDiffuse': 2.05e-08, 'Valence': -1}}
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_activities, value: {'Na': 0.01, 'Cl': 0.01, 'H': 1e-07, 'OH': 1.0000000000000001e-07}
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_dielec_water, value: 7.114977409107323e-10
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_layer_width, value: 1e-10
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_gamma_1, value: 5.5
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_gamma_2, value: 5.5
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_gamma_3, value: 5.5
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_qi, value: 0.0
+2023-02-07 01:06:39,092 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k1, value: 6.752099816116163e-11
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k2, value: 4.018979371999235e-06
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k3, value: 0.009244592467486129
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_k4, value: 0.04789597770198617
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_c1, value: 1.49
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_c2, value: 0.2
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_0, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_stern, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_zeta, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_potential_r, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_charge_0, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_charge_stern, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_charge_diffuse, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_xd, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_cond_stern_plus_edl, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_ionic_strength, value: 0.0200001
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_kappa, value: 327663065.2969292
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_kappa_truncated, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_kappa_stern, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_qs_coeff1_inf, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_qs_coeff2_inf, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_cond_tensor, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_cond_infdiffuse, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_double_layer_length, value: None
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - name: m_logger, value: <Logger smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 (DEBUG)>
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Finished the calculation of electricalproperties for an infinite diffusion layer
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_0: -0.33464703830583314
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_stern: -0.04716747633796392
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_zeta: -0.017586772492475075
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_0: -0.6008322845128465
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_stern: 0.5949161437437488
+2023-02-07 01:06:39,093 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_diffuse: 0.005916140769097769
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Finished the calculation of electricalproperties for an truncated diffusion layer
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_0: -0.4176746203292061
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_stern: -0.131571365044263
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_zeta: -0.09411621322800173
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_r: -0.08528265151852549
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_0: -0.6008168360983805
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_stern: 0.5802165025994368
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_diffuse: 0.020600333498943697
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Finished the calculation of infinite diffuse layer conductivity
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond_ohmic_diffuse: 2.0630719038885663e-09
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond_ohmic_stern: 2.0630719038885663e-09
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Finished the calculation of interlayer conductivity
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond_ohmic_diffuse: 1.1402455293364825e-10
+2023-02-07 01:06:39,127 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond_ohmic_stern: 1.1402455293364825e-10
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Finished the calculation of electricalproperties for an infinite diffusion layer
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_0: -0.12735795019783366
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_stern: -0.005401589108453911
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_potential_zeta: -0.002039150727986092
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_0: -0.18171497802317585
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_stern: 0.18104249034708228
+2023-02-07 01:06:39,128 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - m_charge_diffuse: 0.0006724876760935638
+2023-02-07 01:06:39,161 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - Finished the calculation of infinite diffuse layer conductivity
+2023-02-07 01:06:39,161 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond_ohmic_diffuse: 3.8222067119947593e-10
+2023-02-07 01:06:39,161 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond_ohmic_stern: 3.8222067119947593e-10
+2023-02-07 01:06:39,396 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - create_pixel_by_macro_variable done
+2023-02-07 01:06:39,484 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - set_ib done
+2023-02-07 01:07:03,885 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - femat done
+2023-02-07 01:21:09,717 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - __init__ (solver) done
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - INFO - run done
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - curr x: 0.09242625126170705
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - curr y: 0.09246006390174091
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - curr z: 0.0926074911098372
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond x: 0.09242625126170705
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond y: 0.09246006390174091
+2023-02-07 01:21:10,600 - smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.9 - DEBUG - cond z: 0.0926074911098372

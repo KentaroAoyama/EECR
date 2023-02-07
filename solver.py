@@ -1,9 +1,10 @@
 # TODO: debug追加
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
+from time import time
 from typing import List
 from copy import deepcopy
-import pickle
+from logging import Logger
 import numpy as np
 from tqdm import tqdm
 from solver_input import FEM_Input_Cube, calc_m
@@ -19,9 +20,18 @@ class FEM_Cube():
                         [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
                         (Accessed January 20, 2023)
     """
-    def __init__(self, fem_input: FEM_Input_Cube = None):
+    def __init__(self,
+                 fem_input: FEM_Input_Cube = None,
+                 logger: Logger = None):
+        """Initialize FEM_Cube class
+
+        Args:
+            fem_input (FEM_Input_Cube): Input of FEM computation.
+            logger (Logger): logger to write debug information etc.
+        """
         assert fem_input is not None
         self.fem_input: FEM_Input_Cube = fem_input
+        self.m_logger: Logger = logger
         self.m_u: np.ndarray = None
         self.m_u2d: np.ndarray = None
         self.m_a: np.ndarray = None
@@ -77,8 +87,9 @@ class FEM_Cube():
         self.m_u: np.ndarray = np.array(u, dtype=np.float64)
 
         # m_u2d
+        print("Expand u 2d")
         u_2d: List = [None for _ in range(self.m_u.shape[0])]
-        for m in range(nxyz):
+        for m in tqdm(range(nxyz)):
             self.__expand_2d(deepcopy(self.m_u),
                              u_2d,
                              m,
@@ -120,6 +131,9 @@ class FEM_Cube():
         # gg is the norm squared of the gradient (gg=gb*gb)
         self.m_gg: np.ndarray = np.dot(self.m_gb, self.m_gb)
 
+        if self.m_logger is not None:
+            self.m_logger.info("__init__ (solver) done")
+
 
     def run(self, kmax: int = 40, ldemb: int = 50, gtest: float = None) -> None:
         """ Calculate the distribution of electrical potentials that minimize the electrical
@@ -151,10 +165,22 @@ class FEM_Cube():
             self.__calc_energy()
             cou += 1
             if cou > kmax:
-                print(f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}, gtest: {gtest}")
-                # TODO: もしloggerを受け取っていれば, ここで出力する
+                print(f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}," \
+                    f"gtest: {gtest}")
+                if self.m_logger is not None:
+                    self.m_logger.warn(f"Not sufficiently convergent.\nself.m_gg: "\
+                        f"{self.m_gg}, gtest: {gtest}")
                 break
         self.__calc_current_and_cond()
+
+        if self.m_logger is not None:
+            self.m_logger.info("run done")
+            self.m_logger.debug(f"curr x: {self.m_currx_ave}")
+            self.m_logger.debug(f"curr y: {self.m_curry_ave}")
+            self.m_logger.debug(f"curr z: {self.m_currz_ave}")
+            self.m_logger.debug(f"cond x: {self.m_cond_x}")
+            self.m_logger.debug(f"cond y: {self.m_cond_y}")
+            self.m_logger.debug(f"cond z: {self.m_cond_z}")
 
 
     def __set_a_m(self, a: List, m: int, ib: List, dk: List, pix: List) -> List:

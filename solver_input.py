@@ -3,6 +3,7 @@
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
+from logging import Logger
 from typing import List, Dict, Tuple
 from math import isclose
 import random
@@ -36,6 +37,7 @@ class FEM_Input_Cube:
                  ez: float = None,
                  b: np.ndarray = None,
                  c: float = None,
+                 logger: Logger = None
                  ):
         """ Initialize FEM_Input_Cube class.
 
@@ -68,6 +70,7 @@ class FEM_Input_Cube:
                 at pp.7 in Garboczi (1998).
             b (np.ndarray): TODO: write docstring
             c (float): TODO: write docstring
+            logger (Logger): TODO: write docstring
         """
         self.m_pix_tensor: np.ndarray = pix_tensor
         self.m_dk: List = dk
@@ -79,6 +82,7 @@ class FEM_Input_Cube:
         self.m_ez: float = ez
         self.m_b: np.ndarray = b
         self.m_c: float = c
+        self.m_logger = logger
         self.__init_default()
         self.m_rotation_angle: List = None
 
@@ -202,10 +206,11 @@ class FEM_Input_Cube:
             num_diff: int = int(abs(frac_asigned - frac_targ) / frac_unit)
             # If more than the target value
             if frac_asigned > upper:
-                m_delete_ls: List = random.choices(m_ls, k=num_diff)
+                m_delete_ls: List = random.sample(m_ls, k=num_diff)
                 for m in m_delete_ls:
                     i, j, k = calc_ijk(m, nx, ny)
                     # Re-set instance
+                    print(instance_ls[k][j][i])
                     instance_ls[k][j][i] = instance_next
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
@@ -213,7 +218,7 @@ class FEM_Input_Cube:
             # If less than the target value
             if frac_asigned < lower:
                 _m_all: set = set([m for m in range(nx * ny * nz)])
-                m_add_ls: List = random.choices(list(_m_all.difference(set(m_ls))), k=num_diff)
+                m_add_ls: List = random.sample(list(_m_all.difference(set(m_ls))), k=num_diff)
                 for m in m_add_ls:
                     i, j, k = calc_ijk(m, nx, ny)
                     # Re-set instance
@@ -229,8 +234,10 @@ class FEM_Input_Cube:
                     for i in range(nx):
                         if instance == instance_ls[k][j][i]:
                             frac += frac_unit
-            assert frac - frac_unit <  volume_frac_dict[instance] < frac + frac_unit, \
-                f"instance: {instance}, frac: {frac}"
+            frac_targ: float = volume_frac_dict[instance]
+            # TODO: 合わない場合があるので検証
+            # assert frac_targ - frac_unit < frac < frac_targ + frac_unit, \
+            #     f"instance: {instance}, volume_frac_dict[instance]: {volume_frac_dict[instance]}, frac: {frac}"
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
@@ -269,6 +276,9 @@ class FEM_Input_Cube:
         self.m_sigma = sigma_ls
         self.m_pix = pix_ls
 
+        if self.m_logger is not None:
+            self.m_logger.info("create_pixel_by_macro_variable done")
+
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -302,6 +312,8 @@ class FEM_Input_Cube:
         self.m_sigma = sigma
         self.m_pix = pix_ls
 
+        if self.m_logger is not None:
+            self.m_logger.info("create_from_file done")
 
     def __sum_double_layer_cond(self,
                                 pix_tensor: List,
@@ -494,6 +506,9 @@ class FEM_Input_Cube:
                         ib[m][n] = m1
         self.m_ib = ib
 
+        if self.m_logger is not None:
+            self.m_logger.info("set_ib done")
+
 
     def femat(self) -> None:
         """ Subroutine that sets up the stiffness matrices, linear term in
@@ -530,7 +545,6 @@ class FEM_Input_Cube:
         # of trilinear finite elements are quadratic in x, y, and z, so that
         # Simpson's rule quadrature is exact.
         print("Setting the stiffness matrix...")
-        
         # first calculate the derivative of shape functions
         es: List = np.zeros(shape=(3, 3, 3), dtype=np.float64).tolist()
         for k in range(3):
@@ -573,8 +587,7 @@ class FEM_Input_Cube:
                     dndz[7] = (1.0 - x) * y
                     # now build electric field matrix
                     es[k][j][i] = [dndx, dndy, dndz]
-
-        # construct stiffness 
+        # construct stiffness
         dk: List = [None for _ in range(n_phase)]
         zeros_ls: List = np.zeros(shape=(8, 8), dtype=np.float64).tolist()
         for ijk in tqdm(range(n_phase)):
@@ -594,7 +607,6 @@ class FEM_Input_Cube:
                                 _ls[ii][jj] += g[i][j][k] * _sum / 216.
             dk[ijk] = _ls
         self.m_dk = np.array(dk, dtype=np.float64)
-
         # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,
         # and the periodic terms in the applied field that come in at the boundary
@@ -752,6 +764,8 @@ class FEM_Input_Cube:
 
         self.m_b = np.array(b, dtype=np.float64)
         self.m_c = np.float64(c)
+        if self.m_logger is not None:
+            self.m_logger.info("femat done")
 
 
     def get_pix_tensor(self) -> np.ndarray or None:

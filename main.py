@@ -17,6 +17,7 @@ from fluid import NaCl
 from solver_input import FEM_Input_Cube
 from solver import FEM_Cube
 import constants as const
+from output import plot_smec_frac_cond
 
 
 def create_logger(fpth="./debug.txt", logger_name: str = "log"):
@@ -59,7 +60,7 @@ def run():
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse() # to get self.m_double_layer_length
     smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor(edge_length)
+    smectite.calc_cond_tensor()
     kaolinite.calc_potentials_and_charges_inf()
     kaolinite.calc_cond_infdiffuse() # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
@@ -100,8 +101,7 @@ def run():
     print(solver.m_cond_z)
 
 
-def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> Tuple:
-    # TODO: seedを複数作成してinstanceを作成する
+def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None:
     dirname = ""
     dirname += f"smec_frac-{smec_frac}"
     dirname += f"_temperature-{temperature}"
@@ -112,8 +112,8 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> Tupl
     assert len(outdir) < 244
 
     makedirs(outdir, exist_ok=True)
-    for dirname in listdir(outdir_seed):
-        if len(listdir(path.join(outdir_seed, dirname))) > 1:
+    for date_dirname in listdir(outdir):
+        if len(listdir(path.join(outdir, date_dirname))) > 1:
             return None
 
     logger_pth = path.join(outdir, "log.txt")
@@ -149,7 +149,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> Tupl
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse() # to get self.m_double_layer_length
     smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor(edge_length)
+    smectite.calc_cond_tensor()
     kaolinite.calc_potentials_and_charges_inf()
     kaolinite.calc_cond_infdiffuse() # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
@@ -229,7 +229,7 @@ def experiment():
         porosity_ls = [0.2] # default value
 
     # seed
-    seed_ls: List = [42, 1, 11]
+    seed_ls: List = [42]
 
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count())
     for smec_frac in smec_frac_ls:
@@ -250,6 +250,63 @@ def experiment():
                                             )
                         print(future)
     pool.shutdown(wait=True)
+
+
+def output_fig():
+    pickle_dir = path.join(getcwd(), "output", "pickle")
+    conditions_xye: Dict = {}
+    for condition_dirname in listdir(pickle_dir):
+        _ls = condition_dirname.split("_")
+        del _ls[0] # smec
+        _ls[0] = _ls[0].replace("frac", "smec_frac")
+        smec_frac = None
+        val_ls: List = []
+        for i, condition_val in enumerate(_ls):
+            _, val = condition_val.split("-")
+            val = float(val)
+            if i == 0:
+                smec_frac = val
+                continue # for smec_fac
+            val_ls.append(val)
+        # get average conductivity
+        condition_dir = path.join(pickle_dir, condition_dirname)
+        cond_ave_ls: List = []
+        for seed_dirname in listdir(condition_dir):
+            seed_dir = path.join(condition_dir, seed_dirname)
+            # get latest dir for now
+            date_dirname_ls = listdir(seed_dir)
+            datetime_ls = [datetime.strptime(_name) for _name in date_dirname_ls]
+            date_dirname: str = date_dirname_ls[datetime_ls.index(max(datetime_ls))]
+            date_dir = path.join(seed_dir, date_dirname)
+            # get solver pickle
+            solver_pth = path.join(date_dir, "solver.pkl")
+            with open(solver_pth, "rb") as pkf:
+                solver: FEM_Cube = pickle.load(pkf)
+            cond_x, cond_y, cond_z = solver.m_cond_x, solver.m_cond_y, solver.m_cond_z
+            if None in (cond_x, cond_y, cond_z):
+                continue
+            cond_ave_ls.append(np.mean([cond_x, cond_y, cond_z]))
+        _xye = [smec_frac, np.mean(cond_ave_ls), np.std(cond_ave_ls), ]
+        conditions_xye.setdefault(tuple(val_ls), _xye)
+
+    # plot temperature variation
+    fig_dir = path.join(getcwd(), "output", "fig")
+    makedirs(fig_dir, exist_ok=True)
+
+    tempe_dir = path.join(fig_dir, "temperature")
+    for conditions, _xye in conditions_xye.items():
+        smec_frac_ls = _xye[0]
+        cond_ls = _xye[1]
+        error_ls = _xye[2]
+        label_ls = [conditions[0]] * len(smec_frac_ls)
+        save_pth = path.join(tempe_dir, f"cnacl-{conditions[0]}_porosity-{conditions[1]}.png")
+        plot_smec_frac_cond(smec_frac_ls,
+                            cond_ls,
+                            save_pth,
+                            label_ls,
+                            error_ls,
+                            )
+
 
 if __name__ == "__main__":
     experiment()

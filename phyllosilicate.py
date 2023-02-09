@@ -1548,14 +1548,11 @@ class Phyllosilicate:
         return cond_specific, _err1 + _err2
 
 
-    def calc_smec_cond_tensor_cube_oxyz(self, edge_length: float) -> np.ndarray:
+    def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned
          perpendicular to the z-plane. The T-O-T plane is assumed to be an
          insulator, following Watanabe (2005). The T-O-T plane is the xy-plane,
          and perpendicular to it is the z-axis.
-
-        Args:
-            edge_length (float): Lengths of the edges of the cube's cells
 
         Returns:
             np.ndarray: 3 rows and 3 columns condutivity tensor
@@ -1566,7 +1563,7 @@ class Phyllosilicate:
         sigma_intra = self.m_cond_stern_plus_edl
         assert sigma_intra is not None, "Before calculating the conductivity" \
             "of the smectite cell, we should calculate interlayer conductivity"
-        sigma_h = sigma_intra * self.m_layer_width / edge_length
+        sigma_h = sigma_intra * self.m_layer_width / (6.6e-10 + self.m_layer_width)
         sigma_v = 1.0e-12
         cond_tensor = np.array([[sigma_h, 0. ,0.],
                                 [0., sigma_h ,0.],
@@ -1592,14 +1589,14 @@ class Phyllosilicate:
         return cond_tensor
 
 
-    def calc_cond_tensor(self, edge_length: float = None) -> None:
+    def calc_cond_tensor(self) -> None:
         """Calculate conductivity tensor. Separate cases by smectite and kaolinite.
 
         Args:
             edge_length (float): Length of one side of a cube cell (unit: m)
         """
         if self.m_qi < 0. and self.m_gamma_1 == 0.:
-            tensor = self.calc_smec_cond_tensor_cube_oxyz(edge_length)
+            tensor = self.calc_smec_cond_tensor_cube_oxyz()
         else:
             tensor = self.calc_kaol_cond_tensor_cube_oxyz()
         self.m_cond_tensor = tensor

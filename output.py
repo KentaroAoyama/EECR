@@ -9,12 +9,19 @@ import matplotlib.cm as cm
 def plot_smec_frac_cond(smectite_frac_ls: List[float],
                         cond_ls: List[float],
                         save_pth: str,
-                        label_val_ls: List[float or int] = None,):
+                        label_val_ls: List[float or int] = None,
+                        error_bar_ls: List = None)
     assert len(smectite_frac_ls) == len(cond_ls)
     if label_val_ls is not None:
         assert len(smectite_frac_ls) == len(label_val_ls),\
         f"len(smectite_frac_ls): {len(smectite_frac_ls)}, len(label_val): {len(label_val_ls)}"
     assert path.exists(path.dirname(save_pth))
+
+    if label_val_ls is None:
+        label_val_ls = [0.] * len(smectite_frac_ls)
+
+    if error_bar_ls is None:
+        error_bar_ls = [0.] * len(smectite_frac_ls)
 
     label_xy: Dict = {}
     for smec_frac, _cond, label_val in zip(smectite_frac_ls, cond_ls, label_val_ls):
@@ -23,13 +30,13 @@ def plot_smec_frac_cond(smectite_frac_ls: List[float],
         xy_ls[1].append(_cond)
 
     fig, ax = plt.subplots()
+    ax.grid(linestyle="-", linewidth=1)
     keys_sorted = sorted(list(label_xy.keys()))
     for i, _label in enumerate(keys_sorted):
         _xy = label_xy[_label]
         _x, _y = zip(*sorted(zip(*_xy)))
-        ax.scatter(_x, _y, label=str(_label), color=cm.jet(float(i)/len(keys_sorted)))
+        ax.errorbar(_x, _y, label=str(_label), color=cm.jet(float(i)/len(keys_sorted)))
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
-    ax.set_aspect("equal")
     fig.savefig(save_pth, dpi=200, bbox_inches="tight")
 
 

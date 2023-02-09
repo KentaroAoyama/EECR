@@ -1,5 +1,4 @@
 """Calculate electrical properties of phillosillicate"""
-# TODO: msg to logger
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -11,6 +10,7 @@ import math
 from copy import deepcopy
 import pickle
 
+import pickle
 import numpy as np
 from scipy.integrate import quad
 
@@ -1097,9 +1097,12 @@ class Phyllosilicate:
             if cou > iter_max:
                 norm_step = np.sum(np.sqrt(np.square(step)), axis=0)[0]
                 if norm_step > oscillation_tol:
-                    print(f"fn: {fn}")
-                    raise RuntimeError(f"Loop count exceeded {iter_max} times &" \
-                        f" exceeds oscillation tolerance: {norm_step}")
+                    _msg: str = f"Loop count exceeded {iter_max} times &" \
+                        f" exceeds oscillation tolerance: {norm_step}"
+                    # log
+                    if self.m_logger is not None:
+                        self.m_logger.error(_msg)
+                    raise RuntimeError(_msg)
                 else:
                     break
         xn = xn.T.tolist()[0]
@@ -1599,7 +1602,11 @@ class Phyllosilicate:
             tensor = self.calc_smec_cond_tensor_cube_oxyz()
         else:
             tensor = self.calc_kaol_cond_tensor_cube_oxyz()
+
         self.m_cond_tensor = tensor
+
+        if self.m_logger is not None:
+            self.m_logger.info(f"m_cond_tensor: {self.m_cond_tensor}")
 
 
     def get_logger(self) -> Logger:
@@ -1638,6 +1645,16 @@ class Phyllosilicate:
             float or None: Length of the electrical double layer
         """
         return self.m_double_layer_length
+
+
+    def save(self, _pth: str) -> None:
+        """Save Phyllosilicate class as pickle
+
+        Args:
+            _pth (str): path to save
+        """
+        with open(_pth, 'wb') as pkf:
+            pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)
 
 
 # pylint: disable=dangerous-default-value

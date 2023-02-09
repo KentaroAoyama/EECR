@@ -10,7 +10,7 @@ def plot_smec_frac_cond(smectite_frac_ls: List[float],
                         cond_ls: List[float],
                         save_pth: str,
                         label_val_ls: List[float or int] = None,
-                        error_bar_ls: List = None)
+                        error_bar_ls: List = None):
     assert len(smectite_frac_ls) == len(cond_ls)
     if label_val_ls is not None:
         assert len(smectite_frac_ls) == len(label_val_ls),\

@@ -1,6 +1,4 @@
 """Create input to be passed to the solver class"""
-# TODO: msg to logger
-# TODO: loggerの重複を修正
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
@@ -11,12 +9,10 @@ import random
 from sys import float_info
 
 import numpy as np
-from tqdm import tqdm
 from fluid import Fluid
 
 
 # pylint: disable=invalid-name
-# TODO: debug追加
 class FEM_Input_Cube:
     """Class for creating finite element method inputs when using cubic elements.
         This program is based on Garboczi (1998).
@@ -145,7 +141,7 @@ class FEM_Input_Cube:
                 f"{instance.__name__} don't have \"get_cond_tensor method\""
             instance_set_ls.append(instance)
             # Prevent the probability p given to random.sample from becoming negative
-            if isclose(frac, 0., abs_tol=1.0e-10):
+            if frac < 0.:
                 frac = float_info.min
             frac_ls.append(frac)
 
@@ -158,7 +154,8 @@ class FEM_Input_Cube:
         np.random.seed(seed)
         random.seed(seed)
         # set rotated conductivity tensor for each element
-        print("Setting rotated conductivity tensor for each element...")
+        if self.m_logger is not None:
+            self.m_logger.info("Setting rotated conductivity tensor for each element...")
         nz, ny, nx = shape
         for k in range(nz):
             for j in range(ny):
@@ -184,8 +181,9 @@ class FEM_Input_Cube:
 
         # Check whether the elements are assigned to satisfy the volume_frac_dict and correct
         # it if the error is too large.
-        print("Modifying element assignments...")
-        print(f"instance_set_ls: {instance_set_ls}") #!
+        if self.m_logger is not None:
+            self.m_logger.info("Modifying element assignments...")
+            self.m_logger.info(f"instance_set_ls: {instance_set_ls}")
         ns = nx * ny * nz
         frac_unit = 1. / ns
         for cou, instance in enumerate(instance_set_ls):
@@ -246,7 +244,8 @@ class FEM_Input_Cube:
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
-        print("Adding up the conductivity of the electrical double layer...")
+        if self.m_logger is not None:
+            self.m_logger.info("Adding up the conductivity of the electrical double layer...")
         for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
@@ -320,6 +319,7 @@ class FEM_Input_Cube:
 
         if self.m_logger is not None:
             self.m_logger.info("create_from_file done")
+
 
     def __sum_double_layer_cond(self,
                                 pix_tensor: List,
@@ -550,7 +550,8 @@ class FEM_Input_Cube:
         # points in order to compute the stiffness matrices.  Stiffness matrices
         # of trilinear finite elements are quadratic in x, y, and z, so that
         # Simpson's rule quadrature is exact.
-        print("Setting the stiffness matrix...")
+        if self.m_logger is not None:
+            self.m_logger.info("Setting the stiffness matrix...")
         # first calculate the derivative of shape functions
         es: List = np.zeros(shape=(3, 3, 3), dtype=np.float64).tolist()
         for k in range(3):

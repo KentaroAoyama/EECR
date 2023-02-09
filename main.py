@@ -1,11 +1,9 @@
 # TODO: docker化
 # TODO: pyrite実装する
-
-# TODO: loggerが重複するので修正する
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
 from os import path, getcwd, makedirs, listdir, cpu_count
-from typing import Dict, List, Tuple
+from typing import Dict, List
 from datetime import datetime
 
 from yaml import safe_load
@@ -171,7 +169,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
                                                 volume_frac_dict = {nacl: porosity,
                                                                     smectite: smec_frac_tol,
                                                                     silica: siica_frac_tol},
-                                                seed=42,
+                                                seed=seed,
                                                 rotation_setting="random")
     solver_input.set_ib()
     solver_input.femat()

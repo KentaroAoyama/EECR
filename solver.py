@@ -1,13 +1,12 @@
-# TODO: msg to logger
-# TODO: getter作る
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
-from time import time
 from typing import List
 from copy import deepcopy
 from logging import Logger
+from warnings import warn
+
 import numpy as np
-from tqdm import tqdm
+import pickle
 from solver_input import FEM_Input_Cube, calc_m
 
 class FEM_Cube():
@@ -88,7 +87,8 @@ class FEM_Cube():
         self.m_u: np.ndarray = np.array(u, dtype=np.float64)
 
         # m_u2d
-        print("Expand u 2d")
+        if self.m_logger is not None:
+            self.m_logger.info("Expand u 2d")
         u_2d: List = [None for _ in range(self.m_u.shape[0])]
         for m in range(nxyz):
             self.__expand_2d(deepcopy(self.m_u),
@@ -103,7 +103,8 @@ class FEM_Cube():
         a: List = [None for _ in range(nxyz)]
         dk = self.fem_input.get_dk()
         pix = self.fem_input.get_pix()
-        print("Setting the global matrix A...")
+        if self.m_logger is not None:
+            self.m_logger.info("Setting the global matrix A...")
         for m in range(nxyz):
             self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
         assert None not in a
@@ -154,9 +155,11 @@ class FEM_Cube():
             gtest = 1.0e-16 * ns
         # Solve with conjugate gradient method
         cou = 0
-        print("Start conjugate gradient calculation")
+        if self.m_logger is not None:
+            self.m_logger.info("Start conjugate gradient calculation")
         while self.m_gg > gtest:
-            print(f"cou: {cou}, gg: {self.m_gg}") #!
+            if self.m_logger is not None:
+                self.m_logger.info(f"cou: {cou}, gg: {self.m_gg}")
             self.__calc_dembx(ldemb, gtest)
             # Call energy to compute energy after dembx call. If gg < gtest, this
             # will be the final energy. If gg is still larger than gtest, then this
@@ -166,11 +169,11 @@ class FEM_Cube():
             self.__calc_energy()
             cou += 1
             if cou > kmax:
-                print(f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}," \
-                    f"gtest: {gtest}")
+                _msg = f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}," \
+                    f"gtest: {gtest}"
+                warn(_msg)
                 if self.m_logger is not None:
-                    self.m_logger.warn(f"Not sufficiently convergent.\nself.m_gg: "\
-                        f"{self.m_gg}, gtest: {gtest}")
+                    self.m_logger.warn(_msg)
                 break
         self.__calc_current_and_cond()
 
@@ -414,7 +417,88 @@ class FEM_Cube():
         self.m_cond_y = curry_ave / ey
         self.m_cond_z = currz_ave / ez
 
+    # TODO: getter docstring
+    def get_fem_input(self) -> None or FEM_Input_Cube:
+        return deepcopy(self.fem_input)
 
-    def save(self, pth: str):
-        # TODO: networkx.Graph の write_gpickleを参考に書く
-        pass
+
+    def get_logger(self) -> None or Logger:
+        return deepcopy(self.m_logger)
+
+
+    def get_u(self) -> None or np.ndarray:
+        return deepcopy(self.m_u)
+
+
+    def get_u2d(self):
+        return deepcopy(self.m_u2d)
+
+    
+    def get_a(self):
+        return deepcopy(self.m_a)
+
+
+    def get_gb(self):
+        return deepcopy(self.m_gb)
+
+    
+    def get_u_tot(self):
+        return deepcopy(self.m_u_tot)
+
+    
+    def get_gg(self):
+        return deepcopy(self.m_gg)
+
+
+    def get_h(self):
+        return deepcopy(self.m_h)
+
+    
+    def get_h2d(self):
+        return deepcopy(self.m_h2d)
+
+    
+    def get_cuurx(self):
+        return deepcopy(self.m_currx_m)
+
+    
+    def get_cuury(self):
+        return deepcopy(self.m_curry_m)
+
+
+    def get_cuurz(self):
+        return deepcopy(self.m_currz_m)
+
+
+    def get_currx_ave(self):
+        return deepcopy(self.m_currx_ave)
+
+
+    def get_curry_ave(self):
+        return deepcopy(self.m_curry_ave)
+
+    
+    def get_currz_ave(self):
+        return deepcopy(self.m_currz_ave)
+ 
+
+    def get_cond_x(self):
+        return deepcopy(self.m_cond_x)
+
+    
+    def get_cond_y(self):
+        return deepcopy(self.m_cond_y)
+
+
+    def get_cond_z(self):
+        return deepcopy(self.m_cond_z)
+
+
+    def save(self, _pth: str) -> None:
+        """Save FEM_Cube class as pickle
+
+        Args:
+            _pth (str): path to save
+        """
+        with open(_pth, 'wb') as pkf:
+            pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)

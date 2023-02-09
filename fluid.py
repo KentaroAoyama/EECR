@@ -4,6 +4,7 @@
 from typing import Dict
 from copy import deepcopy
 
+import pickle
 from iapws import IAPWS97
 import numpy as np
 
@@ -82,3 +83,13 @@ class NaCl(Fluid):
         if self.m_cond_tensor is not None:
             return deepcopy(self.m_cond_tensor)
         return self.m_cond_tensor
+
+
+    def save(self, _pth: str) -> None:
+        """Save NaCl class as pickle
+
+        Args:
+            _pth (str): path to save
+        """
+        with open(_pth, 'wb') as pkf:
+            pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)

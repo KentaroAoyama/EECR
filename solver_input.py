@@ -521,7 +521,6 @@ class FEM_Input_Cube:
             voltages, and constant term C that appear in the total energy due
             to the periodic boundary conditions.
         """ 
-        # TODO?: ex, ey, ezは、ΔV/nx, ΔV/ny, ΔV/nzで定義されているので, v/mの単位になるよう修正したほうがいいかも
         assert self.m_sigma is not None
         assert self.m_pix_tensor is not None
         assert self.m_ib is not None

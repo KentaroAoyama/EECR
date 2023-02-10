@@ -78,7 +78,6 @@ class FEM_Cube():
             for j in range(ny):
                 for i in range(nx):
                     m = calc_m(i, j, k, nx, ny)
-                    # TODO: もしex, ey, ezを修正するならここも直す
                     x = float(i)
                     y = float(j)
                     z = float(k)
@@ -417,7 +416,9 @@ class FEM_Cube():
         self.m_cond_y = curry_ave / ey
         self.m_cond_z = currz_ave / ez
 
-    # TODO: getter docstring
+
+    # getters methods for member variables
+    # pylint: disable=missing-docstring
     def get_fem_input(self) -> None or FEM_Input_Cube:
         return deepcopy(self.fem_input)
 

@@ -47,6 +47,7 @@ class NaCl(Fluid):
             pressure (float): pressire in Pa
             concentration (float): NaCl concentration in mol/l.
         """
+        # TODO: 液相領域以外になると適用できないようassertion
         assert 273.15 < temperature < 473.15
         pressure /= 1.0e6
         rho = IAPWS97(T = temperature, P = pressure).rho

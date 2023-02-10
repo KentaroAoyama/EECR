@@ -86,7 +86,6 @@ class Phyllosilicate:
                  cond_stern_plus_edl: float = None,
                  logger: Logger = None,
                  ):
-        # TODO: エラーをraiseするところで loggerにエラーメッセージを書き込む処理を追記
         # TODO: m_layer_widthのassertionを電位, 電荷を計算する関数に加える
         # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
         # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.

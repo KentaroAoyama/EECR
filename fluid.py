@@ -50,7 +50,7 @@ class NaCl(Fluid):
         assert 273.15 < temperature < 473.15
         pressure /= 1.0e6
         rho = IAPWS97(T = temperature, P = pressure).rho
-        # convert Kelvin to Celsius 
+        # convert Kelvin to Celsius
         temperature -= 273.15
         # convert mol/l to mol/kg
         _m = concentration * 1000. / rho

@@ -1,5 +1,6 @@
 # TODO: docker化
 # TODO: pyrite実装する
+# pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
 from os import path, getcwd, makedirs, listdir, cpu_count
@@ -252,20 +253,15 @@ def experiment():
 
 def output_fig():
     pickle_dir = path.join(getcwd(), "output", "pickle")
-    conditions_xye: Dict = {}
+    conditions_ye: Dict = {}
     for condition_dirname in listdir(pickle_dir):
         _ls = condition_dirname.split("_")
         del _ls[0] # smec
         _ls[0] = _ls[0].replace("frac", "smec_frac")
-        smec_frac = None
         val_ls: List = []
-        for i, condition_val in enumerate(_ls):
+        for condition_val in _ls:
             _, val = condition_val.split("-")
-            val = float(val)
-            if i == 0:
-                smec_frac = val
-                continue # for smec_fac
-            val_ls.append(val)
+            val_ls.append(float(val))
         # get average conductivity
         condition_dir = path.join(pickle_dir, condition_dirname)
         cond_ave_ls: List = []
@@ -273,7 +269,7 @@ def output_fig():
             seed_dir = path.join(condition_dir, seed_dirname)
             # get latest dir for now
             date_dirname_ls = listdir(seed_dir)
-            datetime_ls = [datetime.strptime(_name) for _name in date_dirname_ls]
+            datetime_ls = [datetime.strptime(_name, "%Y-%m-%d") for _name in date_dirname_ls]
             date_dirname: str = date_dirname_ls[datetime_ls.index(max(datetime_ls))]
             date_dir = path.join(seed_dir, date_dirname)
             # get solver pickle
@@ -284,27 +280,87 @@ def output_fig():
             if None in (cond_x, cond_y, cond_z):
                 continue
             cond_ave_ls.append(np.mean([cond_x, cond_y, cond_z]))
-        _xye = [smec_frac, np.mean(cond_ave_ls), np.std(cond_ave_ls), ]
-        conditions_xye.setdefault(tuple(val_ls), _xye)
+        _ye = [np.mean(cond_ave_ls), np.std(cond_ave_ls)]
+        conditions_ye.setdefault(tuple(val_ls), _ye)
 
-    # plot temperature variation
     fig_dir = path.join(getcwd(), "output", "fig")
     makedirs(fig_dir, exist_ok=True)
-
+    # plot temperature variation
     tempe_dir = path.join(fig_dir, "temperature")
-    for conditions, _xye in conditions_xye.items():
-        smec_frac_ls = _xye[0]
-        cond_ls = _xye[1]
-        error_ls = _xye[2]
-        label_ls = [conditions[0]] * len(smec_frac_ls)
-        save_pth = path.join(tempe_dir, f"cnacl-{conditions[0]}_porosity-{conditions[1]}.png")
-        plot_smec_frac_cond(smec_frac_ls,
-                            cond_ls,
-                            save_pth,
-                            label_ls,
-                            error_ls,
-                            )
+    makedirs(tempe_dir, exist_ok=True)
+    cnacl_poros_xyel: Dict = {}
+    for conditions, _ye in conditions_ye.items():
+        smec_frac, tempe, cnacl, poros = conditions
+        cond, error = _ye
+        _ls = cnacl_poros_xyel.setdefault((cnacl, poros), [[], [], [], []])
+        if float("nan") in (cond, error):
+            continue
+        if np.isnan(cond) or np.isnan(error):
+            continue
+        if cond < 0.:
+            continue
+        if cond > 1.0e4:
+            continue
+        _ls[0].append(smec_frac)
+        _ls[1].append(cond)
+        _ls[2].append(error)
+        _ls[3].append(tempe)
+    for cnacl_poros, _xyel in cnacl_poros_xyel.items():
+        cnacl, poros = cnacl_poros
+        save_pth = path.join(tempe_dir, f"cnacl-{cnacl}_porosity-{poros}.png")
+        plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
+
+    # plot Cnacl variation
+    cnacl_dir = path.join(fig_dir, "cnacl")
+    makedirs(cnacl_dir, exist_ok=True)
+    tempe_poros_xyel: Dict = {}
+    for conditions, _ye in conditions_ye.items():
+        smec_frac, tempe, cnacl, poros = conditions
+        cond, error = _ye
+        _ls = tempe_poros_xyel.setdefault((tempe, poros), [[], [], [], []])
+        if float("nan") in (cond, error):
+            continue
+        if np.isnan(cond) or np.isnan(error):
+            continue
+        if cond < 0.:
+            continue
+        if cond > 1.0e4:
+            continue
+        _ls[0].append(smec_frac)
+        _ls[1].append(cond)
+        _ls[2].append(error)
+        _ls[3].append(cnacl)
+    for tempe_poros, _xyel in tempe_poros_xyel.items():
+        tempe, poros = tempe_poros
+        save_pth = path.join(cnacl_dir, f"temperature-{tempe}_porosity-{poros}.png")
+        plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
+
+    # plot porosity variation
+    poros_dir = path.join(fig_dir, "poros")
+    makedirs(poros_dir, exist_ok=True)
+    tempe_cnacl_xyel: Dict = {}
+    for conditions, _ye in conditions_ye.items():
+        smec_frac, tempe, cnacl, poros = conditions
+        cond, error = _ye
+        _ls = tempe_cnacl_xyel.setdefault((tempe, cnacl), [[], [], [], []])
+        if float("nan") in (cond, error):
+            continue
+        if np.isnan(cond) or np.isnan(error):
+            continue
+        if cond < 0.:
+            continue
+        if cond > 1.0e4:
+            continue
+        _ls[0].append(smec_frac)
+        _ls[1].append(cond)
+        _ls[2].append(error)
+        _ls[3].append(poros)
+    for tempe_cnacl, _xyel in tempe_cnacl_xyel.items():
+        tempe, cnacl = tempe_cnacl
+        save_pth = path.join(poros_dir, f"temperature-{tempe}_cnacl-{cnacl}.png")
+        plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
 
 
 if __name__ == "__main__":
-    experiment()
+    # experiment()
+    output_fig()

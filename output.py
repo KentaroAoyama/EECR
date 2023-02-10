@@ -10,7 +10,8 @@ def plot_smec_frac_cond(smectite_frac_ls: List[float],
                         cond_ls: List[float],
                         save_pth: str,
                         label_val_ls: List[float or int] = None,
-                        error_bar_ls: List = None):
+                        error_bar_ls: List = None,
+                        ):
     assert len(smectite_frac_ls) == len(cond_ls)
     if label_val_ls is not None:
         assert len(smectite_frac_ls) == len(label_val_ls),\
@@ -35,9 +36,20 @@ def plot_smec_frac_cond(smectite_frac_ls: List[float],
     for i, _label in enumerate(keys_sorted):
         _xy = label_xy[_label]
         _x, _y = zip(*sorted(zip(*_xy)))
+        if float("nan") in _x:
+            continue
+        if float("nan") in _y:
+            continue
+        
         ax.errorbar(_x, _y, label=str(_label), color=cm.jet(float(i)/len(keys_sorted)))
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
+    ax.set_xlabel("Smectite Fraction")
+    ax.set_ylabel("Conductivity (S/m)")
     fig.savefig(save_pth, dpi=200, bbox_inches="tight")
+
+    # close
+    plt.clf()
+    plt.close()
 
 
 def plot_curr_all(currx_ls: List,

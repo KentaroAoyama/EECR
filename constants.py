@@ -1,10 +1,13 @@
 import numpy as np
 
+
 def calc_standard_gibbs_energy(k_25: float) -> float:
     return -np.log(k_25) * GAS_CONST * 298.15
 
+
 def calc_equibilium_const(dg_25, temperature) -> float:
     return np.exp(-dg_25 / (GAS_CONST * temperature))
+
 
 def calc_dielectric_const_water(temperature: float):
     # 十分低い周波数における値であることに注意!
@@ -13,11 +16,13 @@ def calc_dielectric_const_water(temperature: float):
     coeff = 88.15 - 0.414 * t + 0.131 * 1.0e-2 * t**2 - 0.046 * 1.0e-4 * t**3
     return coeff * DIELECTRIC_VACUUM
 
+
 DIELECTRIC_VACUUM = 8.8541878128e-12
 ELEMENTARY_CHARGE = 1.60217663e-19 # 電気素量
 BOLTZMANN_CONST = 1.380649e-23 # ボルツマン定数
 AVOGADRO_CONST = 6.0221408e+23
 GAS_CONST = 8.31446262
+
 
 # 平衡定数 (at 25℃)
 # Smectite & inf

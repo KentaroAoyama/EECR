@@ -1,4 +1,4 @@
-# Effective conductivity simulator for rock
+# Effective electoorical conductivity simulator for rock
 - This is a repository working in progress.
 - Reference:
     - Garboczi, E. (1998), Finite Element and Finite Difference Programs for

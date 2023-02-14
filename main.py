@@ -1,5 +1,6 @@
 # TODO: docker化
 # TODO: pyrite実装する
+# TODO: constants.ion_propsは深いコピーをとる仕様に変更する
 # pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
@@ -18,6 +19,7 @@ from solver import FEM_Cube
 import constants as const
 from output import plot_smec_frac_cond
 
+from matplotlib import pyplot as plt #!
 
 def create_logger(fpth="./debug.txt", logger_name: str = "log"):
     # create logger
@@ -363,4 +365,5 @@ def output_fig():
 
 if __name__ == "__main__":
     # experiment()
-    output_fig()
+    # output_fig()
+    tmp()

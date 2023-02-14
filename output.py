@@ -109,7 +109,7 @@ def plot_curr_all(currx_ls: List,
             label_x = "x"
             label_y = "y"
             fpth = path.join(dir_z, f"{k}.png")
-        
+
         # currx
         _val = currx_arr[k]
         fpth = path.join(dir_x, f"{k}.png")
@@ -203,7 +203,7 @@ def plot_cond_all(condx_ls: List,
             label_x = "x"
             label_y = "y"
             fpth = path.join(dir_z, f"{k}.png")
-        
+
         # condx
         _val = condx_arr[k]
         fpth = path.join(dir_x, f"{k}.png")
@@ -238,3 +238,5 @@ def __plot_cond_grid(grid_x: np.ndarray,
     ax.set_aspect("equal")
     ax.set_title(title)
     fig.savefig(save_pth, dpi=100, bbox_inches="tight")
+    plt.clf()
+    plt.close()

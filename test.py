@@ -497,6 +497,30 @@ def test_single_condition():
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
 
 
+def test_sen_and_goode_1992():
+    cnacl_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
+    tempe_ls = [273.15 + i for i in range(20, 200, 1)]
+    ion_props: Dict = const.ion_props_default.copy()
+    cnacl_tempe_dct: Dict = {} 
+    for cnacl in cnacl_ls:
+        _tempe_dct: Dict = cnacl_tempe_dct.setdefault(cnacl, {})
+        for tempe in tempe_ls:
+            ion_props["Na"]["Concentration"] = cnacl
+            ion_props["Cl"]["Concentration"] = cnacl
+            nacl = NaCl()
+            _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992(tempe, 1.0e5, cnacl))
+    fig, ax = plt.subplots()
+    for cnacl, _tempe_dct in cnacl_tempe_dct.items():
+        tempe_ls: List = []
+        cond_ls: List = []
+        for _tempe, _cond in _tempe_dct.items():
+            tempe_ls.append(_tempe)
+            cond_ls.append(_cond)
+        ax.plot(tempe_ls, cond_ls, label=str(cnacl))
+    ax.legend()
+    fig.savefig("./test/sen_and_goode.png", dpi=200)
+
+
 def main():
     return
 
@@ -512,3 +536,4 @@ if __name__ == "__main__":
     Leroy_Revil_2004_fig8()
     # Leroy_Revil_2004_fig9()
     # goncalves_fig6()
+    test_sen_and_goode_1992()

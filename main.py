@@ -19,7 +19,6 @@ from solver import FEM_Cube
 import constants as const
 from output import plot_smec_frac_cond
 
-from matplotlib import pyplot as plt #!
 
 def create_logger(fpth="./debug.txt", logger_name: str = "log"):
     # create logger
@@ -69,7 +68,7 @@ def run():
     # set fluid instance
     print("set fluid instance")
     nacl = NaCl()
-    nacl.sen_and_goode_1992(298.15, 1.0e5, cnacl)
+    nacl.sen_and_goode_1992(298.15, cnacl)
     print(f"nacl.m_conductivity: {nacl.m_conductivity}")
     nacl.calc_cond_tensor_cube_oxyz()
 
@@ -156,8 +155,8 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     kaolinite.calc_cond_tensor()
 
     # set fluid instance
-    nacl = NaCl()
-    nacl.sen_and_goode_1992(temperature, 1.0e5, cnacl)
+    nacl = NaCl(logger=logger)
+    nacl.sen_and_goode_1992(temperature, cnacl)
     nacl.calc_cond_tensor_cube_oxyz()
 
     # set silica instance
@@ -365,5 +364,5 @@ def output_fig():
 
 if __name__ == "__main__":
     # experiment()
-    # output_fig()
-    tmp()
+    output_fig()
+    

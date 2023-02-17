@@ -14,7 +14,7 @@ from typing import List, Dict
 from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
 import pickle
-from os import path, getcwd
+from os import path, getcwd, listdir
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -508,7 +508,7 @@ def test_sen_and_goode_1992():
             ion_props["Na"]["Concentration"] = cnacl
             ion_props["Cl"]["Concentration"] = cnacl
             nacl = NaCl()
-            _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992(tempe, 1.0e5, cnacl))
+            _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992(tempe, cnacl))
     fig, ax = plt.subplots()
     for cnacl, _tempe_dct in cnacl_tempe_dct.items():
         tempe_ls: List = []
@@ -520,6 +520,30 @@ def test_sen_and_goode_1992():
     ax.legend()
     fig.savefig("./test/sen_and_goode.png", dpi=200)
 
+
+def tmp():
+    fpath = "./output/pickle/smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.01/42/2023-02-17/solver.pkl"
+    with open(fpath, "rb") as pkf:
+        solver = pickle.load(pkf)
+    print(solver.fem_input.m_sigma) 
+
+    ill_cond: set = set()
+    pkl_dirpth = path.join(getcwd(), "output", "pickle")
+    for condition_dirname in listdir(pkl_dirpth):
+        condition_dirpth = path.join(pkl_dirpth, condition_dirname)
+        for seed_dirname in listdir(condition_dirpth):
+            seed_dirpth = path.join(condition_dirpth, seed_dirname)
+            for date_dirname in listdir(seed_dirpth):
+                date_dirpath = path.join(seed_dirpth, date_dirname)
+                if "log.txt" in listdir(date_dirpath):
+                    fpath = path.join(date_dirpath, "log.txt")
+                    with open(fpath, "r") as f:
+                        for l in f.readlines():
+                            if "Not sufficiently convergent." in l:
+                                ill_cond.add(condition_dirname)
+                                break
+    print(f"ill_cond: {ill_cond}")
+    print(len(ill_cond))
 
 def main():
     return
@@ -533,7 +557,8 @@ if __name__ == "__main__":
     # Revil_etal_1998_fig3()
     # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
-    Leroy_Revil_2004_fig8()
+    # Leroy_Revil_2004_fig8()
     # Leroy_Revil_2004_fig9()
     # goncalves_fig6()
-    test_sen_and_goode_1992()
+    # test_sen_and_goode_1992()
+    tmp()

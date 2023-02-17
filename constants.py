@@ -9,12 +9,17 @@ def calc_equibilium_const(dg_25, temperature) -> float:
     return np.exp(-dg_25 / (GAS_CONST * temperature))
 
 
-def calc_dielectric_const_water(temperature: float):
+def calc_dielectric_const_water(temperature: float) -> float:
     # 十分低い周波数における値であることに注意!
     # http://www.isc.meiji.ac.jp/~nkato/Useful_Info.files/water.html
     t = temperature - 273.15
     coeff = 88.15 - 0.414 * t + 0.131 * 1.0e-2 * t**2 - 0.046 * 1.0e-4 * t**3
     return coeff * DIELECTRIC_VACUUM
+
+
+def calc_mobility(mobility, temperature) -> float:
+    coeff = 1 + 0.0414 * (temperature - 273.15 - 22.)
+    return coeff * mobility
 
 
 DIELECTRIC_VACUUM = 8.8541878128e-12
@@ -75,8 +80,7 @@ dg_xna_kaol = calc_standard_gibbs_energy(k_xna_kaol)
 # 参考文献：doi:10.1029/2008JB006114
 # In the dynamic stern layer assumtion, stern layer has surtain
 # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
-# ↑ 現状, Stern層の移動度は設定しているが参照されていない
-# TODO: H+とOH-の"Mobility_Stern"を設定する
+# ↑ 現状, Stern層の移動度は設定しているが参照されていない(拡散層の移動度に0.5をかけている)
 ion_props_default = {"Na": {"Concentration": 1.0e-3,
                             "Mobility_InfDiffuse": 5.19e-8,
                             "Mobility_TrunDiffuse": 0.52e-8,

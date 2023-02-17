@@ -3,6 +3,7 @@
 # pylint: disable=import-error
 from typing import Dict
 from copy import deepcopy
+from logging import Logger
 
 import pickle
 from iapws import IAPWS97
@@ -28,17 +29,18 @@ class NaCl(Fluid):
                  pressure: float = 1.0e5,
                  ion_props: Dict = ion_props_default.copy(),
                  conductivity: float = None,
-                 cond_tensor: np.ndarray = None):
+                 cond_tensor: np.ndarray = None,
+                 logger: Logger = None):
         self.m_temperature = temperature
         self.m_pressure = pressure
         self.m_ion_props = ion_props
         self.m_conductivity = conductivity
         self.m_cond_tensor = cond_tensor
+        self.m_logger = logger
 
 
     def sen_and_goode_1992(self,
                            temperature: float = 298.15,
-                           pressure: float = 1.0e5,
                            concentration: float = 1.0e-3) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
         The modified equation was in Watanabe et al., 2021.
@@ -47,7 +49,6 @@ class NaCl(Fluid):
             pressure (float): pressire in Pa
             concentration (float): NaCl concentration in mol/l.
         """
-        pressure /= 1.0e6
         # convert Kelvin to Celsius
         temperature -= 273.15
         _m = concentration
@@ -68,6 +69,8 @@ class NaCl(Fluid):
                                 [0., self.m_conductivity, 0.],
                                 [0., 0., self.m_conductivity]])
         self.m_cond_tensor = cond_tensor
+        if self.m_logger is not None:
+            self.m_logger.info(f"{__name__} cond tensor: {self.m_cond_tensor}")
         return deepcopy(self.m_cond_tensor)
 
 

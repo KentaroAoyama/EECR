@@ -1604,7 +1604,7 @@ class Phyllosilicate:
         self.m_cond_tensor = tensor
 
         if self.m_logger is not None:
-            self.m_logger.info(f"m_cond_tensor: {self.m_cond_tensor}")
+            self.m_logger.info(f"{__name__} cond tensor: {self.m_cond_tensor}")
 
 
     def get_logger(self) -> Logger:

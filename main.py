@@ -66,16 +66,16 @@ def run():
     kaolinite.calc_cond_tensor()
 
     # set fluid instance
-    print("set fluid instance")
+    # print("set fluid instance")
     nacl = NaCl()
     nacl.sen_and_goode_1992(298.15, cnacl)
-    print(f"nacl.m_conductivity: {nacl.m_conductivity}")
+    # print(f"nacl.m_conductivity: {nacl.m_conductivity}")
     nacl.calc_cond_tensor_cube_oxyz()
 
     # set solver input
-    print("set solver input")
+    # print("set solver input")
     solver_input = FEM_Input_Cube()
-    print("create_pixel_by_macro_variable")
+    # print("create_pixel_by_macro_variable")
     solver_input.create_pixel_by_macro_variable(shape=(20, 20, 20),
                                                 edge_length=edge_length,
                                                 volume_frac_dict = {nacl: 0.9,
@@ -84,21 +84,21 @@ def run():
                                                 rotation_setting="random")
     # print("create_from_file")
     # solver_input.create_from_file("./microstructure_tmp.dat")
-    print("set_ib")
+    # print("set_ib")
     solver_input.set_ib()
-    print("femat")
+    # print("femat")
     solver_input.femat()
 
     # run solver
-    print("run solver")
+    # print("run solver")
     solver = FEM_Cube(solver_input)
     solver.run(100, 30, 1.0e-9)
-    print("x")
-    print(solver.m_cond_x)
-    print("y")
-    print(solver.m_cond_y)
-    print("z")
-    print(solver.m_cond_z)
+    # print("x")
+    # print(solver.m_cond_x)
+    # print("y")
+    # print(solver.m_cond_y)
+    # print("z")
+    # print(solver.m_cond_z)
 
 
 def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None:
@@ -112,9 +112,9 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     assert len(outdir) < 244
 
     makedirs(outdir, exist_ok=True)
-    for date_dirname in listdir(outdir):
-        if len(listdir(path.join(outdir, date_dirname))) > 1:
-            return None
+    # for date_dirname in listdir(outdir):
+    #     if len(listdir(path.join(outdir, date_dirname))) > 1:
+    #         return None
 
     logger_pth = path.join(outdir, "log.txt")
 
@@ -237,10 +237,6 @@ def experiment():
             for cnacl in cnacl_ls:
                 for porosity in porosity_ls:
                     for seed in seed_ls:
-                        print(f"smec_frac: {smec_frac}")
-                        print(f"temperature: {temperature}")
-                        print(f"cnacl: {cnacl}")
-                        print(f"porosity: {porosity}")
                         future = pool.submit(exec_single_condition,
                                             smec_frac=smec_frac,
                                             temperature=temperature,
@@ -248,7 +244,6 @@ def experiment():
                                             porosity=porosity,
                                             seed=seed
                                             )
-                        print(future)
     pool.shutdown(wait=True)
 
 
@@ -362,7 +357,16 @@ def output_fig():
         plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
 
 
+def main():
+    exec_single_condition(smec_frac=0.,
+                          temperature=293.15,
+                          cnacl=0.001,
+                          porosity=0.01,
+                          seed=42)
+
+
 if __name__ == "__main__":
-    # experiment()
-    output_fig()
+    # main()
+    experiment()
+    # output_fig()
     

@@ -15,29 +15,31 @@ from fluid import Fluid
 # pylint: disable=invalid-name
 class FEM_Input_Cube:
     """Class for creating finite element method inputs when using cubic elements.
-        This program is based on Garboczi (1998).
+    This program is based on Garboczi (1998).
 
-        Reference: Garboczi, E. (1998), Finite Element and Finite Difference Programs for
-                        Computing the Linear Electric and Elastic Properties of Digital
-                        Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
-                        National Institute of Standards and Technology, Gaithersburg, MD,
-                        [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
-                        (Accessed January 20, 2023)
+    Reference: Garboczi, E. (1998), Finite Element and Finite Difference Programs for
+                    Computing the Linear Electric and Elastic Properties of Digital
+                    Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
+                    National Institute of Standards and Technology, Gaithersburg, MD,
+                    [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
+                    (Accessed January 20, 2023)
     """
-    def __init__(self,
-                 pix_tensor: List = None,
-                 dk: List = None,
-                 sigma: List = None,
-                 ib: List = None,
-                 pix: List = None,
-                 ex: float = None,
-                 ey: float = None,
-                 ez: float = None,
-                 b: np.ndarray = None,
-                 c: float = None,
-                 logger: Logger = None
-                 ):
-        """ Initialize FEM_Input_Cube class.
+
+    def __init__(
+        self,
+        pix_tensor: List = None,
+        dk: List = None,
+        sigma: List = None,
+        ib: List = None,
+        pix: List = None,
+        ex: float = None,
+        ey: float = None,
+        ez: float = None,
+        b: np.ndarray = None,
+        c: float = None,
+        logger: Logger = None,
+    ):
+        """Initialize FEM_Input_Cube class.
 
         Args:
             pix_tensor (List): 3d list of pix. Each index indicate node. First index increases
@@ -85,26 +87,24 @@ class FEM_Input_Cube:
         self.m_instance_ls: List = None
         self.m_rotation_angle: List = None
 
-
     def __init_default(self) -> None:
-        """ Assign default values to member variables
-        """
+        """Assign default values to member variables"""
         if self.m_ex is None:
-            self.m_ex = np.float64(1.)
+            self.m_ex = np.float64(1.0)
         if self.m_ey is None:
-            self.m_ey = np.float64(1.)
+            self.m_ey = np.float64(1.0)
         if self.m_ez is None:
-            self.m_ez = np.float64(1.)
-
+            self.m_ez = np.float64(1.0)
 
     # pylint: disable=dangerous-default-value
-    def create_pixel_by_macro_variable(self,
-                                       shape: Tuple[int] = (100, 100, 100),
-                                       edge_length: float = 1.0e-6,
-                                       volume_frac_dict: Dict = {},
-                                       seed: int = 42,
-                                       rotation_setting: str or Tuple[float] = "random",
-                                       ) -> None:
+    def create_pixel_by_macro_variable(
+        self,
+        shape: Tuple[int] = (100, 100, 100),
+        edge_length: float = 1.0e-6,
+        volume_frac_dict: Dict = {},
+        seed: int = 42,
+        rotation_setting: str or Tuple[float] = "random",
+    ) -> None:
         """Create a pixel based on macroscopic physical properties such as porosity and mineral
         mass fractions.
 
@@ -121,7 +121,7 @@ class FEM_Input_Cube:
         assert len(volume_frac_dict) > 0
 
         # Check to see if the volume fractions sum to 1
-        _sum = 0.
+        _sum = 0.0
         for _, frac in volume_frac_dict.items():
             _sum += frac
         assert isclose(_sum, 1.0, abs_tol=1.0e-10)
@@ -130,18 +130,19 @@ class FEM_Input_Cube:
         for n in shape:
             assert isinstance(n, int) and n > 0
         nx, ny, nz = shape
-        shape = (nz, ny, nx) # change order
+        shape = (nz, ny, nx)  # change order
 
         # first create pixel as 3d list
         instance_set_ls: List = []
         frac_ls: List = []
         for instance, frac in volume_frac_dict.items():
             get_cond_tensor = getattr(instance, "get_cond_tensor", None)
-            assert get_cond_tensor is not None,\
-                f"{instance.__name__} don't have \"get_cond_tensor method\""
+            assert (
+                get_cond_tensor is not None
+            ), f'{instance.__name__} don\'t have "get_cond_tensor method"'
             instance_set_ls.append(instance)
             # Prevent the probability p given to random.sample from becoming negative
-            if frac < 0.:
+            if frac < 0.0:
                 frac = float_info.min
             frac_ls.append(frac)
 
@@ -155,7 +156,9 @@ class FEM_Input_Cube:
         random.seed(seed)
         # set rotated conductivity tensor for each element
         if self.m_logger is not None:
-            self.m_logger.info("Setting rotated conductivity tensor for each element...")
+            self.m_logger.info(
+                "Setting rotated conductivity tensor for each element..."
+            )
         nz, ny, nx = shape
         for k in range(nz):
             for j in range(ny):
@@ -175,7 +178,9 @@ class FEM_Input_Cube:
                     assert _rot_mat is not None
                     rotation_angle_ls[k][j][i] = _rot_mat
                     instance_ls[k][j][i] = instance
-                    tensor_center: np.ndarray = np.matmul(np.matmul(_rot_mat, tensor_center), _rot_mat.T)
+                    tensor_center: np.ndarray = np.matmul(
+                        np.matmul(_rot_mat, tensor_center), _rot_mat.T
+                    )
                     pix_tensor[k][j][i]: np.ndarray = tensor_center
         self.m_rotation_angle = rotation_angle_ls
 
@@ -185,16 +190,18 @@ class FEM_Input_Cube:
             self.m_logger.info("Modifying element assignments...")
             self.m_logger.info(f"instance_set_ls: {instance_set_ls}")
         ns = nx * ny * nz
-        frac_unit = 1. / ns
+        frac_unit = 1.0 / ns
         for cou, instance in enumerate(instance_set_ls):
             if cou == len(instance_set_ls) - 1:
                 break
             cond_tensor = getattr(instance, "get_cond_tensor", None)()
             instance_next = instance_set_ls[cou + 1]
-            cond_tensor_next = getattr(instance_set_ls[cou + 1], "get_cond_tensor", None)()
+            cond_tensor_next = getattr(
+                instance_set_ls[cou + 1], "get_cond_tensor", None
+            )()
             frac_targ = volume_frac_dict[instance]
             # first, get the volume fraction of each phase
-            frac_asigned: float = 0.
+            frac_asigned: float = 0.0
             m_ls: List[int] = []
             for k in range(nz):
                 for j in range(ny):
@@ -217,21 +224,27 @@ class FEM_Input_Cube:
                     instance_ls[k][j][i] = instance_next
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
-                    pix_tensor[k][j][i] = np.matmul(np.matmul(rot_mat, cond_tensor_next), rot_mat.T)
+                    pix_tensor[k][j][i] = np.matmul(
+                        np.matmul(rot_mat, cond_tensor_next), rot_mat.T
+                    )
             # If less than the target value
             if frac_asigned < lower:
                 _m_all: set = set([m for m in range(nx * ny * nz)])
-                m_add_ls: List = random.sample(list(_m_all.difference(set(m_ls))), k=num_diff)
+                m_add_ls: List = random.sample(
+                    list(_m_all.difference(set(m_ls))), k=num_diff
+                )
                 for m in m_add_ls:
                     i, j, k = calc_ijk(m, nx, ny)
                     # Re-set instance
                     instance_ls[k][j][i] = instance
                     # Re-set conductivity tensor
                     rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
-                    pix_tensor[k][j][i] = np.matmul(np.matmul(rot_mat, cond_tensor), rot_mat.T)
+                    pix_tensor[k][j][i] = np.matmul(
+                        np.matmul(rot_mat, cond_tensor), rot_mat.T
+                    )
         # final check for fraction & conductivity tensor
         for instance in instance_set_ls:
-            frac = 0.
+            frac = 0.0
             for k in range(nz):
                 for j in range(ny):
                     for i in range(nx):
@@ -239,8 +252,8 @@ class FEM_Input_Cube:
                             frac += frac_unit
                         # Reset the negative value generated by the censoring error to 0
                         _tensor = pix_tensor[k][j][i]
-                        _filt: np.ndarray = (_tensor > -1.0e-16) * (_tensor < 0.)
-                        pix_tensor[k][j][i] = np.where(_filt, 0., _tensor)
+                        _filt: np.ndarray = (_tensor > -1.0e-16) * (_tensor < 0.0)
+                        pix_tensor[k][j][i] = np.where(_filt, 0.0, _tensor)
             frac_targ: float = volume_frac_dict[instance]
             # TODO: 合わない場合があるので検証
             # assert frac_targ - frac_unit < frac < frac_targ + frac_unit, \
@@ -249,27 +262,33 @@ class FEM_Input_Cube:
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
         if self.m_logger is not None:
-            self.m_logger.info("Adding up the conductivity of the electrical double layer...")
+            self.m_logger.info(
+                "Adding up the conductivity of the electrical double layer..."
+            )
         for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
                     # Checks whether instance has an attribute for the electric double layer.
                     instance = instance_ls[k][j][i]
                     get_cond_infdiffuse = getattr(instance, "get_cond_infdiffuse", None)
-                    get_double_layer_length = getattr(instance, "get_double_layer_length", None)
+                    get_double_layer_length = getattr(
+                        instance, "get_double_layer_length", None
+                    )
                     if None not in [get_cond_infdiffuse, get_double_layer_length]:
                         cond_infdiffuse: float = get_cond_infdiffuse()
                         double_layer_length: float = get_double_layer_length()
                         # TODO: __sum_double_layer_condをdouble_layer_length >= edge_lengthに使えるように拡張して, 以下のassertionを消す
                         assert double_layer_length < edge_length
-                        self.__sum_double_layer_cond(pix_tensor,
-                                                     instance_ls,
-                                                     i,
-                                                     j,
-                                                     k,
-                                                     edge_length,
-                                                     cond_infdiffuse,
-                                                     double_layer_length)
+                        self.__sum_double_layer_cond(
+                            pix_tensor,
+                            instance_ls,
+                            i,
+                            j,
+                            k,
+                            edge_length,
+                            cond_infdiffuse,
+                            double_layer_length,
+                        )
         self.m_pix_tensor = pix_tensor
 
         # construct self.m_sigma and self.m_pix
@@ -280,14 +299,13 @@ class FEM_Input_Cube:
                 for i in range(nx):
                     m = calc_m(i, j, k, nx, ny)
                     sigma_ls.append(self.m_pix_tensor[k][j][i].tolist())
-                    pix_ls.append(m) # TODO: remove pix
+                    pix_ls.append(m)  # TODO: remove pix
         self.m_sigma = sigma_ls
         self.m_pix = pix_ls
         self.m_instance_ls = instance_ls
 
         if self.m_logger is not None:
             self.m_logger.info("create_pixel_by_macro_variable done")
-
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -302,8 +320,10 @@ class FEM_Input_Cube:
         assert isinstance(ny, int) and ny > 0
         assert isinstance(nz, int) and nz > 0
         # TODO: idx_tensor_mapは引数として与える仕様に変更する
-        idx_tensor_map: Dict = {0: [[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]],
-                                1: [[0.5,0.,0.],[0.,0.5,0.],[0.,0.,0.5]]}
+        idx_tensor_map: Dict = {
+            0: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
+            1: [[0.5, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.5]],
+        }
         sigma: List = list(range(len(idx_tensor_map)))
         _keys: List = list(idx_tensor_map.keys())
         _keys.sort()
@@ -324,17 +344,17 @@ class FEM_Input_Cube:
         if self.m_logger is not None:
             self.m_logger.info("create_from_file done")
 
-
-    def __sum_double_layer_cond(self,
-                                pix_tensor: List,
-                                instance_ls: List,
-                                i: int,
-                                j: int,
-                                k: int,
-                                edge_length: float,
-                                cond_infdiffuse: float,
-                                double_layer_length: float,
-                                ) -> None:
+    def __sum_double_layer_cond(
+        self,
+        pix_tensor: List,
+        instance_ls: List,
+        i: int,
+        j: int,
+        k: int,
+        edge_length: float,
+        cond_infdiffuse: float,
+        double_layer_length: float,
+    ) -> None:
         """Add the conductivity of the electric double layer to the pixels in contact with the
         surface.
 
@@ -359,56 +379,63 @@ class FEM_Input_Cube:
                 itmp += nx
             if itmp >= nx:
                 itmp -= nx
-            self.__add_adjacent_fluid_cell(pix_tensor,
-                                           instance_ls,
-                                           (itmp, j, k),
-                                           "x",
-                                           cond_infdiffuse,
-                                           ratio_edl,
-                                           ratio_fluid)
+            self.__add_adjacent_fluid_cell(
+                pix_tensor,
+                instance_ls,
+                (itmp, j, k),
+                "x",
+                cond_infdiffuse,
+                ratio_edl,
+                ratio_fluid,
+            )
         # y direction
         for jtmp in (j - 1, j + 1):
             if jtmp < 0:
                 jtmp += ny
             if jtmp >= ny:
                 jtmp -= ny
-            self.__add_adjacent_fluid_cell(pix_tensor,
-                                           instance_ls,
-                                           (i, jtmp, k),
-                                           "y",
-                                           cond_infdiffuse,
-                                           ratio_edl,
-                                           ratio_fluid)
+            self.__add_adjacent_fluid_cell(
+                pix_tensor,
+                instance_ls,
+                (i, jtmp, k),
+                "y",
+                cond_infdiffuse,
+                ratio_edl,
+                ratio_fluid,
+            )
         # z direction
         for ktmp in (k - 1, k + 1):
             if ktmp < 0:
                 ktmp += nz
             if ktmp >= nz:
                 ktmp -= nz
-            self.__add_adjacent_fluid_cell(pix_tensor,
-                                           instance_ls,
-                                           (i, j, ktmp),
-                                           "z",
-                                           cond_infdiffuse,
-                                           ratio_edl,
-                                           ratio_fluid)
+            self.__add_adjacent_fluid_cell(
+                pix_tensor,
+                instance_ls,
+                (i, j, ktmp),
+                "z",
+                cond_infdiffuse,
+                ratio_edl,
+                ratio_fluid,
+            )
 
-
-    def __add_adjacent_fluid_cell(self,
-                                  pix_tensor: List,
-                                  instance_ls: List,
-                                  idx_adj: Tuple[int],
-                                  adj_axis: str,
-                                  cond_infdiffuse: float,
-                                  ratio_edl: float,
-                                  ratio_fluid: float) -> None:
+    def __add_adjacent_fluid_cell(
+        self,
+        pix_tensor: List,
+        instance_ls: List,
+        idx_adj: Tuple[int],
+        adj_axis: str,
+        cond_infdiffuse: float,
+        ratio_edl: float,
+        ratio_fluid: float,
+    ) -> None:
         """Add electrical double layer conductivity to adjacent cells
 
         Args:
             pix_tensor (List): 3d list containing the 2d conductivity tensor
             instance_ls (List): 3d list containing instance of fluid or mineral
             idx_adj (Tuple[int]): Adjacent cell index (k, j, i)
-            adj_axis (str): String indicating the direction of adjacent direction (x or y or z) 
+            adj_axis (str): String indicating the direction of adjacent direction (x or y or z)
             cond_infdiffuse (float): Conductivity of the electrical double layer
             ratio_edl (float): Ratio of the electrical double layer in the cell volume
             ratio_fluid (float): Ratio of the fluid in the cell volume
@@ -420,28 +447,39 @@ class FEM_Input_Cube:
         assert adj_axis in ("x", "y", "z"), f"adj_axis: {adj_axis}"
         edl_tensor: np.ndarray = None
         if adj_axis == "x":
-            edl_tensor = np.array([[0., 0., 0.],
-                                   [0., cond_infdiffuse, 0.],
-                                   [0., 0., cond_infdiffuse]],
-                                   dtype=np.float64)
+            edl_tensor = np.array(
+                [
+                    [0.0, 0.0, 0.0],
+                    [0.0, cond_infdiffuse, 0.0],
+                    [0.0, 0.0, cond_infdiffuse],
+                ],
+                dtype=np.float64,
+            )
         if adj_axis == "y":
-            edl_tensor = np.array([[cond_infdiffuse, 0., 0.],
-                                   [0., 0., 0.],
-                                   [0., 0., cond_infdiffuse]],
-                                   dtype=np.float64)
+            edl_tensor = np.array(
+                [
+                    [cond_infdiffuse, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [0.0, 0.0, cond_infdiffuse],
+                ],
+                dtype=np.float64,
+            )
         if adj_axis == "z":
-            edl_tensor = np.array([[cond_infdiffuse, 0., 0.],
-                                   [0., cond_infdiffuse, 0.],
-                                   [0., 0., 0.]],
-                                   dtype=np.float64)
+            edl_tensor = np.array(
+                [
+                    [cond_infdiffuse, 0.0, 0.0],
+                    [0.0, cond_infdiffuse, 0.0],
+                    [0.0, 0.0, 0.0],
+                ],
+                dtype=np.float64,
+            )
         assert edl_tensor is not None
-        pix_tensor[kadj][jadj][iadj] = ratio_edl * edl_tensor + \
-                                       ratio_fluid * pix_tensor[kadj][jadj][iadj]
-
+        pix_tensor[kadj][jadj][iadj] = (
+            ratio_edl * edl_tensor + ratio_fluid * pix_tensor[kadj][jadj][iadj]
+        )
 
     def set_ib(self) -> None:
-        """ set member variable of m_ib based on m_pix_tensor.
-        """
+        """set member variable of m_ib based on m_pix_tensor."""
         assert self.m_pix_tensor is not None
         # Construct the neighbor table, ib(m,n)
         # First construct 27 neighbor table in terms of delta i, delta j, delta k
@@ -519,12 +557,11 @@ class FEM_Input_Cube:
         if self.m_logger is not None:
             self.m_logger.info("set_ib done")
 
-
     def femat(self) -> None:
-        """ Subroutine that sets up the stiffness matrices, linear term in
-            voltages, and constant term C that appear in the total energy due
-            to the periodic boundary conditions.
-        """ 
+        """Subroutine that sets up the stiffness matrices, linear term in
+        voltages, and constant term C that appear in the total energy due
+        to the periodic boundary conditions.
+        """
         assert self.m_sigma is not None
         assert self.m_pix_tensor is not None
         assert self.m_ib is not None
@@ -560,37 +597,37 @@ class FEM_Input_Cube:
         for k in range(3):
             for j in range(3):
                 for i in range(3):
-                    x = float(i) / 2.
-                    y = float(j) / 2.
-                    z = float(k) / 2.
-                    # dndx means the negative derivative with respect to x of the shape 
+                    x = float(i) / 2.0
+                    y = float(j) / 2.0
+                    z = float(k) / 2.0
+                    # dndx means the negative derivative with respect to x of the shape
                     # matrix N (see manual, Sec. 2.2), dndy, dndz are similar.
-                    dndx: List = [0. for _ in range(8)]
+                    dndx: List = [0.0 for _ in range(8)]
                     dndy: List = deepcopy(dndx)
                     dndz: List = deepcopy(dndx)
                     # set dndx
-                    dndx[0] = - (1.0 - y) * (1.0 - z)
-                    dndx[1]= (1.0 - y) * (1.0 - z)
+                    dndx[0] = -(1.0 - y) * (1.0 - z)
+                    dndx[1] = (1.0 - y) * (1.0 - z)
                     dndx[2] = y * (1.0 - z)
-                    dndx[3] = - y * (1.0 - z)
-                    dndx[4] = - (1.0 - y) * z
+                    dndx[3] = -y * (1.0 - z)
+                    dndx[4] = -(1.0 - y) * z
                     dndx[5] = (1.0 - y) * z
                     dndx[6] = y * z
-                    dndx[7] = - y * z
+                    dndx[7] = -y * z
                     # set dndy
-                    dndy[0] = - (1.0 - x) * (1.0 - z)
-                    dndy[1] = - x * (1.0 - z)
+                    dndy[0] = -(1.0 - x) * (1.0 - z)
+                    dndy[1] = -x * (1.0 - z)
                     dndy[2] = x * (1.0 - z)
                     dndy[3] = (1.0 - x) * (1.0 - z)
-                    dndy[4] = - (1.0 - x) * z
-                    dndy[5] = - x * z
+                    dndy[4] = -(1.0 - x) * z
+                    dndy[5] = -x * z
                     dndy[6] = x * z
                     dndy[7] = (1.0 - x) * z
                     # set dndz
-                    dndz[0] = - (1.0 - x) * (1.0 - y)
-                    dndz[1] = - x * (1.0 - y)
-                    dndz[2] = - x * y
-                    dndz[3] = - (1.0 - x) * y
+                    dndz[0] = -(1.0 - x) * (1.0 - y)
+                    dndz[1] = -x * (1.0 - y)
+                    dndz[2] = -x * y
+                    dndz[3] = -(1.0 - x) * y
                     dndz[4] = (1.0 - x) * (1.0 - y)
                     dndz[5] = x * (1.0 - y)
                     dndz[6] = x * y
@@ -609,12 +646,15 @@ class FEM_Input_Cube:
                         # proper weight, and sum into dk, the stiffness matrix
                         for ii in range(8):
                             for jj in range(8):
-                                _sum = 0.
+                                _sum = 0.0
                                 for kk in range(3):
                                     for ll in range(3):
-                                        _sum += es[k][j][i][kk][ii] * self.m_sigma[ijk][kk][ll] \
-                                             * es[k][j][i][ll][jj]
-                                _ls[ii][jj] += g[i][j][k] * _sum / 216.
+                                        _sum += (
+                                            es[k][j][i][kk][ii]
+                                            * self.m_sigma[ijk][kk][ll]
+                                            * es[k][j][i][ll][jj]
+                                        )
+                                _ls[ii][jj] += g[i][j][k] * _sum / 216.0
             dk[ijk] = _ls
         # add 1.0e-16 because rounding errors may have accumulated and the value is
         # no longer positive definite.
@@ -629,7 +669,7 @@ class FEM_Input_Cube:
         nxy = nx * ny
         ns = nxy * nz
         b: List = np.zeros(ns).tolist()
-        c = 0.
+        c = 0.0
         # For all cases, correspondence between 0-7 finite element node labels
         # and 0-26 neighbor labels is:  1:ib[m][26],2:ib[m][2],3:ib[m][1],
         # 4:ib[m][0],5:ib[m][25],6:ib[m][18],7:ib[m][17],8:ib[m][16]
@@ -648,14 +688,14 @@ class FEM_Input_Cube:
         # x=nx face
         i = nx - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 in [1, 2, 5, 6]:
-                xn[i8] = -1. * self.m_ex * nx
+                xn[i8] = -1.0 * self.m_ex * nx
         for j in range(ny - 1):
             for k in range(nz - 1):
-                m = calc_m(i, j, k, nx, ny) # fix i
+                m = calc_m(i, j, k, nx, ny)  # fix i
                 for mm in range(8):
-                    _sum = 0.
+                    _sum = 0.0
                     for m8 in range(8):
                         _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                         c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -663,14 +703,14 @@ class FEM_Input_Cube:
         # y=ny face
         j = ny - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 in [2, 3, 6, 7]:
-                xn[i8] = -1. * self.m_ey * ny
+                xn[i8] = -1.0 * self.m_ey * ny
         for i in range(nx - 1):
             for k in range(nz - 1):
-                m = calc_m(i, j, k, nx, ny) # fix j
+                m = calc_m(i, j, k, nx, ny)  # fix j
                 for mm in range(8):
-                    _sum = 0.
+                    _sum = 0.0
                     for m8 in range(8):
                         _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                         c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -678,14 +718,14 @@ class FEM_Input_Cube:
         # z=nz face
         k = nz - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 in [4, 5, 6, 7]:
-                xn[i8] = -1. * self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ez * nz
         for i in range(nx - 1):
             for j in range(ny - 1):
-                m = calc_m(i, j, k, nx, ny) # fix k
+                m = calc_m(i, j, k, nx, ny)  # fix k
                 for mm in range(8):
-                    _sum = 0.
+                    _sum = 0.0
                     for m8 in range(8):
                         _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                         c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -694,17 +734,17 @@ class FEM_Input_Cube:
         i = nx - 1
         j = ny - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 in [1, 5]:
-                xn[i8] = -1. * self.m_ex * nx
+                xn[i8] = -1.0 * self.m_ex * nx
             if i8 in [3, 7]:
-                xn[i8] = -1. * self.m_ey * ny
+                xn[i8] = -1.0 * self.m_ey * ny
             if i8 in [2, 6]:
-                xn[i8] = -1. * self.m_ey * ny - self.m_ex * nx
+                xn[i8] = -1.0 * self.m_ey * ny - self.m_ex * nx
         for k in range(nz - 1):
-            m = calc_m(i, j, k, nx, ny) # fix i & j
+            m = calc_m(i, j, k, nx, ny)  # fix i & j
             for mm in range(8):
-                _sum = 0.
+                _sum = 0.0
                 for m8 in range(8):
                     _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                     c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -713,17 +753,17 @@ class FEM_Input_Cube:
         i = nx - 1
         k = nz - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 in [1, 2]:
-                xn[i8] = -1. * self.m_ex * nx
+                xn[i8] = -1.0 * self.m_ex * nx
             if i8 in [4, 7]:
-                xn[i8] = -1. * self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ez * nz
             if i8 in [5, 6]:
-                xn[i8] = -1. * self.m_ez * nz - self.m_ex * nx
+                xn[i8] = -1.0 * self.m_ez * nz - self.m_ex * nx
         for j in range(ny - 1):
-            m = calc_m(i, j, k, nx, ny) # fix i & k
+            m = calc_m(i, j, k, nx, ny)  # fix i & k
             for mm in range(8):
-                _sum = 0.
+                _sum = 0.0
                 for m8 in range(8):
                     _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                     c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -732,17 +772,17 @@ class FEM_Input_Cube:
         j = ny - 1
         k = nz - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 in [4, 5]:
-                xn[i8] = -1. * self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ez * nz
             if i8 in [2, 3]:
-                xn[i8] = -1. * self.m_ey * ny
+                xn[i8] = -1.0 * self.m_ey * ny
             if i8 in [6, 7]:
-                xn[i8] = -1. * self.m_ey * ny - self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ey * ny - self.m_ez * nz
         for i in range(nx - 1):
             m = calc_m(i, j, k, nx, ny)
             for mm in range(8):
-                _sum = 0.
+                _sum = 0.0
                 for m8 in range(8):
                     _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                     c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -752,24 +792,24 @@ class FEM_Input_Cube:
         j = ny - 1
         k = nz - 1
         for i8 in range(8):
-            xn[i8] = 0.
+            xn[i8] = 0.0
             if i8 == 1:
-                xn[i8] = -1. * self.m_ex * nx
+                xn[i8] = -1.0 * self.m_ex * nx
             if i8 == 3:
-                xn[i8] = -1. * self.m_ey * ny
+                xn[i8] = -1.0 * self.m_ey * ny
             if i8 == 4:
-                xn[i8] = -1. * self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ez * nz
             if i8 == 7:
-                xn[i8] = -1. * self.m_ey * ny - self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ey * ny - self.m_ez * nz
             if i8 == 5:
-                xn[i8] = -1. * self.m_ex * nx - self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ex * nx - self.m_ez * nz
             if i8 == 2:
-                xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny
+                xn[i8] = -1.0 * self.m_ex * nx - self.m_ey * ny
             if i8 == 6:
-                xn[i8] = -1. * self.m_ex * nx - self.m_ey * ny - self.m_ez * nz
+                xn[i8] = -1.0 * self.m_ex * nx - self.m_ey * ny - self.m_ez * nz
         m = calc_m(i, j, k, nx, ny)
         for mm in range(8):
-            _sum = 0.
+            _sum = 0.0
             for m8 in range(8):
                 _sum += xn[m8] * dk[self.m_pix[m]][m8][mm]
                 c += 0.5 * xn[m8] * dk[self.m_pix[m]][m8][mm] * xn[mm]
@@ -780,9 +820,8 @@ class FEM_Input_Cube:
         if self.m_logger is not None:
             self.m_logger.info("femat done")
 
-
     def get_pix_tensor(self) -> np.ndarray or None:
-        """ Getter for the pix in 5d shape.
+        """Getter for the pix in 5d shape.
 
         Returns:
             np.ndarray or None: 5d array of conductivity tensor. Each index indicate node.
@@ -794,9 +833,8 @@ class FEM_Input_Cube:
             return deepcopy(self.m_pix_tensor)
         return self.m_pix_tensor
 
-
     def get_dk(self) -> List or None:
-        """ Getter for the stiffness matrix in 3d shape.
+        """Getter for the stiffness matrix in 3d shape.
 
         Returns:
             List or None: Stiffness matrix described at pp.8 in Garboczi (1998). First
@@ -809,9 +847,8 @@ class FEM_Input_Cube:
             return deepcopy(self.m_dk)
         return self.m_dk
 
-
     def get_sigma(self) -> List or None:
-        """ Getter for the conductivity tensor in 3d shape.
+        """Getter for the conductivity tensor in 3d shape.
 
         Returns:
             List or None: 3d list of conductivity tensor adescribed at pp.6 in in Garboczi
@@ -823,9 +860,8 @@ class FEM_Input_Cube:
             return deepcopy(self.m_sigma)
         return self.m_sigma
 
-
     def get_ib(self) -> List or None:
-        """ Getter for the neighbor labelling list in 2d shape.
+        """Getter for the neighbor labelling list in 2d shape.
 
         Returns:
             List or None: 2d list of neighbor labelling described at pp.8 to 11 in Garboczi
@@ -841,9 +877,8 @@ class FEM_Input_Cube:
             return deepcopy(self.m_ib)
         return self.m_ib
 
-
     def get_pix(self) -> List or None:
-        """ Getter for the 1d list mapping the index of the conductivity tensor from the
+        """Getter for the 1d list mapping the index of the conductivity tensor from the
         index (m) of the one dimensional labbling scheme
 
         Returns:
@@ -855,9 +890,8 @@ class FEM_Input_Cube:
             return deepcopy(self.m_pix)
         return self.m_pix
 
-
     def get_ex(self) -> np.float64 or None:
-        """ Getter for the electric field in the x direction.
+        """Getter for the electric field in the x direction.
 
         Returns:
             np.float64 or None: Electrical field of x direction. The unit is volt/Δx
@@ -866,9 +900,8 @@ class FEM_Input_Cube:
         """
         return self.m_ex
 
-
     def get_ey(self) -> np.float64 or None:
-        """ Getter for the electric field in the y direction.
+        """Getter for the electric field in the y direction.
 
         Returns:
             np.float64 or None: Electrical field of y direction. The unit is volt/Δy
@@ -877,9 +910,8 @@ class FEM_Input_Cube:
         """
         return self.m_ey
 
-
     def get_ez(self) -> np.float64 or None:
-        """ Getter for the electric field in the z direction.
+        """Getter for the electric field in the z direction.
 
         Returns:
             np.float64 or None: Electrical field of z direction. Note that the unit is volt/Δz
@@ -888,9 +920,8 @@ class FEM_Input_Cube:
         """
         return self.m_ez
 
-
     def get_b(self) -> np.ndarray or None:
-        """ Getter for the coefficient matrix b
+        """Getter for the coefficient matrix b
 
         Returns:
             np.ndarray or None: Coefficient matrix described at pp.11 in Garboczi (1998).
@@ -900,7 +931,6 @@ class FEM_Input_Cube:
         if self.m_b is not None:
             return deepcopy(self.m_b)
         return self.m_b
-
 
     def get_c(self) -> np.float64 or None:
         """Getter for the constant of the energy loss at the boundery.
@@ -913,7 +943,7 @@ class FEM_Input_Cube:
 
 
 def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
-    """ Calculate the one dimensional labbeling index (m)
+    """Calculate the one dimensional labbeling index (m)
         m is calculated as follows:
             m=nx*ny*(k-1)+nx*(j-1)+i
 
@@ -947,10 +977,9 @@ def calc_ijk(m: int, nx: int, ny: int) -> Tuple[int]:
     return i, j, k
 
 
-def calc_rotation_matrix(_x: float = None,
-                         _y: float = None,
-                         _z: float = None,
-                         seed: int = None) -> np.ndarray:
+def calc_rotation_matrix(
+    _x: float = None, _y: float = None, _z: float = None, seed: int = None
+) -> np.ndarray:
     """Calculate rotation matrix
 
     Args:
@@ -965,26 +994,38 @@ def calc_rotation_matrix(_x: float = None,
     if seed is not None:
         random.seed(seed)
     if _x is None:
-        _x: float = random.uniform(0., 2.0 * np.pi)
+        _x: float = random.uniform(0.0, 2.0 * np.pi)
     if _y is None:
-        _y: float = random.uniform(0., 2.0 * np.pi)
+        _y: float = random.uniform(0.0, 2.0 * np.pi)
     if _z is None:
-        _z: float = random.uniform(0., 2.0 * np.pi)
+        _z: float = random.uniform(0.0, 2.0 * np.pi)
 
     # around x-axis
-    _x_rot = np.array([[1., 0., 0.],
-                       [0., np.cos(_x), -1. * np.sin(_x)],
-                       [0., np.sin(_x), np.cos(_x)]],
-                       dtype=np.float64)
+    _x_rot = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, np.cos(_x), -1.0 * np.sin(_x)],
+            [0.0, np.sin(_x), np.cos(_x)],
+        ],
+        dtype=np.float64,
+    )
     # around y-axis
-    _y_rot = np.array([[np.cos(_y), 0., np.sin(_y)],
-                       [0., 1., 0.],
-                       [-1. * np.sin(_y), 0., np.cos(_y)]],
-                       dtype=np.float64)
+    _y_rot = np.array(
+        [
+            [np.cos(_y), 0.0, np.sin(_y)],
+            [0.0, 1.0, 0.0],
+            [-1.0 * np.sin(_y), 0.0, np.cos(_y)],
+        ],
+        dtype=np.float64,
+    )
     # around z-axis
-    _z_rot = np.array([[np.cos(_z), -1. * np.sin(_z), 0.],
-                       [np.sin(_z), np.cos(_z), 0.],
-                       [0., 0., 1.]],
-                       dtype=np.float64)
+    _z_rot = np.array(
+        [
+            [np.cos(_z), -1.0 * np.sin(_z), 0.0],
+            [np.sin(_z), np.cos(_z), 0.0],
+            [0.0, 0.0, 1.0],
+        ],
+        dtype=np.float64,
+    )
     _rot = np.matmul(np.matmul(_x_rot, _y_rot), _z_rot)
     return _rot

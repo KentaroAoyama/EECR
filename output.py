@@ -6,23 +6,25 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 
 
-def plot_smec_frac_cond(smectite_frac_ls: List[float],
-                        cond_ls: List[float],
-                        save_pth: str,
-                        label_val_ls: List[float or int] = None,
-                        error_bar_ls: List = None,
-                        ):
+def plot_smec_frac_cond(
+    smectite_frac_ls: List[float],
+    cond_ls: List[float],
+    save_pth: str,
+    label_val_ls: List[float or int] = None,
+    error_bar_ls: List = None,
+):
     assert len(smectite_frac_ls) == len(cond_ls)
     if label_val_ls is not None:
-        assert len(smectite_frac_ls) == len(label_val_ls),\
-        f"len(smectite_frac_ls): {len(smectite_frac_ls)}, len(label_val): {len(label_val_ls)}"
+        assert len(smectite_frac_ls) == len(
+            label_val_ls
+        ), f"len(smectite_frac_ls): {len(smectite_frac_ls)}, len(label_val): {len(label_val_ls)}"
     assert path.exists(path.dirname(save_pth))
 
     if label_val_ls is None:
-        label_val_ls = [0.] * len(smectite_frac_ls)
+        label_val_ls = [0.0] * len(smectite_frac_ls)
 
     if error_bar_ls is None:
-        error_bar_ls = [0.] * len(smectite_frac_ls)
+        error_bar_ls = [0.0] * len(smectite_frac_ls)
 
     label_xy: Dict = {}
     for smec_frac, _cond, label_val in zip(smectite_frac_ls, cond_ls, label_val_ls):
@@ -40,8 +42,10 @@ def plot_smec_frac_cond(smectite_frac_ls: List[float],
             continue
         if float("nan") in _y:
             continue
-        
-        ax.errorbar(_x, _y, label=str(_label), color=cm.jet(float(i)/len(keys_sorted)))
+
+        ax.errorbar(
+            _x, _y, label=str(_label), color=cm.jet(float(i) / len(keys_sorted))
+        )
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
     ax.set_xlabel("Smectite Fraction")
     ax.set_ylabel("Conductivity (S/m)")
@@ -52,17 +56,18 @@ def plot_smec_frac_cond(smectite_frac_ls: List[float],
     plt.close()
 
 
-def plot_curr_all(currx_ls: List,
-                  curry_ls: List,
-                  currz_ls: List,
-                  axis: str,
-                  edge_length: float,
-                  out_dir: str,):
+def plot_curr_all(
+    currx_ls: List,
+    curry_ls: List,
+    currz_ls: List,
+    axis: str,
+    edge_length: float,
+    out_dir: str,
+):
     currx_arr: np.ndarray = np.array(currx_ls)
     curry_arr: np.ndarray = np.array(curry_ls)
     currz_arr: np.ndarray = np.array(currz_ls)
-    assert currx_arr.shape == curry_arr.shape == \
-        currz_arr.shape
+    assert currx_arr.shape == curry_arr.shape == currz_arr.shape
     assert axis in ("x", "y", "z")
 
     # transpose
@@ -76,8 +81,10 @@ def plot_curr_all(currx_ls: List,
         currz_arr = np.transpose(currz_arr, (1, 2, 0))
 
     ax0, ax1, ax2 = currx_arr.shape
-    grid_x, grid_y = np.meshgrid(np.array([edge_length * i for i in range(ax1)]),
-                                 np.array([edge_length * i for i in range(ax2)]))
+    grid_x, grid_y = np.meshgrid(
+        np.array([edge_length * i for i in range(ax1)]),
+        np.array([edge_length * i for i in range(ax2)]),
+    )
 
     # path
     dir_x: str = path.join(out_dir, "x")
@@ -126,13 +133,15 @@ def plot_curr_all(currx_ls: List,
         __plot_current_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
 
 
-def __plot_current_grid(grid_x: np.ndarray,
-                        grid_y: np.ndarray,
-                        val: np.ndarray,
-                        label_x: str,
-                        label_y: str,
-                        title: str,
-                        save_pth: str) -> None:
+def __plot_current_grid(
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+    val: np.ndarray,
+    label_x: str,
+    label_y: str,
+    title: str,
+    save_pth: str,
+) -> None:
     fig, ax = plt.subplots()
     mappable = ax.pcolormesh([grid_x, grid_y], val)
     ax.set_xlabel(label_x)
@@ -146,17 +155,18 @@ def __plot_current_grid(grid_x: np.ndarray,
     fig.savefig(save_pth, dpi=100, bbox_inches="tight")
 
 
-def plot_cond_all(condx_ls: List,
-                  condy_ls: List,
-                  condz_ls: List,
-                  axis: str,
-                  edge_length: float,
-                  out_dir: str,):
+def plot_cond_all(
+    condx_ls: List,
+    condy_ls: List,
+    condz_ls: List,
+    axis: str,
+    edge_length: float,
+    out_dir: str,
+):
     condx_arr: np.ndarray = np.array(condx_ls)
     condy_arr: np.ndarray = np.array(condy_ls)
     condz_arr: np.ndarray = np.array(condz_ls)
-    assert condx_arr.shape == condy_arr.shape == \
-        condz_arr.shape
+    assert condx_arr.shape == condy_arr.shape == condz_arr.shape
     assert axis in ("x", "y", "z")
 
     # transpose
@@ -170,8 +180,10 @@ def plot_cond_all(condx_ls: List,
         condz_arr = np.transpose(condz_arr, (1, 2, 0))
 
     ax0, ax1, ax2 = condx_arr.shape
-    grid_x, grid_y = np.meshgrid(np.array([edge_length * i for i in range(ax1)]),
-                                 np.array([edge_length * i for i in range(ax2)]))
+    grid_x, grid_y = np.meshgrid(
+        np.array([edge_length * i for i in range(ax1)]),
+        np.array([edge_length * i for i in range(ax2)]),
+    )
 
     # path
     dir_x: str = path.join(out_dir, "x")
@@ -220,13 +232,15 @@ def plot_cond_all(condx_ls: List,
         __plot_cond_grid(grid_x, grid_y, _val, label_x, label_y, title, fpth)
 
 
-def __plot_cond_grid(grid_x: np.ndarray,
-                     grid_y: np.ndarray,
-                     val: np.ndarray,
-                     label_x: str,
-                     label_y: str,
-                     title: str,
-                     save_pth: str) -> None:
+def __plot_cond_grid(
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+    val: np.ndarray,
+    label_x: str,
+    label_y: str,
+    title: str,
+    save_pth: str,
+) -> None:
     fig, ax = plt.subplots()
     mappable = ax.pcolormesh([grid_x, grid_y], val)
     ax.set_xlabel(label_x)

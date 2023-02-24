@@ -9,20 +9,20 @@ import numpy as np
 import pickle
 from solver_input import FEM_Input_Cube, calc_m
 
-class FEM_Cube():
-    """ Calculate effective conductivity in systems with cubic elements.
-        This program is based on Garboczi (1998).
 
-        Reference: Garboczi, E. (1998), Finite Element and Finite Difference Programs for
-                        Computing the Linear Electric and Elastic Properties of Digital
-                        Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
-                        National Institute of Standards and Technology, Gaithersburg, MD,
-                        [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
-                        (Accessed January 20, 2023)
+class FEM_Cube:
+    """Calculate effective conductivity in systems with cubic elements.
+    This program is based on Garboczi (1998).
+
+    Reference: Garboczi, E. (1998), Finite Element and Finite Difference Programs for
+                    Computing the Linear Electric and Elastic Properties of Digital
+                    Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
+                    National Institute of Standards and Technology, Gaithersburg, MD,
+                    [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
+                    (Accessed January 20, 2023)
     """
-    def __init__(self,
-                 fem_input: FEM_Input_Cube = None,
-                 logger: Logger = None):
+
+    def __init__(self, fem_input: FEM_Input_Cube = None, logger: Logger = None):
         """Initialize FEM_Cube class
 
         Args:
@@ -51,19 +51,18 @@ class FEM_Cube():
         self.m_cond_y: float = None
         self.m_cond_z: float = None
 
-
     def __init_default(self) -> None:
-        """ Initialize the following member variables:
-                self.m_u (np.ndarray): 1d array of the electrical potential (shape is m).
-                self.m_a (np.ndarray): 2d array of global matrix (m rows and 27 colums)
-                    described at pp.11 to 12 in Garboczi (1998). By computing the inner
-                    product with self.m_u[m] in each row self.a[m], the gradient vector can
-                    be computed.
-                self.m_gb (np.ndarray): 1d array of the gradient: ∂En/∂um described at pp.11
-                    in Garboczi (1998).
-                self.m_u_tot (np.float64): Total electrical energy held by the system.
-                self.m_gg (np.float64): The sum of the self.m_gb**2.
-                self.m_h (np.ndarray): Conjugate gradient vector (shape is m).
+        """Initialize the following member variables:
+        self.m_u (np.ndarray): 1d array of the electrical potential (shape is m).
+        self.m_a (np.ndarray): 2d array of global matrix (m rows and 27 colums)
+            described at pp.11 to 12 in Garboczi (1998). By computing the inner
+            product with self.m_u[m] in each row self.a[m], the gradient vector can
+            be computed.
+        self.m_gb (np.ndarray): 1d array of the gradient: ∂En/∂um described at pp.11
+            in Garboczi (1998).
+        self.m_u_tot (np.float64): Total electrical energy held by the system.
+        self.m_gg (np.float64): The sum of the self.m_gb**2.
+        self.m_h (np.ndarray): Conjugate gradient vector (shape is m).
         """
         # m_u
         pix_tensor: np.ndarray = self.fem_input.get_pix_tensor()
@@ -90,10 +89,7 @@ class FEM_Cube():
             self.m_logger.info("Expand u 2d")
         u_2d: List = [None for _ in range(self.m_u.shape[0])]
         for m in range(nxyz):
-            self.__expand_2d(deepcopy(self.m_u),
-                             u_2d,
-                             m,
-                             deepcopy(ib))
+            self.__expand_2d(deepcopy(self.m_u), u_2d, m, deepcopy(ib))
         assert None not in u_2d
         u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
         self.m_u2d = u_2d
@@ -122,10 +118,7 @@ class FEM_Cube():
         # h_2d
         h_2d: List = [None for _ in range(nxyz)]
         for m in range(nxyz):
-            self.__expand_2d(deepcopy(self.m_h),
-                             h_2d,
-                             m,
-                             deepcopy(ib))
+            self.__expand_2d(deepcopy(self.m_h), h_2d, m, deepcopy(ib))
         assert None not in h_2d
         self.m_h2d = np.array(h_2d, dtype=np.float64)
 
@@ -135,9 +128,8 @@ class FEM_Cube():
         if self.m_logger is not None:
             self.m_logger.info("__init__ (solver) done")
 
-
     def run(self, kmax: int = 40, ldemb: int = 50, gtest: float = None) -> None:
-        """ Calculate the distribution of electrical potentials that minimize the electrical
+        """Calculate the distribution of electrical potentials that minimize the electrical
         energy of the system using the conjugate gradient method.
 
         Args:
@@ -168,8 +160,10 @@ class FEM_Cube():
             self.__calc_energy()
             cou += 1
             if cou > kmax:
-                _msg = f"Not sufficiently convergent.\nself.m_gg: {self.m_gg}," \
+                _msg = (
+                    f"Not sufficiently convergent.\nself.m_gg: {self.m_gg},"
                     f"gtest: {gtest}"
+                )
                 warn(_msg)
                 if self.m_logger is not None:
                     self.m_logger.warn(_msg)
@@ -185,9 +179,8 @@ class FEM_Cube():
             self.m_logger.debug(f"cond y: {self.m_cond_y}")
             self.m_logger.debug(f"cond z: {self.m_cond_z}")
 
-
     def __set_a_m(self, a: List, m: int, ib: List, dk: List, pix: List) -> List:
-        """ Set self.m_a[m] value
+        """Set self.m_a[m] value
 
         Args:
             a (List): 2d list of global matrix A.
@@ -199,14 +192,34 @@ class FEM_Cube():
             List: 1d list of a[m]
         """
         ib_m: List = ib[m]
-        am: List = [0. for _ in range(27)]
-        am[0] = dk[pix[ib_m[26]]][0][3] + dk[pix[ib_m[6]]][1][2] + dk[pix[ib_m[24]]][4][7] + dk[pix[ib_m[14]]][5][6]
+        am: List = [0.0 for _ in range(27)]
+        am[0] = (
+            dk[pix[ib_m[26]]][0][3]
+            + dk[pix[ib_m[6]]][1][2]
+            + dk[pix[ib_m[24]]][4][7]
+            + dk[pix[ib_m[14]]][5][6]
+        )
         am[1] = dk[pix[ib_m[26]]][0][2] + dk[pix[ib_m[24]]][4][6]
-        am[2] = dk[pix[ib_m[26]]][0][1] + dk[pix[ib_m[4]]][3][2] + dk[pix[ib_m[12]]][7][6] + dk[pix[ib_m[24]]][4][5]
+        am[2] = (
+            dk[pix[ib_m[26]]][0][1]
+            + dk[pix[ib_m[4]]][3][2]
+            + dk[pix[ib_m[12]]][7][6]
+            + dk[pix[ib_m[24]]][4][5]
+        )
         am[3] = dk[pix[ib_m[4]]][3][1] + dk[pix[ib_m[12]]][7][5]
-        am[4] = dk[pix[ib_m[5]]][2][1] + dk[pix[ib_m[4]]][3][0] + dk[pix[ib_m[13]]][5][6] + dk[pix[ib_m[12]]][7][4]
+        am[4] = (
+            dk[pix[ib_m[5]]][2][1]
+            + dk[pix[ib_m[4]]][3][0]
+            + dk[pix[ib_m[13]]][5][6]
+            + dk[pix[ib_m[12]]][7][4]
+        )
         am[5] = dk[pix[ib_m[5]]][2][0] + dk[pix[ib_m[13]]][6][4]
-        am[6] = dk[pix[ib_m[5]]][2][3] + dk[pix[ib_m[6]]][1][0] + dk[pix[ib_m[13]]][6][7] + dk[pix[ib_m[14]]][5][4]
+        am[6] = (
+            dk[pix[ib_m[5]]][2][3]
+            + dk[pix[ib_m[6]]][1][0]
+            + dk[pix[ib_m[13]]][6][7]
+            + dk[pix[ib_m[14]]][5][4]
+        )
         am[7] = dk[pix[ib_m[6]]][1][3] + dk[pix[ib_m[14]]][5][7]
         am[8] = dk[pix[ib_m[24]]][4][3] + dk[pix[ib_m[14]]][5][2]
         am[9] = dk[pix[ib_m[24]]][4][2]
@@ -224,15 +237,32 @@ class FEM_Cube():
         am[21] = dk[pix[ib_m[5]]][2][4]
         am[22] = dk[pix[ib_m[5]]][2][7] + dk[pix[ib_m[6]]][1][4]
         am[23] = dk[pix[ib_m[6]]][1][7]
-        am[24] = dk[pix[ib_m[13]]][6][2] + dk[pix[ib_m[12]]][7][3] + dk[pix[ib_m[14]]][5][1] + dk[pix[ib_m[24]]][4][0]
-        am[25] = dk[pix[ib_m[5]]][2][6] + dk[pix[ib_m[4]]][3][7] + dk[pix[ib_m[26]]][0][4] + dk[pix[ib_m[6]]][1][5]
-        am[26] = dk[pix[ib_m[26]]][0][0] + dk[pix[ib_m[6]]][1][1] + dk[pix[ib_m[5]]][2][2] + dk[pix[ib_m[4]]][3][3] \
-                    + dk[pix[ib_m[24]]][4][4] + dk[pix[ib_m[14]]][5][5] + dk[pix[ib_m[13]]][6][6] + dk[pix[ib_m[12]]][7][7]
+        am[24] = (
+            dk[pix[ib_m[13]]][6][2]
+            + dk[pix[ib_m[12]]][7][3]
+            + dk[pix[ib_m[14]]][5][1]
+            + dk[pix[ib_m[24]]][4][0]
+        )
+        am[25] = (
+            dk[pix[ib_m[5]]][2][6]
+            + dk[pix[ib_m[4]]][3][7]
+            + dk[pix[ib_m[26]]][0][4]
+            + dk[pix[ib_m[6]]][1][5]
+        )
+        am[26] = (
+            dk[pix[ib_m[26]]][0][0]
+            + dk[pix[ib_m[6]]][1][1]
+            + dk[pix[ib_m[5]]][2][2]
+            + dk[pix[ib_m[4]]][3][3]
+            + dk[pix[ib_m[24]]][4][4]
+            + dk[pix[ib_m[14]]][5][5]
+            + dk[pix[ib_m[13]]][6][6]
+            + dk[pix[ib_m[12]]][7][7]
+        )
         a[m] = am
 
-
     def __expand_2d(self, ls1d: List, ls2d: List, m: int, ib: List) -> None:
-        """ Convert a 1d list with m elements to an m x 27 2d list
+        """Convert a 1d list with m elements to an m x 27 2d list
 
         Args:
             ls1d (List): 1d list
@@ -240,12 +270,11 @@ class FEM_Cube():
             m (int): Global 1d lablling index.
             ib (List): Neighbor labeling list
         """
-        hm = [0. for _ in range(27)]
+        hm = [0.0 for _ in range(27)]
         ib_m: List = ib[m]
         for i in range(27):
             hm[i] = ls1d[ib_m[i]]
         ls2d[m] = hm
-
 
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.m_gb), the amount of electrostatic energy (self.m_u_tot),
@@ -266,9 +295,8 @@ class FEM_Cube():
         self.m_u_tot = u_tot
         self.m_gb = gb + b
 
-
     def __calc_dembx(self, ldemb: int, gtest: float) -> None:
-        """ Function that carries out the conjugate gradient relaxation process.
+        """Function that carries out the conjugate gradient relaxation process.
 
         Args:
             ldemb (int): Maximum number of conjugate gradient iterations.
@@ -287,7 +315,7 @@ class FEM_Cube():
             self.m_h2d = np.array(h_2d, dtype=np.float64)
 
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
-            ah: np.ndarray = np.sum(self.m_a * self.m_h2d, axis=1) # 1d
+            ah: np.ndarray = np.sum(self.m_a * self.m_h2d, axis=1)  # 1d
             hah: float = np.dot(self.m_h, ah)
             lamda = self.m_gg / hah
 
@@ -308,9 +336,8 @@ class FEM_Cube():
             gamma = self.m_gg / gglast
             self.m_h = self.m_gb + gamma * self.m_h
 
-
     def __calc_current_and_cond(self):
-        """ Calculate and update macro currents (self.m_currx_ave, m_curry_ave, m_currz_ave)
+        """Calculate and update macro currents (self.m_currx_ave, m_curry_ave, m_currz_ave)
         and micro currents (self.m_currx_m, m_curry_m, m_currz_m) and macro conductivity
         (self.m_cond_x, self.m_cond_y, self.m_cond_z). af is the average field matrix, average
         field in a pixel is af*u(pixel). The matrix af relates the nodal voltages to the
@@ -387,7 +414,7 @@ class FEM_Cube():
                         uu[6] -= ez * nz
                         uu[7] -= ez * nz
                     # cur1, cur2, cur3 are the local currents averaged over the pixel
-                    cur1, cur2, cur3 = 0., 0., 0.
+                    cur1, cur2, cur3 = 0.0, 0.0, 0.0
                     for n in range(8):
                         for nn in range(3):
                             _e = af[nn][n] * uu[n]
@@ -416,84 +443,64 @@ class FEM_Cube():
         self.m_cond_y = curry_ave / ey
         self.m_cond_z = currz_ave / ez
 
-
     # getters methods for member variables
     # pylint: disable=missing-docstring
     def get_fem_input(self) -> None or FEM_Input_Cube:
         return deepcopy(self.fem_input)
 
-
     def get_logger(self) -> None or Logger:
         return deepcopy(self.m_logger)
-
 
     def get_u(self) -> None or np.ndarray:
         return deepcopy(self.m_u)
 
-
     def get_u2d(self):
         return deepcopy(self.m_u2d)
 
-    
     def get_a(self):
         return deepcopy(self.m_a)
-
 
     def get_gb(self):
         return deepcopy(self.m_gb)
 
-    
     def get_u_tot(self):
         return deepcopy(self.m_u_tot)
 
-    
     def get_gg(self):
         return deepcopy(self.m_gg)
-
 
     def get_h(self):
         return deepcopy(self.m_h)
 
-    
     def get_h2d(self):
         return deepcopy(self.m_h2d)
 
-    
     def get_cuurx(self):
         return deepcopy(self.m_currx_m)
 
-    
     def get_cuury(self):
         return deepcopy(self.m_curry_m)
-
 
     def get_cuurz(self):
         return deepcopy(self.m_currz_m)
 
-
     def get_currx_ave(self):
         return deepcopy(self.m_currx_ave)
-
 
     def get_curry_ave(self):
         return deepcopy(self.m_curry_ave)
 
-    
     def get_currz_ave(self):
         return deepcopy(self.m_currz_ave)
- 
 
     def get_cond_x(self):
         return deepcopy(self.m_cond_x)
 
-    
     def get_cond_y(self):
         return deepcopy(self.m_cond_y)
 
-
     def get_cond_z(self):
         return deepcopy(self.m_cond_z)
-
 
     def save(self, _pth: str) -> None:
         """Save FEM_Cube class as pickle
@@ -501,5 +508,5 @@ class FEM_Cube():
         Args:
             _pth (str): path to save
         """
-        with open(_pth, 'wb') as pkf:
+        with open(_pth, "wb") as pkf:
             pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)

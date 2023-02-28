@@ -5,8 +5,8 @@ from copy import deepcopy
 from logging import Logger
 from warnings import warn
 
-import numpy as np
 import pickle
+import numpy as np
 from solver_input import FEM_Input_Cube, calc_m
 
 

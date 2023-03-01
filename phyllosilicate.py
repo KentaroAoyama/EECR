@@ -97,23 +97,23 @@ class Phyllosilicate:
 
         Args:
             temperature (float): temperature (unit: K).
-            ion_props (Dict): key is ionic species (Na, Cl, etc.), and
-                value is properties of dict. Check ion_props_default in constant.py for details.
-            activities (Dict): key is ionic species (Na, Cl, etc.), and
+            ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict. Check ion_props_default in constant.py for details.
+            activities (Dict): Keys are ionic species (Na, Cl, etc.), and
                 value is activity (unit: Mol).
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            gamma_1 (float): surface site densities of aluminol (unit: sites/nm2).
-            gamma_2 (float): surface site densities of sianol (unit: sites/nm2).
-            gamma_3 (float): surface site densities of >Si-O-Al< (unit: sites/nm2).
-            qi (float): layer charge density (charge/nm2).
-            potential_0 (float, optional): surface potential (unit: V).
-            potential_stern (float, optional): stern plane potential (unit: V).
-            potential_zeta (float, optional): zeta plane potential (unit: V).
-            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
-            charge_0 (float, optional): charges in surface layer (unit: C/m3).
-            charge_stern (float, optional): charges in stern layer (unit: C/m3).
-            charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
+            gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
+            gamma_2 (float): Surface site densities of sianol (unit: sites/nm2).
+            gamma_3 (float): Surface site densities of >Si-O-Al< (unit: sites/nm2).
+            qi (float): Layer charge density (charge/nm2).
+            potential_0 (float, optional): Surface potential (unit: V).
+            potential_stern (float, optional): Stern plane potential (unit: V).
+            potential_zeta (float, optional): Zeta plane potential (unit: V).
+            potential_r (float, optional): Potential at the position truncated inside the inter layer (unit: V).
+            charge_0 (float, optional): Charges in surface layer (unit: C/m3).
+            charge_stern (float, optional): Charges in stern layer (unit: C/m3).
+            charge_zeta (float, optional): Charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
             cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m).
             logger (Logger): Logger for debugging.

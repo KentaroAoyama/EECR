@@ -11,8 +11,6 @@ import iapws
 import constants as const
 
 
-# TODO: write docstring
-
 # Set the ionic radius and the diffusion coefficient in solution at infinite dilution
 # based on TABLE 1 in Roger et al. (2009)
 Species: IntEnum = const.Species
@@ -24,105 +22,95 @@ msa_props: Dict[str, Dict] = {
 
 def __calc_pn(
     __gamma: float,
-    _ion_props: Dict,
+    _msa_props: Dict,
 ) -> float:
     """Calculate Pn in Roger et al. (2009) by solving eq.(19)
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
-        _ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict. Check ion_props_default in constant.py for details.
+        _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
 
     Returns:
         float: Pn
     """
-    _na: float = const.AVOGADRO_CONST
-    _omega: float = __calc_omega(__gamma, _ion_props)
+    _omega: float = __calc_omega(__gamma, _msa_props)
     _sum: float = 0.0
-    for _s, _prop in _ion_props.items():
-        _n: float = _prop["Concentration"] * _na * 1000.0
-        _z: float = _prop["Valence"]
-        _sigma = msa_props[_s]["radius"] * 2.0
+    for _, _prop in _msa_props.items():
+        _n: float = _prop["n"]
+        _z: float = _prop["z"]
+        _sigma = _prop["radius"] * 2.0
         _sum += (_n * _sigma * _z) / (1.0 + __gamma * _sigma)
     return _sum / _omega
 
 
 def __calc_omega(
     __gamma: float,
-    ion_props: Dict,
+    _msa_props: Dict,
 ) -> float:
     """Calculate Ω in Roger et al. (2009) by solving eq.(20).
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
-        ion_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict. Check ion_props_default in constant.py for details.
+        _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
 
     Returns:
         float: Ω
     """
-    _na: float = const.AVOGADRO_CONST
-    _delta: float = __calc_delta(ion_props)
+    _delta: float = __calc_delta(_msa_props)
     _sum: float = 0.0
-    for _s, _prop in ion_props.items():
-        if _s in (Species.H.name, Species.OH.name):
-            continue
-        _n: float = _prop["Concentration"] * _na * 1000.0
-        _sigma = msa_props[_s]["radius"] * 2.0
+    for _, _prop in _msa_props.items():
+        _n: float = _prop["n"]
+        _sigma = _prop["radius"] * 2.0
         _sum += (_n * _sigma**3) / (1.0 + __gamma * _sigma)
     return 1.0 + (pi / (2.0 * _delta)) * _sum
 
 
 def __calc_delta(
-    ion_props: Dict,
+    _msa_props: Dict,
 ) -> float:
     """Calculate Δ in in Roger et al. (2009) by solving eq.(21).
 
     Args:
-        ion_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict. Check ion_props_default in constant.py for details.
+        _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
 
     Returns:
         float: Δ
     """
-    _na: float = const.AVOGADRO_CONST
     _sum: float = 0.0
-    for _s, _prop in ion_props.items():
-        if _s in (Species.H.name, Species.OH.name):
-            continue
-        _n: float = _prop["Concentration"] * _na * 1000.0
-        _sigma = msa_props[_s]["radius"] * 2.0
+    for _, _prop in _msa_props.items():
+        _n: float = _prop["n"]
+        _sigma = _prop["radius"] * 2.0
         _sum += _n * _sigma**3
     return 1.0 - 6.0 / pi * _sum
 
 
-def __calc_eq18(__gamma: float, ion_props: Dict, temperature: float) -> float:
+def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float) -> float:
     """Left hand side - Right hand side of eq.(18) in Roger et al. (2009).
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
-        ion_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict. Check ion_props_default in constant.py for details.
-        temperature (float): Absolute temperature (K)
+        _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        _t (float): Absolute temperature (K)
 
     Returns:
         float: Left hand side - Right hand side of eq.(18) in Roger et al. (2009).
     """
     _e: float = const.ELEMENTARY_CHARGE
-    _dielec_water: float = const.calc_dielectric_const_water(temperature)
+    _dielec_water: float = const.calc_dielectric_const_water(_t)
     _kb: float = const.BOLTZMANN_CONST
-    _na: float = const.AVOGADRO_CONST
     left = 4.0 * __gamma**2
-    r_coeff: float = _e**2 / (_dielec_water * _kb * temperature)
-    _pn: float = __calc_pn(__gamma, ion_props)
-    _delta: float = __calc_delta(ion_props)
+    r_coeff: float = _e**2 / (_dielec_water * _kb * _t)
+    _pn: float = __calc_pn(__gamma, _msa_props)
+    _delta: float = __calc_delta(_msa_props)
     _sum: float = 0.0
-    for _s, _props in ion_props.items():
-        if _s in (Species.H.name, Species.OH.name):
-            continue
-        _n = _props["Concentration"] * _na * 1000.0
-        _z = _props["Valence"]
-        _sigma = msa_props[_s]["radius"] * 2.0
+    for _, _props in _msa_props.items():
+        _n = _props["n"]
+        _z = _props["z"]
+        _sigma = _props["radius"] * 2.0
         _sum += (
             _n
             * (
@@ -135,42 +123,64 @@ def __calc_eq18(__gamma: float, ion_props: Dict, temperature: float) -> float:
     return left - right
 
 
-def __calc_gamma(ion_props: Dict, temperature: float) -> float:
-    """Calculate Γ in Roger et al. (2009). Solve eq.(18) by bisection method.
+def __calc_gamma(_msa_props: Dict, _t: float) -> float:
+    """Calculate Γ in Roger et al. (2009). Solving eq.(18) by bisection method.
 
     Args:
-        ion_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict. Check ion_props_default in constant.py for details.
-        temperature (float): Absolute temperature (K)
+        _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        _t (float): Absolute temperature (K)
 
     Returns:
         float: Γ
     """
     # dissolved chemical species should not exceed 3
     _cou: int = 0
-    for _s in ion_props:
+    for _s in _msa_props:
         if _s in ("H", "OH"):
             continue
         _cou += 1
     assert _cou <= 4
-    __callback = partial(__calc_eq18, ion_props=ion_props, temperature=temperature)
+    __callback = partial(__calc_eq18, _msa_props=_msa_props, _t=_t)
     return bisect(__callback, 0.0, 1.0e10)
 
 
-def __calc_di(gamma: float, pn: float, delta: float, sigma: float, z: float) -> float:
-    r1 = gamma * z / (1.0 + gamma * sigma)
-    r2 = pi / (2.0 * delta) * pn * sigma / (1.0 + gamma * sigma)
-    return r1 + r2
+def __calc_di(_gamma: float, _pn: float, _delta: float, _sigma: float, _z: float) -> float:
+    """Calculate Di in Roger et al. (2009)
+
+    Args:
+        _gamma (float): Γ in Roger et al. (2009).
+        _pn (float): Pn in Roger et al. (2009).
+        _delta (float): Δ in Roger et al. (2009).
+        _sigma (float): σ in Roger et al. (2009).
+        _z (float): z in Roger et al. (2009).
+
+    Returns:
+        float: Di
+    """
+    _r1 = _gamma * _z / (1.0 + _gamma * _sigma)
+    _r2 = pi / (2.0 * _delta) * _pn * _sigma / (1.0 + _gamma * _sigma)
+    return _r1 + _r2
 
 
-def __calc_dvhydi(_ion_props: Dict, _msa_props: Dict, _t: float, species: str) -> float:
+def __calc_dvhydi(_msa_props: Dict, _t: float, _s: str) -> float:
+    """Calculate δdhydi in Roger et al. (2009)
+
+    Args:
+        _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        _t (float): Absolute temperature (K)
+        _s (str): Chemical species (names of const.Species)
+
+    Returns:
+        float: δdhydi
+    """
     _e: float = const.ELEMENTARY_CHARGE
-    _na: float = const.AVOGADRO_CONST
-    _gamma: float = __calc_gamma(_ion_props, _t)
-    _pn: float = __calc_pn(_gamma, _ion_props)
-    _delta: float = __calc_delta(_ion_props)
-    _z = _ion_props[species]["Valence"]
-    _sigma = _msa_props[species]["radius"] * 2.0
+    _gamma: float = __calc_gamma(_msa_props, _t)
+    _pn: float = __calc_pn(_gamma, _msa_props)
+    _delta: float = __calc_delta(_msa_props)
+    _z = _msa_props[_s]["z"]
+    _sigma = _msa_props[_s]["radius"] * 2.0
     _di: float = __calc_di(_gamma, _pn, _delta, _sigma, _z)
     # calculate viscosity
     water = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=_t)
@@ -178,10 +188,10 @@ def __calc_dvhydi(_ion_props: Dict, _msa_props: Dict, _t: float, species: str) -
     _eta0: float = iapws._iapws._Viscosity(water.rho, T=_t)
     # calculate 2nd and 3rd term
     r2_sum, r3_sum = 0.0, 0.0
-    for _s, _props in _ion_props.items():
-        _n: float = _props["Concentration"] * _na * 1000.0
-        _z: float = _props["Valence"]
-        _sigma: float = _msa_props[_s]["radius"] * 2.0
+    for _s, _prop in _msa_props.items():
+        _n: float = _prop["n"]
+        _z: float = _prop["z"]
+        _sigma: float = _prop["radius"] * 2.0
         _dj: float = __calc_di(_gamma, _pn, _delta, _sigma, _z)
         r2_sum += _n * _z * _sigma**2
         r3_sum += _n * _sigma**3 * _dj
@@ -203,6 +213,22 @@ def __calc_eq14(
     _gamma: float,
     _y: float,
 ) -> float:
+    """Calculate eq.(14) in Roger et al. (2009)
+
+    Args:
+        _t (float): Absolute temperature (K)
+        _ei (float): ei in eq.(14)
+        _ej (float): ej in eq.(14)
+        _qp (float): qp in eq.(14)
+        _kappa (float): κ in eq.(14)
+        _sigmaij (float): σij in eq.(14)
+        _dielec_water (float): Dielectric constant of pure water.
+        _gamma (float): Γ in Roger et al. (2009)
+        _y (float): Y in Roger et al. (2009)
+
+    Returns:
+        float: Value fo eq.(14)
+    """
     _kb: float = const.BOLTZMANN_CONST
     qp_root = sqrt(_qp)
     _top = _ei * _ej * _kappa * qp_root * _sigmaij * exp(-_kappa * qp_root * _sigmaij)
@@ -217,6 +243,17 @@ def __calc_eq14(
 
 
 def __calc_y(_msa_props: Dict[str, Dict], _kappa: float, _gamma: float) -> float:
+    """Calculate Y in Roger et al. (2009)
+
+    Args:
+        _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        _kappa (float): κ in Roger et al. (2009)
+        _gamma (float): Γ in Roger et al. (2009)
+
+    Returns:
+        float: Y
+    """
     _top = 0.0
     _bottom = 0.0
     for _, _prop in _msa_props.items():
@@ -235,6 +272,17 @@ def __calc_y(_msa_props: Dict[str, Dict], _kappa: float, _gamma: float) -> float
 
 
 def __calc_eq12(alpha: float, _omega_bar: float, _omegak: float, _t_ls: List) -> float:
+    """Calculate eq.(12) in Roger et al. (2009)
+
+    Args:
+        alpha (float): α in Roger et al. (2009)
+        _omega_bar (float): ω with bar in Roger et al. (2009)
+        _omegak (float): ω in Roger et al. (2009)
+        _t_ls (List): List containing t in Roger et al. (2009)
+
+    Returns:
+        float: Value of eq.(12)
+    """
     return -1.0 * _omega_bar * alpha * sum(_t_ls) / (_omegak**2 - alpha**2)
 
 
@@ -245,6 +293,20 @@ def __calc_alphap(
     _min: float = 0.0,
     _max: float = 1.0e5,
 ) -> float:
+    """Calculate α by Solving eq.(12) in Roger et al. (2009)
+
+    Args:
+        _omega_k (float): ωk in eq.(12)
+        _omega_bar (float): ω with bar in eq.(18)
+        _t_ls (List): List containing ti in eq.(18)
+        _min (float, optional): The minimum value used in the bisection method.
+            Defaults to 0.0.
+        _max (float, optional): The maximum value used in the bisection method.
+            Defaults to 1.0e5.
+
+    Returns:
+        float: α
+    """
     __callback = partial(
         __calc_eq12, _omega_bar=_omega_bar, _omegak=_omega_k, _t_ls=_t_ls
     )
@@ -252,6 +314,16 @@ def __calc_alphap(
 
 
 def __calc_np(omega_ls: List, t_ls: List, _alphap: float) -> float:
+    """Calculate Np in Roger et al. (2009)
+
+    Args:
+        omega_ls (List): List containing ω in eq.(11)
+        t_ls (List): List containing ti in eq.(11)
+        _alphap (float): αp in eq.(11)
+
+    Returns:
+        float: Np
+    """
     _sum = 0.0
     for _wi, _ti in zip(omega_ls, t_ls):
         _sum += _ti * _wi**2 / (_wi**2 - _alphap**2) ** 2
@@ -259,13 +331,34 @@ def __calc_np(omega_ls: List, t_ls: List, _alphap: float) -> float:
 
 
 def __calc_qp(_alphap: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -> float:
+    """Calculate qp in Roger et al. (2009)
+
+    Args:
+        _alphap (float): αp in eq.(9)
+        _omega_bar (float): ω with bar in eq.(9)
+        _omega_ls (List): List containing ωk in eq.(9)
+        _t_ls (List): List containing ti in eq.(9)
+
+    Returns:
+        float: qp
+    """
     _sum = 0.0
     for _omegai, _ti in zip(_omega_ls, _t_ls):
         _sum += _ti / (_omegai + _alphap)
     return _omega_bar * _sum
 
 
-def __calc_kappa(_msa_props: Dict[str, Dict], _t: float):
+def __calc_kappa(_msa_props: Dict[str, Dict], _t: float) -> float:
+    """Calculate κ in Roger et al. (2009)
+
+    Args:
+        _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        _t (float): Absolute temperature (K)
+
+    Returns:
+        float: κ
+    """
     _dielec_water = const.calc_dielectric_const_water(_t)
     _kb = const.BOLTZMANN_CONST
     _sum = 0.0
@@ -286,6 +379,22 @@ def __calc_dkkkk(
     _gamma: float,
     _y: float,
 ) -> float:
+    """Calculate δkk/kk in Roger et al. (2009)
+
+    Args:
+        _k (str): Ion Species
+        _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        ki_pk (Dict[Tuple, float]): χpk in eq.(4)
+        sigma_ij (Dict[Tuple, float]): σij in eq.(4)
+        _t (float): Absolute temperature (K) in eq.(4)
+        _kappa (float): κ in in eq.(4)
+        _gamma (float): Γ in eq.(4)
+        _y (float): Y in eq.(4)
+
+    Returns:
+        float: δkk/kk
+    """
     _dielec_water: float = const.calc_dielectric_const_water(_t)
     _coeff = -1.0 * _kappa**2 * _msa_props[_k]["e"] / 3.0
     _s_ls: List[str] = list(_msa_props.keys())
@@ -328,11 +437,21 @@ def __calc_dkkkk(
     return _coeff * _sum
 
 
-def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]):
+def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
+    """Calculate the mobility of a single ion species using eq.(1)
+
+    Args:
+        _s (str): Ion species
+        _t (float): Absolute temperature (K)
+        _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+
+    Returns:
+        float: eq.(1) / (e * abs(z) * n)
+    """
     _e: float = const.ELEMENTARY_CHARGE
-    _kb = const.BOLTZMANN_CONST
+    _kb: float = const.BOLTZMANN_CONST
     _prop = _msa_props[_s]
-    _ni = _prop["n"]
     _d0i = _prop["D0"]
     _zi = _prop["z"]
     _dhydi = _prop["vhydi"]
@@ -348,7 +467,16 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]):
 
 
 def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
+    """Calculate the mobility of each ion based on Roger et al. (2009)
 
+    Args:
+        ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
+                values are properties of dict.
+        temperature (float): Absolute temperature (K)
+
+    Returns:
+        Dict[str, Dict]: Dictionary containing MSA properties, etc.
+    """
     _ion_props = deepcopy(ion_props)
 
     # constants
@@ -459,7 +587,7 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     _kappa: float = __calc_kappa(_msa_props, temperature)
 
     # gamma (Γ)
-    _gamma: float = __calc_gamma(_ion_props, temperature)
+    _gamma: float = __calc_gamma(_msa_props, temperature)
 
     # Y
     _y = __calc_y(_msa_props, _kappa, _gamma)
@@ -469,13 +597,13 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
         _prop["dkkkk"] = __calc_dkkkk(
             _s, _msa_props, ki_pk, sigma_ij, temperature, _kappa, _gamma, _y
         )
-        _prop["vhydi"] = __calc_dvhydi(_ion_props, _msa_props, temperature, _s)
+        _prop["vhydi"] = __calc_dvhydi(_msa_props, temperature, _s)
 
     # mobility
     for _s, _prop in _msa_props.items():
         _prop["mobility"] = __calc_mobility(_s, temperature, _msa_props)
 
-    return deepcopy(_msa_props)
+    return _msa_props
 
 
 if __name__ == "__main__":

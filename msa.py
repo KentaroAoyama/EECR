@@ -155,7 +155,9 @@ def __calc_gamma(_msa_props: Dict, _t: float) -> float:
     return bisect(__callback, 0.0, 1.0e10)
 
 
-def __calc_di(_gamma: float, _pn: float, _delta: float, _sigma: float, _z: float) -> float:
+def __calc_di(
+    _gamma: float, _pn: float, _delta: float, _sigma: float, _z: float
+) -> float:
     """Calculate Di in Roger et al. (2009)
 
     Args:
@@ -295,17 +297,17 @@ def __calc_eq12(alpha: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -
     Returns:
         float: Value of eq.(12)
     """
-    _sum = 0.
+    _sum = 0.0
     for _ti, _omegai in zip(_t_ls, _omega_ls):
         _bottom = _omegai - alpha
-        if _bottom == 0.:
+        if _bottom == 0.0:
             _bottom = float_info.min
         _sum += _ti / _bottom
     _ret = -1.0 * _omega_bar * alpha * _sum
     _ret_abs = abs(_ret)
-    if _ret < 0. and _ret_abs == float("inf"):
-        return -1. * float_info.max
-    elif _ret > 0. and _ret_abs == float("inf"):
+    if _ret < 0.0 and _ret_abs == float("inf"):
+        return -1.0 * float_info.max
+    elif _ret > 0.0 and _ret_abs == float("inf"):
         return float_info.max
     return _ret
 
@@ -557,7 +559,7 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     # omega (ω)
     for _, _prop in _msa_props.items():
         _prop["omega"] = _prop["D0"] / (_kb * temperature)
-    _msa_props = OrderedDict(sorted(_msa_props.items(), key=lambda x:x[1]["omega"]))
+    _msa_props = OrderedDict(sorted(_msa_props.items(), key=lambda x: x[1]["omega"]))
 
     # mu (μ)
     _bottom = 0.0
@@ -589,24 +591,24 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     # alpha (α)
     for i, (_, _prop) in enumerate(_msa_props.items()):
         if i == 0:
-            _prop["alpha"] = 0.
+            _prop["alpha"] = 0.0
             continue
-        _alpha_min, _alpha_max = _omega_ls[i-1], _omega_ls[i]
+        _alpha_min, _alpha_max = _omega_ls[i - 1], _omega_ls[i]
         _val_max: float = __calc_eq12(_alpha_max, _omega_mean, _omega_ls, _t_ls)
         if abs(_val_max) == float("inf"):
             _alpha_min_tmp = _alpha_min
-            _alpha_min = -1. * _alpha_max
-            _alpha_max = -1. * _alpha_min_tmp
+            _alpha_min = -1.0 * _alpha_max
+            _alpha_max = -1.0 * _alpha_min_tmp
             _val_max: float = __calc_eq12(_alpha_max, _omega_mean, _omega_ls, _t_ls)
-        _interval = (_alpha_max - _alpha_min) / 100.
+        _interval = (_alpha_max - _alpha_min) / 100.0
         while _alpha_min < _alpha_max:
             _val_min: float = __calc_eq12(_alpha_min, _omega_mean, _omega_ls, _t_ls)
-            if _val_min * _val_max < 0.:
+            if _val_min * _val_max < 0.0:
                 break
             _alpha_min += _interval
 
         _prop["alpha"] = __calc_alphap(
-        _omega_ls, _omega_mean, _t_ls, _alpha_min, _alpha_max
+            _omega_ls, _omega_mean, _t_ls, _alpha_min, _alpha_max
         )
 
     # Np
@@ -651,6 +653,7 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     for _s, _prop in _msa_props.items():
         _prop["mobility"] = __calc_mobility(_s, temperature, _msa_props)
     return _msa_props
+
 
 if __name__ == "__main__":
     pass

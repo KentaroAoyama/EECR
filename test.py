@@ -15,6 +15,7 @@ from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
 import pickle
 from os import path, getcwd, listdir
+from copy import deepcopy
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -831,6 +832,49 @@ def tmp():
     print(len(ill_cond))
 
 
+def test_mobility():
+    # TODO:
+    # _ls = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 2.0, 3.0]
+    # ion_props: Dict = deepcopy(const.ion_props_default)
+    # for i in _ls:
+    #     ion_props["Na"]["Concentration"] = i
+    #     ion_props["Cl"]["Concentration"] = i
+    #     _msa_props: Dict = calc_mobility(ion_props, 298.0)
+    #     m_na = _msa_props["Na"]["mobility"]
+    #     m_cl = _msa_props["Cl"]["mobility"]
+    #     print("=======")
+    #     print(f"Conc: {i}")  #!
+    #     print(f"Na: {m_na}")  #!
+    #     print(f"Cl: {m_cl}")  #!
+    #     print(f"_msa_props: {_msa_props}") #!
+    _min, _max = 20, 200
+    _ls = [float(i) for i in range(_min, _max)]
+    # _ls = [20., 50., 80., 110., 140., 170., 200.]
+    ion_props: Dict = deepcopy(const.ion_props_default)
+    mu_na_ls: List = []
+    mu_cl_ls: List = []
+    cond_ls: List = []
+    _cna = 1.
+    for i in _ls:
+        print("=======")
+        print(f"Tempe: {i}")  #!
+        ion_props["Na"]["Concentration"] = _cna
+        ion_props["Cl"]["Concentration"] = _cna
+        _msa_props: Dict = calc_mobility(ion_props, i+273.15)
+        m_na = _msa_props["Na"]["mobility"]
+        m_cl = _msa_props["Cl"]["mobility"]
+        print(m_na) #!
+        mu_na_ls.append(m_na)
+        mu_cl_ls.append(m_cl)
+        _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.
+
+        cond_ls.append(_coeff * (m_na + m_cl))
+    _, ax = plt.subplots()
+    ax.plot(_ls, cond_ls)
+    ax.set_yscale("log")
+    plt.show()
+
+
 def main():
     return
 
@@ -849,3 +893,4 @@ if __name__ == "__main__":
     # goncalves_fig6()
     # test_sen_and_goode_1992()
     # tmp()
+    test_mobility()

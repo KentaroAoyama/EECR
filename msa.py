@@ -1,9 +1,19 @@
-"""Calculate ion mobility by mean spherical approximation"""
+"""Calculate ion mobility by mean spherical approximation
+    References:
+        Gaëlle M. Roger, Serge Durand-Vidal, Olivier Bernard, and Pierre Turq
+            The Journal of Physical Chemistry B 2009 113 (25), 8670-8674
+            DOI: 10.1021/jp901916r
+        Steven Van Damme and Johan Deconinck
+            The Journal of Physical Chemistry B 2007 111 (19), 5308-5315
+            DOI: 10.1021/jp071651l
+"""
 from typing import Dict, List, Tuple
 from enum import IntEnum
 from functools import partial
 from math import pi, sqrt, exp, sinh
 from copy import deepcopy
+from sys import float_info
+from collections import OrderedDict
 
 from scipy.optimize import bisect
 import iapws
@@ -184,7 +194,8 @@ def __calc_dvhydi(_msa_props: Dict, _t: float, _s: str) -> float:
     _di: float = __calc_di(_gamma, _pn, _delta, _sigma, _z)
     # calculate viscosity
     water = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=_t)
-    assert water.phase == "Liquid"
+    assert water.phase == "Liquid", f"water.phase: {water.phase}"
+    # TODO
     _eta0: float = iapws._iapws._Viscosity(water.rho, T=_t)
     # calculate 2nd and 3rd term
     r2_sum, r3_sum = 0.0, 0.0
@@ -199,7 +210,7 @@ def __calc_dvhydi(_msa_props: Dict, _t: float, _s: str) -> float:
     _r2 = pi / 4.0 * r2_sum
     _r3 = pi / 6.0 * r3_sum
 
-    return -1.0 * _e / (3.0 * pi * _eta0) * (_di + _r2 + _r3)
+    return -1.0 * _e / (3.0 * pi * _eta0) * (_di + _r2 - _r3)
 
 
 def __calc_eq14(
@@ -271,32 +282,45 @@ def __calc_y(_msa_props: Dict[str, Dict], _kappa: float, _gamma: float) -> float
     return _top / _bottom
 
 
-def __calc_eq12(alpha: float, _omega_bar: float, _omegak: float, _t_ls: List) -> float:
-    """Calculate eq.(12) in Roger et al. (2009)
+def __calc_eq12(alpha: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -> float:
+    """Calculate eq.(12) in Roger et al. (2009).
+    ※ ωk is modified to ωi
 
     Args:
         alpha (float): α in Roger et al. (2009)
         _omega_bar (float): ω with bar in Roger et al. (2009)
-        _omegak (float): ω in Roger et al. (2009)
+        _omega_ls (float): List containing ωi
         _t_ls (List): List containing t in Roger et al. (2009)
 
     Returns:
         float: Value of eq.(12)
     """
-    return -1.0 * _omega_bar * alpha * sum(_t_ls) / (_omegak**2 - alpha**2)
+    _sum = 0.
+    for _ti, _omegai in zip(_t_ls, _omega_ls):
+        _bottom = _omegai - alpha
+        if _bottom == 0.:
+            _bottom = float_info.min
+        _sum += _ti / _bottom
+    _ret = -1.0 * _omega_bar * alpha * _sum
+    _ret_abs = abs(_ret)
+    if _ret < 0. and _ret_abs == float("inf"):
+        return -1. * float_info.max
+    elif _ret > 0. and _ret_abs == float("inf"):
+        return float_info.max
+    return _ret
 
 
 def __calc_alphap(
-    _omega_k: float,
+    _omega_ls: List,
     _omega_bar: float,
     _t_ls: List,
     _min: float = 0.0,
     _max: float = 1.0e5,
 ) -> float:
-    """Calculate α by Solving eq.(12) in Roger et al. (2009)
+    """Calculate α by Solving eq.(12) in Roger et al. (2009).
 
     Args:
-        _omega_k (float): ωk in eq.(12)
+        _omega_ls (float): List containing ωi in eq.(12)
         _omega_bar (float): ω with bar in eq.(18)
         _t_ls (List): List containing ti in eq.(18)
         _min (float, optional): The minimum value used in the bisection method.
@@ -308,7 +332,7 @@ def __calc_alphap(
         float: α
     """
     __callback = partial(
-        __calc_eq12, _omega_bar=_omega_bar, _omegak=_omega_k, _t_ls=_t_ls
+        __calc_eq12, _omega_bar=_omega_bar, _omega_ls=_omega_ls, _t_ls=_t_ls
     )
     return bisect(__callback, _min, _max)
 
@@ -454,13 +478,13 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
     _prop = _msa_props[_s]
     _d0i = _prop["D0"]
     _zi = _prop["z"]
-    _dhydi = _prop["vhydi"]
+    _dvhydi = _prop["dvhydi"]
     _v0 = _prop["v0"]
     _dkkkk = _prop["dkkkk"]
     # first term
     _a = _e * _d0i * abs(_zi) / (_kb * _t)
     # second term
-    _b = 1.0 + _dhydi / _v0
+    _b = 1.0 + _dvhydi / _v0
     # third term
     _c = 1.0 + _dkkkk
     return _a * _b * _c
@@ -484,8 +508,8 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     _na: float = const.AVOGADRO_CONST
     _kb: float = const.BOLTZMANN_CONST
 
-    _msa_props: Dict = {}
-    for _s, _prop in msa_props.items():
+    _msa_props: OrderedDict = OrderedDict()
+    for _s, _prop in deepcopy(msa_props).items():
         if _s in ion_props:
             _msa_props[_s] = _prop
     assert len(_msa_props) > 0
@@ -503,10 +527,17 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
 
     sigma_ij: Dict[Tuple, float] = {}
     # set basic ionic propeties
+    t_std = 298.15
+    water = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=temperature)
+    assert water.phase == "Liquid", f"water.phase: {water.phase}"
+    _eta_t: float = iapws._iapws._Viscosity(water.rho, T=temperature) / water.rho
+    water_298 = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=t_std)
+    _eta_298: float = iapws._iapws._Viscosity(water_298.rho, T=t_std) / water_298.rho
+    d_coeff = _eta_298 * temperature / (_eta_t * t_std)
     for _si, _basic_prop in _ion_props.items():
-        if _si in (Species.H.name, Species.OH.name):
-            continue
         _msa_prop = _msa_props[_si]
+        # temperature correction for diffusion coefficient
+        _msa_prop["D0"] = _msa_prop["D0"] * d_coeff
         # valence
         _msa_prop["z"] = _basic_prop["Valence"]
         # charge
@@ -526,6 +557,7 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     # omega (ω)
     for _, _prop in _msa_props.items():
         _prop["omega"] = _prop["D0"] / (_kb * temperature)
+    _msa_props = OrderedDict(sorted(_msa_props.items(), key=lambda x:x[1]["omega"]))
 
     # mu (μ)
     _bottom = 0.0
@@ -545,20 +577,36 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
 
     # t
     _t_ls: List = []
+    _omega_ls: List = []
     for _, _prop in _msa_props.items():
         _mu = _prop["mu"]
         _omega = _prop["omega"]
         _t = _mu * _omega / _omega_mean
         _prop["t"] = _t
         _t_ls.append(_t)
+        _omega_ls.append(_omega)
 
     # alpha (α)
-    _alpha_min, _alpha_max = 0.0, max(
-        [_prop["omega"] ** 2 for _, _prop in _msa_props.items()]
-    )
-    for _, _prop in _msa_props.items():
+    for i, (_, _prop) in enumerate(_msa_props.items()):
+        if i == 0:
+            _prop["alpha"] = 0.
+            continue
+        _alpha_min, _alpha_max = _omega_ls[i-1], _omega_ls[i]
+        _val_max: float = __calc_eq12(_alpha_max, _omega_mean, _omega_ls, _t_ls)
+        if abs(_val_max) == float("inf"):
+            _alpha_min_tmp = _alpha_min
+            _alpha_min = -1. * _alpha_max
+            _alpha_max = -1. * _alpha_min_tmp
+            _val_max: float = __calc_eq12(_alpha_max, _omega_mean, _omega_ls, _t_ls)
+        _interval = (_alpha_max - _alpha_min) / 100.
+        while _alpha_min < _alpha_max:
+            _val_min: float = __calc_eq12(_alpha_min, _omega_mean, _omega_ls, _t_ls)
+            if _val_min * _val_max < 0.:
+                break
+            _alpha_min += _interval
+
         _prop["alpha"] = __calc_alphap(
-            _prop["omega"], _omega_mean, _t_ls, _alpha_min, _alpha_max
+        _omega_ls, _omega_mean, _t_ls, _alpha_min, _alpha_max
         )
 
     # Np
@@ -597,25 +645,12 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
         _prop["dkkkk"] = __calc_dkkkk(
             _s, _msa_props, ki_pk, sigma_ij, temperature, _kappa, _gamma, _y
         )
-        _prop["vhydi"] = __calc_dvhydi(_msa_props, temperature, _s)
+        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, _s)
 
     # mobility
     for _s, _prop in _msa_props.items():
         _prop["mobility"] = __calc_mobility(_s, temperature, _msa_props)
-
     return _msa_props
 
-
 if __name__ == "__main__":
-    _ls = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 2.0, 3.0]
-    ion_props: Dict = deepcopy(const.ion_props_default)
-    for i in _ls:
-        ion_props["Na"]["Concentration"] = i
-        ion_props["Cl"]["Concentration"] = i
-        _msa_props: Dict = calc_mobility(ion_props, 298.0)
-        m_na = _msa_props["Na"]["mobility"]
-        m_cl = _msa_props["Cl"]["mobility"]
-        print("=======")
-        print(f"Conc: {i}")  #!
-        print(f"Na: {m_na}")  #!
-        print(f"Cl: {m_cl}")  #!
+    pass

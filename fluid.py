@@ -6,7 +6,6 @@ from copy import deepcopy
 from logging import Logger
 
 import pickle
-from iapws import IAPWS97
 import numpy as np
 
 import constants as const
@@ -28,7 +27,7 @@ class NaCl(Fluid):
         self,
         temperature: float = 298.15,
         pressure: float = 1.0e5,
-        ion_props: Dict = ion_props_default.copy(),
+        ion_props: Dict = deepcopy(ion_props_default),
         conductivity: float = None,
         cond_tensor: np.ndarray = None,
         logger: Logger = None,

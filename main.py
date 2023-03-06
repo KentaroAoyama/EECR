@@ -1,12 +1,12 @@
 # TODO: docker化
 # TODO: pyrite実装する
-# TODO: constants.ion_propsは深いコピーをとる仕様に変更する
 # pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
 from os import path, getcwd, makedirs, listdir, cpu_count
 from typing import Dict, List
 from datetime import datetime
+from copy import deepcopy
 
 from yaml import safe_load
 import pickle
@@ -17,6 +17,7 @@ from fluid import NaCl
 from solver_input import FEM_Input_Cube
 from solver import FEM_Cube
 import constants as const
+from msa import calc_mobility
 from output import plot_smec_frac_cond
 
 
@@ -25,7 +26,7 @@ def create_logger(fpth="./debug.txt", logger_name: str = "log"):
     logger = getLogger(logger_name)
     logger.setLevel(DEBUG)
     file_handler = FileHandler(fpth, encoding="utf-8")
-    handler_format = Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler_format = Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
     file_handler.setFormatter(handler_format)
     logger.addHandler(file_handler)
     return logger
@@ -34,11 +35,11 @@ def create_logger(fpth="./debug.txt", logger_name: str = "log"):
 def run():
     # set external condition
     print("set external condition")
-    ph = 7.
+    ph = 7.0
     cnacl = 1.0e-3
     ion_props = const.ion_props_default.copy()
     activities = const.activities_default.copy()
-    ch = 10. ** ((-1.) * ph)
+    ch = 10.0 ** ((-1.0) * ph)
     ion_props["H"]["Concentration"] = ch
     ion_props["OH"]["Concentration"] = 1.0e-14 / ch
     ion_props["Na"]["Concentration"] = cnacl
@@ -53,16 +54,14 @@ def run():
 
     # set mineral instance
     print("set mineral instance")
-    smectite = Smectite(ion_props = ion_props,
-                        activities = activities)
-    kaolinite = Kaolinite(ion_props = ion_props,
-                          activities = activities)
+    smectite = Smectite(ion_props=ion_props, activities=activities)
+    kaolinite = Kaolinite(ion_props=ion_props, activities=activities)
     smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse() # to get self.m_double_layer_length
+    smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     smectite.calc_cond_interlayer()
     smectite.calc_cond_tensor()
     kaolinite.calc_potentials_and_charges_inf()
-    kaolinite.calc_cond_infdiffuse() # to get self.m_double_layer_length
+    kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
 
     # set fluid instance
@@ -76,12 +75,13 @@ def run():
     # print("set solver input")
     solver_input = FEM_Input_Cube()
     # print("create_pixel_by_macro_variable")
-    solver_input.create_pixel_by_macro_variable(shape=(20, 20, 20),
-                                                edge_length=edge_length,
-                                                volume_frac_dict = {nacl: 0.9,
-                                                                    smectite: 0.1},
-                                                seed=42,
-                                                rotation_setting="random")
+    solver_input.create_pixel_by_macro_variable(
+        shape=(20, 20, 20),
+        edge_length=edge_length,
+        volume_frac_dict={nacl: 0.9, smectite: 0.1},
+        seed=42,
+        rotation_setting="random",
+    )
     # print("create_from_file")
     # solver_input.create_from_file("./microstructure_tmp.dat")
     # print("set_ib")
@@ -115,16 +115,18 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     # for date_dirname in listdir(outdir):
     #     if len(listdir(path.join(outdir, date_dirname))) > 1:
     #         return None
-
+    print(outdir)
     logger_pth = path.join(outdir, "log.txt")
 
     # create logger
     logger = create_logger(logger_pth, dirname)
 
-    ph = 7.
-    ion_props = const.ion_props_default.copy()
-    activities = const.activities_default.copy()
-    ch = 10. ** ((-1.) * ph)
+    ph = 7.0
+    ion_props = deepcopy(const.ion_props_default)
+    activities = deepcopy(const.activities_default)
+
+    # concentration
+    ch = 10.0 ** ((-1.0) * ph)
     ion_props["H"]["Concentration"] = ch
     ion_props["OH"]["Concentration"] = 1.0e-14 / ch
     ion_props["Na"]["Concentration"] = cnacl
@@ -134,24 +136,39 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     activities["Na"] = cnacl
     activities["Cl"] = cnacl
 
+    # mobility
+    msa_props: Dict = calc_mobility(ion_props, temperature)
+    _na_mobility = msa_props["Na"]["mobility"]
+    ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
+    ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
+    ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
+    _cl_mobility = msa_props["Cl"]["mobility"]
+    ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
+    ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
+    ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
+
     # set mesh parameter
     edge_length: float = 1.0e-6
 
     # set mineral instance
-    smectite = Smectite(ion_props = ion_props,
-                        activities = activities,
-                        temperature=temperature,
-                        logger=logger)
-    kaolinite = Kaolinite(ion_props = ion_props,
-                            activities = activities,
-                            temperature=temperature,
-                            logger=logger)
+    smectite = Smectite(
+        ion_props=ion_props,
+        activities=activities,
+        temperature=temperature,
+        logger=logger,
+    )
+    kaolinite = Kaolinite(
+        ion_props=ion_props,
+        activities=activities,
+        temperature=temperature,
+        logger=logger,
+    )
     smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse() # to get self.m_double_layer_length
+    smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     smectite.calc_cond_interlayer()
     smectite.calc_cond_tensor()
     kaolinite.calc_potentials_and_charges_inf()
-    kaolinite.calc_cond_infdiffuse() # to get self.m_double_layer_length
+    kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
 
     # set fluid instance
@@ -166,13 +183,17 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     solver_input = FEM_Input_Cube(logger=logger)
     smec_frac_tol = (1.0 - porosity) * smec_frac
     siica_frac_tol = (1.0 - porosity) * (1.0 - smec_frac)
-    solver_input.create_pixel_by_macro_variable(shape=(10, 10, 10), #!
-                                                edge_length=edge_length,
-                                                volume_frac_dict = {nacl: porosity,
-                                                                    smectite: smec_frac_tol,
-                                                                    silica: siica_frac_tol},
-                                                seed=seed,
-                                                rotation_setting="random")
+    solver_input.create_pixel_by_macro_variable(
+        shape=(10, 10, 10),  #!
+        edge_length=edge_length,
+        volume_frac_dict={
+            nacl: porosity,
+            smectite: smec_frac_tol,
+            silica: siica_frac_tol,
+        },
+        seed=seed,
+        rotation_setting="random",
+    )
     solver_input.set_ib()
     solver_input.femat()
 
@@ -211,40 +232,41 @@ def experiment():
     # smectite fraction
     smec_frac_ls: List or None = conditions.get("smec_frac", None)
     if smec_frac_ls is None:
-        smec_frac_ls = [0.] # default value
+        smec_frac_ls = [0.0]  # default value
 
     # temperature
     temperature_ls: List or None = conditions.get("temperature", None)
     if temperature_ls is None:
-        temperature_ls = [293.15] # default value
+        temperature_ls = [293.15]  # default value
 
     # cnacl
     cnacl_ls: List or None = conditions.get("cnacl", None)
     if cnacl_ls is None:
-        cnacl_ls = [1.0e-3] # default value
+        cnacl_ls = [1.0e-3]  # default value
 
     # porosity
     porosity_ls: List or None = conditions.get("porosity", None)
     if porosity_ls is None:
-        porosity_ls = [0.2] # default value
+        porosity_ls = [0.2]  # default value
 
     # seed
     seed_ls: List = [42]
 
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count())
-    for smec_frac in smec_frac_ls:
-        for temperature in temperature_ls:
-            for cnacl in cnacl_ls:
-                for porosity in porosity_ls:
-                    for seed in seed_ls:
-                        future = pool.submit(exec_single_condition,
-                                            smec_frac=smec_frac,
-                                            temperature=temperature,
-                                            cnacl=cnacl,
-                                            porosity=porosity,
-                                            seed=seed
-                                            )
-    pool.shutdown(wait=True)
+    for seed in seed_ls:
+        for smec_frac in smec_frac_ls:
+            for temperature in temperature_ls:
+                for cnacl in cnacl_ls:
+                    for porosity in porosity_ls:
+                        pool.submit(
+                            exec_single_condition,
+                            smec_frac=smec_frac,
+                            temperature=temperature,
+                            cnacl=cnacl,
+                            porosity=porosity,
+                            seed=seed,
+                        )
+        pool.shutdown(wait=True)
 
 
 def output_fig():
@@ -252,7 +274,7 @@ def output_fig():
     conditions_ye: Dict = {}
     for condition_dirname in listdir(pickle_dir):
         _ls = condition_dirname.split("_")
-        del _ls[0] # smec
+        del _ls[0]  # smec
         _ls[0] = _ls[0].replace("frac", "smec_frac")
         val_ls: List = []
         for condition_val in _ls:
@@ -265,7 +287,9 @@ def output_fig():
             seed_dir = path.join(condition_dir, seed_dirname)
             # get latest dir for now
             date_dirname_ls = listdir(seed_dir)
-            datetime_ls = [datetime.strptime(_name, "%Y-%m-%d") for _name in date_dirname_ls]
+            datetime_ls = [
+                datetime.strptime(_name, "%Y-%m-%d") for _name in date_dirname_ls
+            ]
             date_dirname: str = date_dirname_ls[datetime_ls.index(max(datetime_ls))]
             date_dir = path.join(seed_dir, date_dirname)
             # get solver pickle
@@ -293,7 +317,7 @@ def output_fig():
             continue
         if np.isnan(cond) or np.isnan(error):
             continue
-        if cond < 0.:
+        if cond < 0.0:
             continue
         if cond > 1.0e4:
             continue
@@ -318,7 +342,7 @@ def output_fig():
             continue
         if np.isnan(cond) or np.isnan(error):
             continue
-        if cond < 0.:
+        if cond < 0.0:
             continue
         if cond > 1.0e4:
             continue
@@ -343,7 +367,7 @@ def output_fig():
             continue
         if np.isnan(cond) or np.isnan(error):
             continue
-        if cond < 0.:
+        if cond < 0.0:
             continue
         if cond > 1.0e4:
             continue
@@ -358,15 +382,13 @@ def output_fig():
 
 
 def main():
-    exec_single_condition(smec_frac=0.,
-                          temperature=293.15,
-                          cnacl=0.001,
-                          porosity=0.01,
-                          seed=42)
+    # output_fig()
+    exec_single_condition(
+        smec_frac=0.0, temperature=293.15, cnacl=0.001, porosity=0.01, seed=42
+    )
 
 
 if __name__ == "__main__":
-    # main()
-    experiment()
+    main()
+    # experiment()
     # output_fig()
-    

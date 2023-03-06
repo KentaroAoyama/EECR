@@ -14,10 +14,10 @@ import numpy as np
 from scipy.integrate import quad
 
 import constants as const
+from constants import Species, IonProp
+from fluid import NaCl
 
 
-ion_props_default = const.ion_props_default.copy()
-activities_default = const.activities_default.copy()
 # load global parameters
 # for smectite, infinite diffuse layer case
 smectite_inf_init_pth: PathLike = path.join(
@@ -68,9 +68,7 @@ class Phyllosilicate:
     # pylint: disable=dangerous-default-value
     def __init__(
         self,
-        temperature: float = 298.15,
-        ion_props: Dict = ion_props_default.copy(),
-        activities: Dict = activities_default.copy(),
+        nacl: NaCl,
         layer_width: float = 1.3e-9,
         gamma_1: float = 0.0,
         gamma_2: float = 5.5,
@@ -92,15 +90,10 @@ class Phyllosilicate:
         # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
         # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
         # TODO: external_propsクラス (or Dict)を引数としてメンバ変数を減らす
-        # TODO: fluidクラスからion_propsとactivitiesを読み込む仕様とする
         """Initialize Phyllosilicate class.
 
         Args:
-            temperature (float): temperature (unit: K).
-            ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict. Check ion_props_default in constant.py for details.
-            activities (Dict): Keys are ionic species (Na, Cl, etc.), and
-                value is activity (unit: Mol).
+            nacl (NaCl): Instance of NaCl class
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
@@ -130,10 +123,9 @@ class Phyllosilicate:
         ####################################################
         # Parameters related to the external environment
         ####################################################
-        self.m_temperature: float = temperature
-        self.m_ion_props: Dict = ion_props
-        self.m_activities: Dict = activities
-        self.m_dielec_water: float = None
+        self.m_temperature: float = nacl.get_temperature()
+        self.m_ion_props: Dict = nacl.get_ion_props()
+        self.m_dielec_water: float = nacl.get_dielec_water()
         ####################################################
         # Parameters held by phyllosilicate
         ####################################################
@@ -180,14 +172,6 @@ class Phyllosilicate:
         ####################################################
         self.m_logger = logger
 
-        # value check
-        # Currently, only H2O-NaCl fluid is implemented.
-        electrolytes_assumed: List = ["Na", "Cl", "H", "OH"]
-        for key in activities:
-            assert (
-                key in electrolytes_assumed
-            ), f"keys must be included in the following list: {electrolytes_assumed}"
-
         # Calculate frequently used constants and parameters.
         self.init_default()
 
@@ -208,22 +192,20 @@ class Phyllosilicate:
             self.__set_constant_for_kaolinite()
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
-        # Dielectric constant of water
-        self.m_dielec_water = const.calc_dielectric_const_water(self.m_temperature)
 
         # Ionic strength (based on Leroy & Revil, 2004)
         strength = 0.0
         for elem, props in self.m_ion_props.items():
-            if elem in ("Na", "Cl"):
-                strength += props["Concentration"]
-        strength += self.m_ion_props["H"]["Concentration"]
+            if elem in (Species.Na.name, Species.Cl.name):
+                strength += props[IonProp.Concentration.name]
+        strength += self.m_ion_props[Species.H.name][IonProp.Concentration.name]
         self.m_ionic_strength = strength
 
         # calculate kappa (eq.(11) of Gonçalvès et al., 2004)
         # Electrolyte concentration is assumed to be equal to Na+ concentration
         top = (
             2000.0
-            * self.m_ion_props["Na"]["Concentration"]
+            * self.m_ion_props[Species.Na.name][IonProp.Concentration.name]
             * const.AVOGADRO_CONST
             * _e**2
         )
@@ -330,7 +312,7 @@ class Phyllosilicate:
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
-        ch = self.m_activities["H"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
         x = -_e * phi0 / (_kb * self.m_temperature)
         a = self.__calc_A(phi0)
         b = self.__calc_B(phi0)
@@ -352,8 +334,8 @@ class Phyllosilicate:
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
-        ch = self.m_activities["H"]
-        cna = self.m_activities["Na"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
+        cna = self.m_ion_props[Species.Na.name][IonProp.Activity.name]
         x = -_e * phib / (_kb * self.m_temperature)
         c = self.__calc_C(phib)
         f2 = (
@@ -436,7 +418,7 @@ class Phyllosilicate:
         dielec = self.m_dielec_water
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
-        cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
+        cf = self.m_ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
         c = _e / (kb * _t)
@@ -457,7 +439,7 @@ class Phyllosilicate:
         """
         # TODO: ６回微分まで実装する
         # electrolyte concentration assumed equal to cf
-        cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
+        cf = self.m_ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         dielec = self.m_dielec_water
         _t = self.m_temperature
@@ -573,7 +555,7 @@ class Phyllosilicate:
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29Divide%5Bc%2C1%2Bb*exp%5C%2840%29-a*x%5C%2841%29%5D*%5C%2840%29b*exp%5C%2840%29-a*x%5C%2841%29-1%5C%2841%29%2BDivide%5Be%2C1%2Bd*exp%5C%2840%29-a*x%5C%2841%29%5D*%5C%2840%29d*exp%5C%2840%29-a*x%5C%2841%29-1%5C%2841%29%5C%2841%29%2Cx%5D&lang=ja
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
-        ch = self.m_activities["H"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
         a = _e / (kb * self.m_temperature)
         x = a * phi0
         b = ch / self.m_k1
@@ -605,8 +587,8 @@ class Phyllosilicate:
         # https://www.wolframalpha.com/input?key=&i2d=true&i=D%5B%5C%2840%29Divide%5Bd%2C1%2B%5C%2840%29b%2Bc%5C%2841%29*exp%5C%2840%29-a*x%5C%2841%29%5D*%5C%2840%29b%2Bc%5C%2841%29*exp%5C%2840%29-a*x%5C%2841%29%5C%2841%29%2Cx%5D&lang=ja
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
-        ch = self.m_activities["H"]
-        na = self.m_activities["Na"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
+        na = self.m_ion_props[Species.Na.name][IonProp.Activity.name]
         a = _e / (kb * self.m_temperature)
         exp = np.exp(a * phib)
         b = ch / self.m_k3
@@ -655,7 +637,7 @@ class Phyllosilicate:
         _t = self.m_temperature
         _e = const.ELEMENTARY_CHARGE
         # electrolyte concentration is assumed to be equal to Na+ concentration
-        cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
+        cf = self.m_ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
         _na = const.AVOGADRO_CONST
         b = np.sqrt(_na * cf * kb * _t * dielec)
         c = _e / (kb * _t)
@@ -680,7 +662,7 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
         # electrolyte concentration is assumed to be equal to Na+ concentration
-        cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
+        cf = self.m_ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
         b = np.sqrt(_na * cf * kb * _t * dielec)
@@ -702,7 +684,7 @@ class Phyllosilicate:
         """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29d-x-a*sinh%5C%2840%29b*x%5C%2841%29*%5C%2840%29y-r%5C%2841%29**2-c*sinh%5C%2840%292*b*x%5C%2841%29*%5C%2840%29y-r%5C%2841%29**4%5C%2841%29%2Cx%5D&lang=ja
         # electrolyte concentration is assumed to be equal to Na+ concentration
-        cf = self.m_ion_props["Na"]["Concentration"] * 1.0e3
+        cf = self.m_ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
@@ -729,7 +711,7 @@ class Phyllosilicate:
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
         t = self.m_temperature
-        ch = self.m_activities["H"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
         k1 = self.m_k1
         return 1.0 + ch / k1 * np.exp(-_e * phi0 / (kb * t))
 
@@ -745,7 +727,7 @@ class Phyllosilicate:
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
         t = self.m_temperature
-        ch = self.m_activities["H"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
         k2 = self.m_k2
         return 1.0 + ch / k2 * np.exp(-_e * phi0 / (kb * t))
 
@@ -761,8 +743,8 @@ class Phyllosilicate:
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
         t = self.m_temperature
-        ch = self.m_activities["H"]
-        cna = self.m_activities["Na"]
+        ch = self.m_ion_props[Species.H.name][IonProp.Activity.name]
+        cna = self.m_ion_props[Species.Na.name][IonProp.Activity.name]
         k3 = self.m_k3
         k4 = self.m_k4
         return 1.0 + (ch / k3 + cna / k4) * np.exp(-_e * phib / (kb * t))
@@ -844,7 +826,10 @@ class Phyllosilicate:
         _e = const.ELEMENTARY_CHARGE
         # electrolyte concentration is assumed to be equal to Na+ concentration
         self.m_qs_coeff1_inf = (
-            2000.0 * _e * const.AVOGADRO_CONST * self.m_ion_props["Na"]["Concentration"]
+            2000.0
+            * _e
+            * const.AVOGADRO_CONST
+            * self.m_ion_props[Species.Na.name][IonProp.Concentration.name]
         )
         self.m_qs_coeff2_inf = (
             -_e * self.m_potential_zeta / (const.BOLTZMANN_CONST * self.m_temperature)
@@ -953,10 +938,10 @@ class Phyllosilicate:
             else:
                 # TODO: Prepare more initial parameters in other minerals.
                 params = kaolinite_init_params
-            ch = self.m_ion_props["H"]["Concentration"]
+            ch = self.m_ion_props[Species.H.name][IonProp.Concentration.name]
             ch_ls = list(params.keys())
             _idx_ch: int = np.argmin(np.square(np.array(ch_ls, dtype=np.float64) - ch))
-            cna = self.m_ion_props["Na"]["Concentration"]
+            cna = self.m_ion_props[Species.Na.name][IonProp.Concentration.name]
             cna_dct: Dict = params[ch_ls[_idx_ch]]
             cna_ls = list(cna_dct.keys())
             _idx_cna: int = np.argmin(
@@ -1078,8 +1063,8 @@ class Phyllosilicate:
             _r = self.m_layer_width
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
             ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
-            _ch = self.m_ion_props["H"]["Concentration"]
-            _cna = self.m_ion_props["Na"]["Concentration"]
+            _ch = self.m_ion_props[Species.H.name][IonProp.Concentration.name]
+            _cna = self.m_ion_props[Species.Na.name][IonProp.Concentration.name]
             ch_ls = list(ch_cna_dict.keys())
             _idx = np.argmin(np.square((np.array(ch_ls, dtype=np.float64) - _ch)))
             cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
@@ -1227,9 +1212,9 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa * _x)
         for _, prop in self.m_ion_props.items():
-            _conc = 1000.0 * prop["Concentration"]
-            _v = prop["Valence"]
-            _mobility = prop["Mobility_InfDiffuse"]
+            _conc = 1000.0 * prop[IonProp.Concentration.name]
+            _v = prop[IonProp.Valence.name]
+            _mobility = prop[IonProp.MobilityInfDiffuse.name]
             _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1250,10 +1235,10 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa * _x)
-        prop_na = self.m_ion_props["Na"]
-        _conc = 1000.0 * prop_na["Concentration"]
-        _v = prop_na["Valence"]
-        _mobility = prop_na["Mobility_InfDiffuse"]
+        prop_na = self.m_ion_props[Species.Na.name]
+        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
+        _v = prop_na[IonProp.Valence.name]
+        _mobility = prop_na[IonProp.MobilityInfDiffuse.name]
         _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1279,9 +1264,9 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa_truncated * _x)
         for _, prop in self.m_ion_props.items():
-            _conc = 1000.0 * prop["Concentration"]
-            _v = prop["Valence"]
-            _mobility = prop["Mobility_TrunDiffuse"]
+            _conc = 1000.0 * prop[IonProp.Concentration.name]
+            _v = prop[IonProp.Valence.name]
+            _mobility = prop[IonProp.MobilityTrunDiffuse.name]
             _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1303,10 +1288,10 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa_truncated * _x)
-        prop_na = self.m_ion_props["Na"]
-        _conc = 1000.0 * prop_na["Concentration"]
-        _v = prop_na["Valence"]
-        _mobility = prop_na["Mobility_TrunDiffuse"]
+        prop_na = self.m_ion_props[Species.Na.name]
+        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
+        _v = prop_na[IonProp.Valence.name]
+        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name]
         _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1333,12 +1318,12 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
         for _, prop in self.m_ion_props.items():
-            _conc = 1000.0 * prop["Concentration"]
-            _v = prop["Valence"]
+            _conc = 1000.0 * prop[IonProp.Concentration.name]
+            _v = prop[IonProp.Valence.name]
             # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
             # 参考文献：doi:10.1029/2008JB006114.
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-            _mobility = prop["Mobility_InfDiffuse"] * 0.5
+            _mobility = prop[IonProp.MobilityInfDiffuse.name] * 0.5
             _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1361,10 +1346,10 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
-        prop_na: Dict = self.m_ion_props["Na"]
-        _conc = 1000.0 * prop_na["Concentration"]
-        _v = prop_na["Valence"]  # 1
-        _mobility = prop_na["Mobility_Stern"]
+        prop_na: Dict = self.m_ion_props[Species.Na.name]
+        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
+        _v = prop_na[IonProp.Valence.name]  # 1
+        _mobility = prop_na[IonProp.MobilityStern.name]
         _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1390,10 +1375,10 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
         for _, prop in self.m_ion_props.items():
-            _conc = 1000.0 * prop["Concentration"]
-            _v = prop["Valence"]
+            _conc = 1000.0 * prop[IonProp.Concentration.name]
+            _v = prop[IonProp.Valence.name]
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-            _mobility = prop["Mobility_TrunDiffuse"] * 0.5
+            _mobility = prop[IonProp.MobilityTrunDiffuse.name] * 0.5
             _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1416,13 +1401,13 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
-        prop_na: Dict = self.m_ion_props["Na"]
-        _conc = 1000.0 * prop_na["Concentration"]
-        _v = prop_na["Valence"]  # 1
+        prop_na: Dict = self.m_ion_props[Species.Na.name]
+        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
+        _v = prop_na[IonProp.Valence.name]  # 1
         # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする. 他に方法がないか調べる
         # 参考文献：doi:10.1029/2008JB006114.
         # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-        _mobility = prop_na["Mobility_TrunDiffuse"] * 0.5
+        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name] * 0.5
         _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1671,9 +1656,7 @@ class Smectite(Phyllosilicate):
 
     def __init__(
         self,
-        temperature: float = 298.15,
-        ion_props: Dict = ion_props_default.copy(),
-        activities: Dict = activities_default.copy(),
+        nacl: NaCl,
         layer_width: float = 1.3e-9,
         potential_0: float = None,
         potential_stern: float = None,
@@ -1691,11 +1674,7 @@ class Smectite(Phyllosilicate):
             smectite case.
 
         Args:
-            temperature (float): temperature (unit: K).
-            ion_props (Dict): key is ionic species (Na, Cl, etc.), and
-                value is properties of dict. Check ion_props_default in constant.py for details.
-            activities (Dict): key is ionic species (Na, Cl, etc.), and
-                value is activity (unit: Mol).
+            nacl (NaCl): Instance of NaCl class
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             potential_0 (float, optional): surface potential (unit: V).
@@ -1711,9 +1690,7 @@ class Smectite(Phyllosilicate):
             flag_truncated (bool): True if truncated parameters will be calculate.
         """
         super().__init__(
-            temperature=temperature,
-            ion_props=ion_props.copy(),
-            activities=activities.copy(),
+            nacl=nacl,
             layer_width=layer_width,
             gamma_1=0.0,
             gamma_2=5.5,
@@ -1743,9 +1720,7 @@ class Kaolinite(Phyllosilicate):
 
     def __init__(
         self,
-        temperature: float = 298.15,
-        ion_props: Dict = ion_props_default.copy(),
-        activities: Dict = activities_default.copy(),
+        nacl: NaCl,
         layer_width: float = 1.0e-10,
         potential_0: float = None,
         potential_stern: float = None,
@@ -1763,11 +1738,7 @@ class Kaolinite(Phyllosilicate):
             kaolinite case.
 
         Args:
-            temperature (float): temperature (unit: K).
-            ion_props (Dict): key is ionic species (Na, Cl, etc.), and
-                value is properties of dict. Check ion_props_default in constant.py for details.
-            activities (Dict): key is ionic species (Na, Cl, etc.), and
-                value is activity (unit: Mol).
+            nacl (NaCl): Instance of NaCl class
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             potential_0 (float, optional): surface potential (unit: V).
@@ -1782,9 +1753,7 @@ class Kaolinite(Phyllosilicate):
             logger (Logger): Logger for debugging.
         """
         super().__init__(
-            temperature=temperature,
-            ion_props=ion_props.copy(),
-            activities=activities.copy(),
+            nacl=nacl,
             layer_width=layer_width,
             gamma_1=5.5,
             gamma_2=5.5,

@@ -37,25 +37,19 @@ def run():
     print("set external condition")
     ph = 7.0
     cnacl = 1.0e-3
-    ion_props = const.ion_props_default.copy()
-    activities = const.activities_default.copy()
-    ch = 10.0 ** ((-1.0) * ph)
-    ion_props["H"]["Concentration"] = ch
-    ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-    ion_props["Na"]["Concentration"] = cnacl
-    ion_props["Cl"]["Concentration"] = cnacl
-    activities["H"] = ch
-    activities["OH"] = 1.0e-14 / ch
-    activities["Na"] = cnacl
-    activities["Cl"] = cnacl
+    temperature = 298.15
+    # set fluid instance
+    nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
 
     # set mesh parameter
     edge_length: float = 1.0e-6
 
     # set mineral instance
     print("set mineral instance")
-    smectite = Smectite(ion_props=ion_props, activities=activities)
-    kaolinite = Kaolinite(ion_props=ion_props, activities=activities)
+    smectite = Smectite(nacl=deepcopy(nacl))
+    kaolinite = Kaolinite(nacl=deepcopy(nacl))
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     smectite.calc_cond_interlayer()
@@ -64,17 +58,8 @@ def run():
     kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
 
-    # set fluid instance
-    # print("set fluid instance")
-    nacl = NaCl()
-    nacl.sen_and_goode_1992(298.15, cnacl)
-    # print(f"nacl.m_conductivity: {nacl.m_conductivity}")
-    nacl.calc_cond_tensor_cube_oxyz()
-
     # set solver input
-    # print("set solver input")
     solver_input = FEM_Input_Cube()
-    # print("create_pixel_by_macro_variable")
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20),
         edge_length=edge_length,
@@ -93,12 +78,6 @@ def run():
     # print("run solver")
     solver = FEM_Cube(solver_input)
     solver.run(100, 30, 1.0e-9)
-    # print("x")
-    # print(solver.m_cond_x)
-    # print("y")
-    # print(solver.m_cond_y)
-    # print("z")
-    # print(solver.m_cond_z)
 
 
 def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None:
@@ -121,46 +100,22 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     # create logger
     logger = create_logger(logger_pth, dirname)
 
+    # set NaCl instance
     ph = 7.0
-    ion_props = deepcopy(const.ion_props_default)
-    activities = deepcopy(const.activities_default)
-
-    # concentration
-    ch = 10.0 ** ((-1.0) * ph)
-    ion_props["H"]["Concentration"] = ch
-    ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-    ion_props["Na"]["Concentration"] = cnacl
-    ion_props["Cl"]["Concentration"] = cnacl
-    activities["H"] = ch
-    activities["OH"] = 1.0e-14 / ch
-    activities["Na"] = cnacl
-    activities["Cl"] = cnacl
-
-    # mobility
-    msa_props: Dict = calc_mobility(ion_props, temperature)
-    _na_mobility = msa_props["Na"]["mobility"]
-    ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-    ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-    ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-    _cl_mobility = msa_props["Cl"]["mobility"]
-    ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-    ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-    ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
+    nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph, logger=logger)
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
 
     # set mesh parameter
     edge_length: float = 1.0e-6
 
     # set mineral instance
     smectite = Smectite(
-        ion_props=ion_props,
-        activities=activities,
-        temperature=temperature,
+        nacl=nacl,
         logger=logger,
     )
     kaolinite = Kaolinite(
-        ion_props=ion_props,
-        activities=activities,
-        temperature=temperature,
+        nacl=nacl,
         logger=logger,
     )
     smectite.calc_potentials_and_charges_truncated()
@@ -170,11 +125,6 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     kaolinite.calc_potentials_and_charges_inf()
     kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
-
-    # set fluid instance
-    nacl = NaCl(logger=logger)
-    nacl.sen_and_goode_1992(temperature, cnacl)
-    nacl.calc_cond_tensor_cube_oxyz()
 
     # set silica instance
     silica = Silica()
@@ -250,10 +200,12 @@ def experiment():
         porosity_ls = [0.2]  # default value
 
     # seed
-    seed_ls: List = [42]
+    seed_ls: List or None = conditions.get("seed", None)
+    if seed_ls is None:
+        seed_ls = [42]
 
-    pool = futures.ProcessPoolExecutor(max_workers=cpu_count())
     for seed in seed_ls:
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count())
         for smec_frac in smec_frac_ls:
             for temperature in temperature_ls:
                 for cnacl in cnacl_ls:
@@ -382,13 +334,11 @@ def output_fig():
 
 
 def main():
-    # output_fig()
-    exec_single_condition(
-        smec_frac=0.0, temperature=293.15, cnacl=0.001, porosity=0.01, seed=42
-    )
+    pass
 
 
 if __name__ == "__main__":
-    main()
+    # main()
     # experiment()
     # output_fig()
+    exec_single_condition(0., 298.15, 0.1, 0.1, 42)

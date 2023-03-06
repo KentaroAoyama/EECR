@@ -175,13 +175,14 @@ def __calc_di(
     return _r1 + _r2
 
 
-def __calc_dvhydi(_msa_props: Dict, _t: float, _s: str) -> float:
+def __calc_dvhydi(_msa_props: Dict, _t: float, _p: float, _s: str) -> float:
     """Calculate δdhydi in Roger et al. (2009)
 
     Args:
         _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
         _t (float): Absolute temperature (K)
+        _p (float): Absolute pressure (Pa)
         _s (str): Chemical species (names of const.Species)
 
     Returns:
@@ -195,9 +196,8 @@ def __calc_dvhydi(_msa_props: Dict, _t: float, _s: str) -> float:
     _sigma = _msa_props[_s]["radius"] * 2.0
     _di: float = __calc_di(_gamma, _pn, _delta, _sigma, _z)
     # calculate viscosity
-    water = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=_t)
+    water = iapws.IAPWS97(P=_p * 1.0e-6, T=_t)
     assert water.phase == "Liquid", f"water.phase: {water.phase}"
-    # TODO
     _eta0: float = iapws._iapws._Viscosity(water.rho, T=_t)
     # calculate 2nd and 3rd term
     r2_sum, r3_sum = 0.0, 0.0
@@ -492,13 +492,16 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
     return _a * _b * _c
 
 
-def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
+def calc_mobility(
+    ion_props: Dict, temperature: float, pressure: float = 2.0e6
+) -> Dict[str, Dict]:
     """Calculate the mobility of each ion based on Roger et al. (2009)
 
     Args:
         ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
         temperature (float): Absolute temperature (K)
+        pressure (float): Absolute pressure (Pa)
 
     Returns:
         Dict[str, Dict]: Dictionary containing MSA properties, etc.
@@ -533,7 +536,7 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
     water = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=temperature)
     assert water.phase == "Liquid", f"water.phase: {water.phase}"
     _eta_t: float = iapws._iapws._Viscosity(water.rho, T=temperature) / water.rho
-    water_298 = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=t_std)
+    water_298 = iapws.IAPWS97(P=pressure * 1.0e-6, T=t_std)
     _eta_298: float = iapws._iapws._Viscosity(water_298.rho, T=t_std) / water_298.rho
     d_coeff = _eta_298 * temperature / (_eta_t * t_std)
     for _si, _basic_prop in _ion_props.items():
@@ -647,7 +650,7 @@ def calc_mobility(ion_props: Dict, temperature: float) -> Dict[str, Dict]:
         _prop["dkkkk"] = __calc_dkkkk(
             _s, _msa_props, ki_pk, sigma_ij, temperature, _kappa, _gamma, _y
         )
-        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, _s)
+        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, pressure, _s)
 
     # mobility
     for _s, _prop in _msa_props.items():

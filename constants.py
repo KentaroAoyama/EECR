@@ -29,6 +29,7 @@ BOLTZMANN_CONST = 1.380649e-23  # ボルツマン定数
 AVOGADRO_CONST = 6.0221408e23
 GAS_CONST = 8.31446262
 PRESSURE = 2.0 * 1.0e6
+DISSOSIATION_WATER = 1.0e-14
 
 
 # 平衡定数 (at 25℃)
@@ -84,6 +85,15 @@ class Species(IntEnum):
     OH = auto()
 
 
+class IonProp(IntEnum):
+    Concentration = auto()
+    Activity = auto()
+    MobilityInfDiffuse = auto()
+    MobilityTrunDiffuse = auto()
+    MobilityStern = auto()
+    Valence = auto()
+
+
 # http://apchem2.kanagawa-u.ac.jp/matsumotolab/Echem3.pdf
 # Mobility_TrunDiffuseは, Mobility_InfDiffuseの1/10と設定した.
 # 参考文献：doi:10.1029/2008JB006114
@@ -92,31 +102,33 @@ class Species(IntEnum):
 # ↑ 現状, Stern層の移動度は設定しているが参照されていない(拡散層の移動度に0.5をかけている)
 ion_props_default = {
     Species.Na.name: {
-        "Concentration": 1.0e-3,
-        "Mobility_InfDiffuse": 5.19e-8,
-        "Mobility_TrunDiffuse": 0.52e-8,
-        "Mobility_Stern": 2.59e-8,
-        "Valence": 1,
+        IonProp.Concentration.name: 1.0e-3,
+        IonProp.Activity.name: 1.0e-3,
+        IonProp.MobilityInfDiffuse.name: 5.19e-8,
+        IonProp.MobilityTrunDiffuse.name: 0.52e-8,
+        IonProp.MobilityStern.name: 2.59e-8,
+        IonProp.Valence.name: 1,
     },
     Species.Cl.name: {
-        "Concentration": 1.0e-3,
-        "Mobility_InfDiffuse": 7.91e-8,
-        "Mobility_TrunDiffuse": 0.791e-8,
-        "Mobility_Stern": 3.95e-8,
-        "Valence": -1,
+        IonProp.Concentration.name: 1.0e-3,
+        IonProp.Activity.name: 1.0e-3,
+        IonProp.MobilityInfDiffuse.name: 7.91e-8,
+        IonProp.MobilityTrunDiffuse.name: 0.791e-8,
+        IonProp.MobilityStern.name: 3.95e-8,
+        IonProp.Valence.name: -1,
     },
     Species.H.name: {
-        "Concentration": 1.0e-7,
-        "Mobility_InfDiffuse": 36.3e-8,
-        "Mobility_TrunDiffuse": 1.6e-8,
-        "Valence": 1,
+        IonProp.Concentration.name: 1.0e-7,
+        IonProp.Activity.name: 1.0e-7,
+        IonProp.MobilityInfDiffuse.name: 36.3e-8,
+        IonProp.MobilityTrunDiffuse.name: 1.6e-8,
+        IonProp.Valence.name: 1,
     },
     Species.OH.name: {
-        "Concentration": 1.0e-7,
-        "Mobility_InfDiffuse": 20.5e-8,
-        "Mobility_TrunDiffuse": 2.05e-8,
-        "Valence": -1,
+        IonProp.Concentration.name: 1.0e-7,
+        IonProp.Activity.name: 1.0e-7,
+        IonProp.MobilityInfDiffuse.name: 20.5e-8,
+        IonProp.MobilityTrunDiffuse.name: 2.05e-8,
+        IonProp.Valence.name: -1,
     },
 }
-
-activities_default = {"Na": 1.0e-3, "Cl": 1.0e-3, "H": 1.0e-7, "OH": 1.0e-7}

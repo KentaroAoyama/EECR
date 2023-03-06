@@ -1,5 +1,4 @@
 # pylint: disable=import-error
-# TODO: MSAで温度・濃度補正したmobilityで計算しなおす
 # 比較する実験データ：
 # (Done) A. Revil, L. M. Cathles, S. LoshのFig.3 (スメクタイトとカオリナイトにおける, 塩濃度と導電率の関係, 傾向だけ合っていればよい)
 # (Done) Leroy and Revil (2004)のFig.4 (カオリナイトにおける, 塩濃度とゼータ電位のプロット)
@@ -51,41 +50,17 @@ def Revil_etal_1998_fig3():
     # カオリナイトに関しては, オーダー・傾向ともにあっていない. 拡散層が間隙水に占める割合は実際の岩石では非常に小さいのだと
     # すると, この結果で説明がつく. コード側に不備は確認できなかった (23/01/11)
     temperature = 298.15
+    ph = 7.
     cnacl_interval = (2.4 - 0.01) / 100
     cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
     kaolinite_cond_ls: List = []
     smectite_cond_ls: List = []
     for cnacl in cnacl_ls:
         print(f"cnacl: {cnacl}")  #!
-        ion_props = const.ion_props_default.copy()
-        activities = const.activities_default.copy()
-        ch = 1.0e-7
-        ion_props["H"]["Concentration"] = ch
-        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-        ion_props["Na"]["Concentration"] = cnacl
-        ion_props["Cl"]["Concentration"] = cnacl
-        activities["H"] = ch
-        activities["OH"] = 1.0e-14 / ch
-        activities["Na"] = cnacl
-        activities["Cl"] = cnacl
-
-        # mobility
-        msa_props: Dict = calc_mobility(ion_props, temperature)
-        _na_mobility = msa_props["Na"]["mobility"]
-        ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-        ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-        ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-        _cl_mobility = msa_props["Cl"]["mobility"]
-        ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-        ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-        ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
-
-
+        nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         # Kaolinite
         kaolinite = Kaolinite(
-            temperature=temperature,
-            ion_props=ion_props,
-            activities=activities,
+            nacl=nacl,
             xd=None,
             logger=None,
         )
@@ -94,9 +69,7 @@ def Revil_etal_1998_fig3():
         kaolinite_cond_ls.append(kaolinite.m_cond_stern_plus_edl)
         # Smectite
         smectite = Smectite(
-            temperature=temperature,
-            ion_props=ion_props,
-            activities=activities,
+            nacl=nacl,
             layer_width=1.14e-9,
         )
         smectite.calc_potentials_and_charges_truncated()
@@ -119,38 +92,15 @@ def Leroy_Revil_2004_fig4():
     # c1, k2, k4をfixすれば合う (論文中のoptimized, KClでの実験値なので, 比較対象として不適かも)
     print("test: Leroy & Revil, 2004 fig4")
     temperature = 298.15
+    ph = 8.
     cnacl_interval = (0.1 - 0.001) / 100
     cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
     potential_zeta_ls: List = []
     for cnacl in cnacl_ls:
-        print(f"cnacl: {cnacl}")  #!
-        ion_props = const.ion_props_default.copy()
-        activities = const.activities_default.copy()
-        ch = 1.0e-8
-        ion_props["H"]["Concentration"] = ch
-        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-        ion_props["Na"]["Concentration"] = cnacl
-        ion_props["Cl"]["Concentration"] = cnacl
-        activities["H"] = ch
-        activities["OH"] = 1.0e-14 / ch
-        activities["Na"] = cnacl
-        activities["Cl"] = cnacl
-
-        # mobility
-        msa_props: Dict = calc_mobility(ion_props, temperature)
-        _na_mobility = msa_props["Na"]["mobility"]
-        ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-        ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-        ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-        _cl_mobility = msa_props["Cl"]["mobility"]
-        ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-        ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-        ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
-
+        print(f"cnacl: {cnacl}")
+        nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         kaolinite = Kaolinite(
-            temperature=temperature,
-            ion_props=ion_props,
-            activities=activities,
+            nacl=nacl,
         )
         kaolinite.calc_potentials_and_charges_inf()
         # cpnvert V → mV
@@ -174,33 +124,9 @@ def Leroy_Revil_2004_fig5_a():
     potential_zeta_ls = []
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
-        ion_props = const.ion_props_default.copy()
-        activities = const.activities_default.copy()
-        ch = 10.0 ** ((-1.0) * ph)
-        ion_props["H"]["Concentration"] = ch
-        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-        ion_props["Na"]["Concentration"] = cnacl
-        ion_props["Cl"]["Concentration"] = cnacl
-        activities["H"] = ch
-        activities["OH"] = 1.0e-14 / ch
-        activities["Na"] = cnacl
-        activities["Cl"] = cnacl
-
-        # mobility
-        msa_props: Dict = calc_mobility(ion_props, temperature)
-        _na_mobility = msa_props["Na"]["mobility"]
-        ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-        ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-        ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-        _cl_mobility = msa_props["Cl"]["mobility"]
-        ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-        ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-        ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
-
+        nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         kaolinite = Kaolinite(
-            temperature=temperature,
-            ion_props=ion_props,
-            activities=activities,
+            nacl=nacl
         )
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.0)
@@ -224,33 +150,9 @@ def Leroy_Revil_2004_fig8():
     potential_zeta_ls = []
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
-        ion_props = const.ion_props_default.copy()
-        activities = const.activities_default.copy()
-        ch = 10.0 ** ((-1.0) * ph)
-        ion_props["H"]["Concentration"] = ch
-        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-        ion_props["Na"]["Concentration"] = cnacl
-        ion_props["Cl"]["Concentration"] = cnacl
-        activities["H"] = ch
-        activities["OH"] = 1.0e-14 / ch
-        activities["Na"] = cnacl
-        activities["Cl"] = cnacl
-
-        # mobility
-        msa_props: Dict = calc_mobility(ion_props, temperature)
-        _na_mobility = msa_props["Na"]["mobility"]
-        ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-        ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-        ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-        _cl_mobility = msa_props["Cl"]["mobility"]
-        ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-        ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-        ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
-
+        nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         smectite = Smectite(
-            temperature=temperature,
-            ion_props=ion_props,
-            activities=activities,
+            nacl=nacl,
         )
         smectite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(smectite.m_potential_zeta * 1000.0)
@@ -274,38 +176,13 @@ def Leroy_Revil_2004_fig9():
     specific_cond_ls = []
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
-        ion_props = const.ion_props_default.copy()
-        activities = const.activities_default.copy()
-        ch = 10.0 ** ((-1.0) * ph)
-        ion_props["H"]["Concentration"] = ch
-        ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-        ion_props["Na"]["Concentration"] = cnacl
-        ion_props["Cl"]["Concentration"] = cnacl
-        activities["H"] = ch
-        activities["OH"] = 1.0e-14 / ch
-        activities["Na"] = cnacl
-        activities["Cl"] = cnacl
-
-        # mobility
-        msa_props: Dict = calc_mobility(ion_props, temperature)
-        _na_mobility = msa_props["Na"]["mobility"]
-        ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-        ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-        ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-        _cl_mobility = msa_props["Cl"]["mobility"]
-        ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-        ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-        ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
-
+        nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         kaolinite = Kaolinite(
-            temperature=temperature,
-            ion_props=ion_props,
-            activities=activities,
+            nacl=nacl,
         )
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.0)
-        nacl = NaCl()
-        cond_fluid = nacl.sen_and_goode_1992(298.15, cnacl)
+        cond_fluid = nacl.sen_and_goode_1992()
         specific_cond_ls.append(kaolinite.calc_specific_surface_cond_inf(cond_fluid)[0])
     # plot
     fig, ax = plt.subplots()
@@ -319,50 +196,28 @@ def goncalves_fig6():
     # layer width vs zeta potential
     print("test: Goncalves et al., fig6")
     cna = 1.0e-3
-    ch_ls = [1.0e-7, 1.0e-5, 1.0e-4, 1.0e-3]
+    ph_ls = [7., 5., 4., 3.]
     temperature = 298.15
-    ch_r_zeta: Dict = {}
-    for ch in ch_ls:
-        print(f"_ch: {ch}")
-        _dct = ch_r_zeta.setdefault(ch, {})
+    ph_r_zeta: Dict = {}
+    for ph in ph_ls:
+        print(f"ph: {ph}")
+        nacl = NaCl(temperature=temperature, cnacl=cna, ph=ph)
+        _dct = ph_r_zeta.setdefault(ph, {})
         r_ls = [2.0e-9 * i for i in range(1, 6)]
         for _r in r_ls:
             print(f"_r: {_r}")  #!
-            ion_props = const.ion_props_default.copy()
-            ion_props["Na"]["Concentration"] = cna
-            ion_props["Cl"]["Concentration"] = cna
-            ion_props["H"]["Concentration"] = ch
-            ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-            activities = const.activities_default.copy()
-            activities["Na"] = cna
-            activities["Cl"] = cna
-            activities["H"] = ch
-            activities["OH"] = 1.0e-14 / ch
-
-            # mobility
-            msa_props: Dict = calc_mobility(ion_props, temperature)
-            _na_mobility = msa_props["Na"]["mobility"]
-            ion_props["Na"]["Mobility_InfDiffuse"] = _na_mobility
-            ion_props["Na"]["Mobility_TrunDiffuse"] = _na_mobility * 0.1
-            ion_props["Na"]["Mobility_Stern"] = _na_mobility * 0.5
-            _cl_mobility = msa_props["Cl"]["mobility"]
-            ion_props["Cl"]["Mobility_InfDiffuse"] = _cl_mobility
-            ion_props["Cl"]["Mobility_TrunDiffuse"] = _cl_mobility * 0.1
-            ion_props["Cl"]["Mobility_Stern"] = _cl_mobility * 0.5
-
-
-            smectite = Smectite(temperature=temperature, ion_props=ion_props, layer_width=_r / 2.0)
+            smectite = Smectite(nacl=nacl, layer_width=_r / 2.0)
             smectite.calc_potentials_and_charges_truncated()
             _dct.setdefault(_r, smectite.m_potential_zeta)
     # plot
     fig, ax = plt.subplots()
-    for ch, _dct in ch_r_zeta.items():
+    for ph, _dct in ph_r_zeta.items():
         _x, _y = [], []
         for _r, _zeta in _dct.items():
             _x.append(_r)
             _y.append(_zeta)
         _x = [i / 2.0 for i in _x]
-        ax.plot(_x, _y, label=f"pH: {(-1.) * np.log10(ch)}")
+        ax.plot(_x, _y, label=f"pH: {ph}")
     _y_goncalves = [-0.159, -0.148, -0.145, -0.144, -0.1435]
     ax.plot(_x, _y_goncalves, label="Gonçalvès")
     ax.legend()
@@ -380,21 +235,9 @@ def get_kaolinite_init_params():
         print(f"ch: {ch}")  #!
         for i, cna in enumerate(conc_ls):
             print(f"cna: {cna}")  #!
-            ion_props = const.ion_props_default.copy()
-            activities = const.activities_default.copy()
-            ion_props["H"]["Concentration"] = ch
-            ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-            ion_props["Na"]["Concentration"] = cna
-            ion_props["Cl"]["Concentration"] = cna
-            activities["H"] = ch
-            activities["OH"] = 1.0e-14 / ch
-            activities["Na"] = cna
-            activities["Cl"] = cna
-
+            nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
             kaolinite = Kaolinite(
-                temperature=temperature,
-                ion_props=ion_props,
-                activities=activities,
+                nacl=nacl,
                 layer_width=0.0,
                 xd=None,
                 logger=None,
@@ -500,21 +343,9 @@ def get_smectite_init_params_inf():
         print(f"ch: {ch}")  #!
         for i, cna in enumerate(conc_ls):
             print(f"cna: {cna}")  #!
-            ion_props = const.ion_props_default.copy()
-            activities = const.activities_default.copy()
-            ch = ch
-            ion_props["H"]["Concentration"] = ch
-            ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-            ion_props["Na"]["Concentration"] = cna
-            ion_props["Cl"]["Concentration"] = cna
-            activities["H"] = ch
-            activities["OH"] = 1.0e-14 / ch
-            activities["Na"] = cna
-            activities["Cl"] = cna
+            nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
             smectite = Smectite(
-                temperature=temperature,
-                ion_props=ion_props,
-                activities=activities,
+                nacl=nacl,
                 layer_width=1.14e-9,
                 xd=None,
                 logger=None,
@@ -706,20 +537,9 @@ def get_smectite_init_params_truncated():
             print(f"ch: {ch}")  #!
             for j, cna in enumerate(conc_ls):
                 print(f"cna: {cna}")  #!
-                ion_props = const.ion_props_default.copy()
-                activities = const.activities_default.copy()
-                ion_props["H"]["Concentration"] = ch
-                ion_props["OH"]["Concentration"] = 1.0e-14 / ch
-                ion_props["Na"]["Concentration"] = cna
-                ion_props["Cl"]["Concentration"] = cna
-                activities["H"] = ch
-                activities["OH"] = 1.0e-14 / ch
-                activities["Na"] = cna
-                activities["Cl"] = cna
+                nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
                 smectite = Smectite(
-                    temperature=temperature,
-                    ion_props=ion_props,
-                    activities=activities,
+                    nacl=nacl,
                     layer_width=_r,
                 )
                 if j == 0:
@@ -755,16 +575,7 @@ def test_single_condition():
     _r = 2.0e-09
     _ch = 6.428073117284319e-11
     _cna = 3.1622776601683795
-    ion_props = const.ion_props_default.copy()
-    activities = const.activities_default.copy()
-    ion_props["H"]["Concentration"] = _ch
-    ion_props["OH"]["Concentration"] = 1.0e-14 / _ch
-    ion_props["Na"]["Concentration"] = _cna
-    ion_props["Cl"]["Concentration"] = _cna
-    activities["H"] = _ch
-    activities["OH"] = 1.0e-14 / _ch
-    activities["Na"] = _cna
-    activities["Cl"] = _cna
+    nacl = NaCl(temperature=293.15, cnacl=_cna, ph=-np.log10(_ch))
     x_init = [
         -0.3185634630543255,
         -0.00016802801283331357,
@@ -775,9 +586,7 @@ def test_single_condition():
         7.887858103894404e-05,
     ]
     smectite = Smectite(
-        temperature=293.15,
-        ion_props=ion_props,
-        activities=activities,
+        nacl=nacl,
         layer_width=_r,
     )
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
@@ -793,8 +602,8 @@ def test_sen_and_goode_1992():
         for tempe in tempe_ls:
             ion_props["Na"]["Concentration"] = cnacl
             ion_props["Cl"]["Concentration"] = cnacl
-            nacl = NaCl()
-            _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992(tempe, cnacl))
+            nacl = NaCl(temperature=tempe, cnacl=cnacl)
+            _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992())
     fig, ax = plt.subplots()
     for cnacl, _tempe_dct in cnacl_tempe_dct.items():
         tempe_ls: List = []
@@ -875,6 +684,11 @@ def test_mobility():
     plt.show()
 
 
+def compare_WS_shaly():
+    out_dir: str = test_dir()
+    return
+
+
 def main():
     return
 
@@ -886,11 +700,13 @@ if __name__ == "__main__":
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
-    Leroy_Revil_2004_fig4()
+    # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
     # Leroy_Revil_2004_fig8()
     # Leroy_Revil_2004_fig9()
     # goncalves_fig6()
     # test_sen_and_goode_1992()
-    # tmp()
-    test_mobility()
+    # test_mobility()
+
+    nacl = NaCl(ph=3.)
+    print(nacl.get_ion_props())

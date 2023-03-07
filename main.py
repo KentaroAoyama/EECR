@@ -11,13 +11,10 @@ from copy import deepcopy
 from yaml import safe_load
 import pickle
 import numpy as np
-from silica import Silica
-from phyllosilicate import Smectite, Kaolinite
+from mineral import Smectite, Kaolinite, Quartz
 from fluid import NaCl
 from solver_input import FEM_Input_Cube
 from solver import FEM_Cube
-import constants as const
-from msa import calc_mobility
 from output import plot_smec_frac_cond
 
 
@@ -118,6 +115,10 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         nacl=nacl,
         logger=logger,
     )
+    quartz = Quartz(
+        nacl=nacl,
+        logger=logger,
+    )
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     smectite.calc_cond_interlayer()
@@ -125,9 +126,9 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     kaolinite.calc_potentials_and_charges_inf()
     kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
-
-    # set silica instance
-    silica = Silica()
+    quartz.calc_potentials_and_charges_inf()
+    quartz.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+    quartz.calc_cond_tensor()
 
     # set solver input
     solver_input = FEM_Input_Cube(logger=logger)
@@ -139,7 +140,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         volume_frac_dict={
             nacl: porosity,
             smectite: smec_frac_tol,
-            silica: siica_frac_tol,
+            quartz: siica_frac_tol,
         },
         seed=seed,
         rotation_setting="random",
@@ -161,6 +162,11 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     smectite_fpth: str = path.join(outdir, "smectite.pkl")
     with open(smectite_fpth, "wb") as pkf:
         pickle.dump(smectite, pkf, pickle.HIGHEST_PROTOCOL)
+
+    # quartz
+    quartz_fpth = path.join(outdir, "quartz.pkl")
+    with open(quartz_fpth, "wb") as pkf:
+        pickle.dump(quartz, pkf, pickle.HIGHEST_PROTOCOL)
 
     # solver
     solver_fpth: str = path.join(outdir, "solver.pkl")
@@ -220,7 +226,7 @@ def experiment():
                         )
         pool.shutdown(wait=True)
 
-
+# TODO: error bar
 def output_fig():
     pickle_dir = path.join(getcwd(), "output", "pickle")
     conditions_ye: Dict = {}
@@ -340,5 +346,5 @@ def main():
 if __name__ == "__main__":
     # main()
     # experiment()
-    # output_fig()
-    exec_single_condition(0., 298.15, 0.1, 0.1, 42)
+    output_fig()
+    # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

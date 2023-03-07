@@ -1,4 +1,4 @@
-"""Calculate electrical properties of phillosillicate"""
+"""Calculate electrical properties of mineral"""
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -41,10 +41,10 @@ with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
 
-class Phyllosilicate:
+class Mineral:
     """
-    Phyllosilicate Class
-    It has a function to calculate the conductivity of phyllosilicate particles and
+    Mineral Class
+    It has a function to calculate the conductivity of mineral particles and
     the member variables necessary for the calculation.
 
     To calculate the surface potential, we use the equation proposed by
@@ -90,11 +90,11 @@ class Phyllosilicate:
         # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
         # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
         # TODO: external_propsクラス (or Dict)を引数としてメンバ変数を減らす
-        """Initialize Phyllosilicate class.
+        """Initialize mineral class.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
+            layer_width (float): Distance between sheets of mineral minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
             gamma_2 (float): Surface site densities of sianol (unit: sites/nm2).
@@ -127,7 +127,7 @@ class Phyllosilicate:
         self.m_ion_props: Dict = nacl.get_ion_props()
         self.m_dielec_water: float = nacl.get_dielec_water()
         ####################################################
-        # Parameters held by phyllosilicate
+        # Parameters held by mineral
         ####################################################
         self.m_layer_width: float = layer_width
         self.m_gamma_1: float = gamma_1
@@ -155,7 +155,7 @@ class Phyllosilicate:
         self.m_charge_diffuse: float = charge_diffuse
         self.m_xd = xd
         self.m_cond_stern_plus_edl = cond_stern_plus_edl
-        # Parameters subordinate to those required for phyllosilicate initialization,
+        # Parameters subordinate to those required for mineral initialization,
         # but useful to be obtained in advance
         self.m_ionic_strength = None
         self.m_kappa = None
@@ -177,7 +177,7 @@ class Phyllosilicate:
 
         # START DEBUGGING
         if self.m_logger is not None:
-            self.m_logger.info("Initialize Phyllosilicate")
+            self.m_logger.info("Initialize mineral")
             for name, value in vars(self).items():
                 _msg = f"name: {name}, value: {value}"
                 self.m_logger.debug(_msg)
@@ -188,8 +188,10 @@ class Phyllosilicate:
         """
         if self.m_qi < 0.0 and self.m_gamma_1 == 0.0:
             self.__set_constant_for_smectite_truncated()
-        else:
+        elif self.m_qi == 0.0 and self.m_gamma_1 > 0.0:
             self.__set_constant_for_kaolinite()
+        else:
+            self.__set_constant_for_qurtz()
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
 
@@ -211,6 +213,23 @@ class Phyllosilicate:
         )
         bottom = self.m_dielec_water * _kb * self.m_temperature
         self.m_kappa = np.sqrt(top / bottom)
+
+    def __set_constant_for_qurtz(self) -> None:
+        """Set the constants for the case of quartz and infinite diffuse layer"""
+        self.m_k1: float = const.calc_equibilium_const(
+            const.dg_aloh_quartz, self.m_temperature
+        )
+        self.m_k2: float = const.calc_equibilium_const(
+            const.dg_sioh_quartz, self.m_temperature
+        )
+        self.m_k3: float = const.calc_equibilium_const(
+            const.dg_xh_quartz, self.m_temperature
+        )
+        self.m_k4: float = const.calc_equibilium_const(
+            const.dg_xna_quartz, self.m_temperature
+        )
+        self.m_c1: float = const.c1_quartz
+        self.m_c2: float = const.c2_quartz
 
     def __set_constant_for_kaolinite(self) -> None:
         """Set the constants for the case of kaolinite and infinite diffuse layer"""
@@ -893,6 +912,9 @@ class Phyllosilicate:
         oscillation_tol: float = 1.0e-04,
         beta: float = 0.75,
         lamda: float = 2.0,
+        _k2: float = None,
+        _c1: float = None,
+        _c2: float = None
     ) -> List:
         """Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
@@ -920,13 +942,13 @@ class Phyllosilicate:
         """
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
-
         # TODO: May need to consider other cases (e.g., illite, etc.)
         if self.m_qi < 0.0 and self.m_gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()
-        else:
+        elif self.m_qi == 0.0 and self.m_gamma_1 > 0.0:
             self.__set_constant_for_kaolinite()
-
+        else:
+            self.__set_constant_for_qurtz()
         if x_init is None:
             # Set initial electrical parameters
             if self.m_qi < 0 and self.m_gamma_1 == 0.0:
@@ -1484,8 +1506,10 @@ class Phyllosilicate:
         # TODO: May need to consider other cases (e.g., illite, etc.)
         if self.m_qi < 0.0 and self.m_gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()
-        else:
+        elif self.m_qi == 0.0 and self.m_gamma_1 > 0.0:
             self.__set_constant_for_kaolinite()
+        else:
+            self.__set_constant_for_qurtz()
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
         if self.m_xd is None:
@@ -1636,7 +1660,7 @@ class Phyllosilicate:
         return self.m_double_layer_length
 
     def save(self, _pth: str) -> None:
-        """Save Phyllosilicate class as pickle
+        """Save mineral class as pickle
 
         Args:
             _pth (str): path to save
@@ -1646,12 +1670,12 @@ class Phyllosilicate:
 
 
 # pylint: disable=dangerous-default-value
-class Smectite(Phyllosilicate):
-    """Inherited class of Phyllosilicate, with surface adsorption site density and layer
+class Smectite(Mineral):
+    """Inherited class of Mineral, with surface adsorption site density and layer
     charge fixed to the physical properties of smectite
 
     Args:
-        Phyllosilicate: Phyllosilicate class
+        mineral: mineral class
     """
 
     def __init__(
@@ -1669,13 +1693,13 @@ class Smectite(Phyllosilicate):
         cond_stern_plus_edl: float = None,
         logger: Logger = None,
     ):
-        """Inherited classes from Philosilicate. Number density of
+        """Inherited classes from Mineral. Number density of
             reactors on the surface and fixing the layer charge for
             smectite case.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
+            layer_width (float): Distance between sheets of mineral minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             potential_0 (float, optional): surface potential (unit: V).
             potential_stern (float, optional): stern plane potential (unit: V).
@@ -1710,12 +1734,12 @@ class Smectite(Phyllosilicate):
 
 
 # pylint: disable=dangerous-default-value
-class Kaolinite(Phyllosilicate):
-    """Inherited class of Phyllosilicate, with surface adsorption site density, layer
+class Kaolinite(Mineral):
+    """Inherited class of Mineral, with surface adsorption site density, layer
     charge, and layer width fixed to the physical properties of kaolinite
 
     Args:
-        Phyllosilicate: Phyllosilicate class
+        Mineral: Mineral class
     """
 
     def __init__(
@@ -1733,13 +1757,13 @@ class Kaolinite(Phyllosilicate):
         cond_stern_plus_edl: float = None,
         logger: Logger = None,
     ):
-        """Inherited classes from Philosilicate. Number density of
+        """Inherited classes from Mineral. Number density of
             reactors on the surface and fixing the layer charge for
             kaolinite case.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
+            layer_width (float): Distance between sheets of mineral minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             potential_0 (float, optional): surface potential (unit: V).
             potential_stern (float, optional): stern plane potential (unit: V).
@@ -1758,6 +1782,42 @@ class Kaolinite(Phyllosilicate):
             gamma_1=5.5,
             gamma_2=5.5,
             gamma_3=5.5,
+            qi=0.0,
+            potential_0=potential_0,
+            potential_stern=potential_stern,
+            potential_zeta=potential_zeta,
+            potential_r=potential_r,
+            charge_0=charge_0,
+            charge_stern=charge_stern,
+            charge_diffuse=charge_diffuse,
+            xd=xd,
+            cond_stern_plus_edl=cond_stern_plus_edl,
+            logger=logger,
+        )
+
+
+class Quartz(Mineral):
+    # TODO: docstring
+    # TODO: test
+    def __init__(self,
+                nacl: NaCl,
+                layer_width: float = 0.,
+                potential_0: float = None,
+                potential_stern: float = None,
+                potential_zeta: float = None,
+                potential_r: float = None,
+                charge_0: float = None,
+                charge_stern: float = None,
+                charge_diffuse: float = None,
+                xd: float = None,
+                cond_stern_plus_edl: float = None,
+                logger: Logger = None,):
+        super().__init__(
+            nacl=nacl,
+            layer_width=layer_width,
+            gamma_1=0.,
+            gamma_2=5.5,
+            gamma_3=0.,
             qi=0.0,
             potential_0=potential_0,
             potential_stern=potential_stern,

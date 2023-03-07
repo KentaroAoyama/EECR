@@ -18,7 +18,7 @@ from copy import deepcopy
 
 from matplotlib import pyplot as plt
 import numpy as np
-from phyllosilicate import Smectite, Kaolinite
+from mineral import Smectite, Kaolinite, Quartz
 import constants as const
 from fluid import NaCl
 from msa import calc_mobility
@@ -616,7 +616,7 @@ def test_sen_and_goode_1992():
     fig.savefig("./test/sen_and_goode.png", dpi=200)
 
 
-def tmp():
+def search_ill_cond():
     fpath = "./output/pickle/smec_frac-0.0_temperature-293.15_cnacl-0.01_porosity-0.01/42/2023-02-17/solver.pkl"
     with open(fpath, "rb") as pkf:
         solver = pickle.load(pkf)
@@ -639,6 +639,59 @@ def tmp():
                                 break
     print(f"ill_cond: {ill_cond}")
     print(len(ill_cond))
+
+
+def Grieser_and_Healy():
+    """Grieser & Healy (1989)で測定されたQuarzのゼータ電位とあっているかどうかテストする
+    """
+    temperature = 298.15
+    ph = 5.9
+    # a_k2 = np.arange(17.7, 17.9, 0.01).tolist()
+    # # a_c1 = np.arange(2.2, 2.3, 0.01).tolist()
+    # # a_c2 = np.arange(1.6, 1.7, 0.01).tolist()
+    # a_c1 = [2.28]
+    # a_c2 = [1.67]
+    _x_data = [0.10163604555319171, 0.010035704616274973, 0.0010470361117482126, 0.00010696056608526546]
+    _y_data = [-25.324768769868783, -43.21354282499772, -70.07810149269352, -88.14660966244529]
+    # rms_ls = np.zeros((len(a_k2), len(a_c1), len(a_c2))).tolist()
+    # for i, ak2 in enumerate(a_k2):
+    #     for j, ac1 in enumerate(a_c1):
+    #         for k, ac2 in enumerate(a_c2):
+    #             _k2 = const.k_sioh_quartz * ak2
+    #             _c1 = const.c1_quartz * ac1
+    #             _c2 = const.c2_quartz * ac2
+    #             cal_ls = []
+    #             for cnacl in _x_data:
+    #                 nacl = NaCl(cnacl=cnacl, temperature=temperature, ph=ph)
+    #                 quartz = Quartz(nacl=nacl)
+    #                 quartz.calc_potentials_and_charges_inf(_k2=_k2, _c1=_c1, _c2=_c2)
+    #                 cal_ls.append(quartz.m_potential_zeta * 1000.)
+    #             _rms = np.sqrt(np.square(np.array(_y_data) - np.array(cal_ls)).sum())
+    #             rms_ls[i][j][k] = _rms
+    # print(rms_ls)
+    # i, j, k = np.unravel_index(np.argmin(rms_ls), shape=(len(a_k2), len(a_c1), len(a_c2)))
+    # print(a_k2[i])
+    # print(a_c1[j])
+    # print(a_c2[k])
+
+    zeta_ls = []
+    for cnacl in _x_data:
+        nacl = NaCl(cnacl=cnacl, temperature=temperature, ph=ph)
+        quartz = Quartz(nacl=nacl)
+        quartz.calc_potentials_and_charges_inf()
+        quartz.calc_cond_infdiffuse()
+        quartz.calc_cond_tensor()
+        zeta_ls.append(quartz.m_potential_zeta * 1000.)
+    _x_data = [0.10163604555319171, 0.010035704616274973, 0.0010470361117482126, 0.00010339940482242445]
+    _y_data = [-25.324768769868783, -43.21354282499772, -70.07810149269352, -88.22328915867556]
+    fig, ax = plt.subplots()
+    ax.plot(_x_data, zeta_ls)
+    ax.scatter(_x_data, _y_data)
+    ax.set_xscale("log")
+    ax.invert_xaxis()
+    ax.invert_yaxis()
+    fig.savefig(path.join(test_dir(), "quartz_zeta.png"), dpi=200, bbox_inches="tight")
+
 
 
 def test_mobility():
@@ -708,5 +761,4 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992()
     # test_mobility()
 
-    nacl = NaCl(ph=3.)
-    print(nacl.get_ion_props())
+    Grieser_and_Healy()

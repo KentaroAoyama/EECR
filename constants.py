@@ -1,13 +1,13 @@
 from enum import IntEnum, auto
-import numpy as np
+from math import log, exp
 
 
 def calc_standard_gibbs_energy(k_25: float) -> float:
-    return -np.log(k_25) * GAS_CONST * 298.15
+    return -log(k_25) * GAS_CONST * 298.15
 
 
 def calc_equibilium_const(dg_25, temperature) -> float:
-    return np.exp(-dg_25 / (GAS_CONST * temperature))
+    return exp(-dg_25 / (GAS_CONST * temperature))
 
 
 def calc_dielectric_const_water(temperature: float) -> float:

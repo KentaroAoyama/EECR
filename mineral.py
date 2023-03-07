@@ -914,7 +914,7 @@ class Mineral:
         lamda: float = 2.0,
         _k2: float = None,
         _c1: float = None,
-        _c2: float = None
+        _c2: float = None,
     ) -> List:
         """Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
@@ -1741,6 +1741,7 @@ class Kaolinite(Mineral):
     Args:
         Mineral: Mineral class
     """
+
     def __init__(
         self,
         nacl: NaCl,
@@ -1802,19 +1803,22 @@ class Quartz(Mineral):
     Args:
         Mineral: Mineral class
     """
-    def __init__(self,
-                nacl: NaCl,
-                layer_width: float = 0.,
-                potential_0: float = None,
-                potential_stern: float = None,
-                potential_zeta: float = None,
-                potential_r: float = None,
-                charge_0: float = None,
-                charge_stern: float = None,
-                charge_diffuse: float = None,
-                xd: float = None,
-                cond_stern_plus_edl: float = None,
-                logger: Logger = None,):
+
+    def __init__(
+        self,
+        nacl: NaCl,
+        layer_width: float = 0.0,
+        potential_0: float = None,
+        potential_stern: float = None,
+        potential_zeta: float = None,
+        potential_r: float = None,
+        charge_0: float = None,
+        charge_stern: float = None,
+        charge_diffuse: float = None,
+        xd: float = None,
+        cond_stern_plus_edl: float = None,
+        logger: Logger = None,
+    ):
         """Inherited classes from Mineral. Number density of
             reactors on the surface and fixing the layer charge for
             quartz case.
@@ -1837,9 +1841,9 @@ class Quartz(Mineral):
         super().__init__(
             nacl=nacl,
             layer_width=layer_width,
-            gamma_1=0.,
+            gamma_1=0.0,
             gamma_2=5.5,
-            gamma_3=0.,
+            gamma_3=0.0,
             qi=0.0,
             potential_0=potential_0,
             potential_stern=potential_stern,

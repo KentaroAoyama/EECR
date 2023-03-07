@@ -22,7 +22,7 @@ from mineral import Smectite, Kaolinite, Quartz
 import constants as const
 from fluid import NaCl
 from msa import calc_mobility
-
+from solver_input import FEM_Input_Cube
 
 def create_logger(i, fpth="./debug.txt"):
     # create logger
@@ -693,7 +693,6 @@ def Grieser_and_Healy():
     fig.savefig(path.join(test_dir(), "quartz_zeta.png"), dpi=200, bbox_inches="tight")
 
 
-
 def test_mobility():
     # TODO:
     # _ls = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 2.0, 3.0]
@@ -736,6 +735,25 @@ def test_mobility():
     ax.set_yscale("log")
     plt.show()
 
+def tmp():
+    nacl = NaCl()
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
+    quartz = Quartz(nacl=nacl)
+    smectite = Smectite(nacl=nacl)
+    quartz.calc_potentials_and_charges_inf()
+    quartz.calc_cond_infdiffuse()
+    quartz.calc_cond_tensor()
+    smectite.calc_cond_infdiffuse()
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+
+    _frac = {nacl: 0.1, quartz: 0.2, smectite: 0.7}
+    sol_input = FEM_Input_Cube()
+    sol_input.create_pixel_by_macro_variable(volume_frac_dict=_frac)
+
+
 
 def compare_WS_shaly():
     out_dir: str = test_dir()
@@ -761,4 +779,5 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992()
     # test_mobility()
 
-    Grieser_and_Healy()
+    # Grieser_and_Healy()
+    tmp()

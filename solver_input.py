@@ -7,7 +7,7 @@ from typing import List, Dict, Tuple
 from math import isclose
 import random
 from sys import float_info
-
+from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
 from fluid import Fluid
 
@@ -68,9 +68,9 @@ class FEM_Input_Cube:
             ez (float): Electrical field of z direction. Note that the unit is volt/Δz (Δz is
                 the pix size of z direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998).
-            b (np.ndarray): TODO: write docstring
-            c (float): TODO: write docstring
-            logger (Logger): TODO: write docstring
+            b (np.ndarray): Constants for energy diverging at the boundary
+            c (float): Constants for energy diverging at the boundary
+            logger (Logger): Logger for debugging
         """
         self.m_pix_tensor: np.ndarray = pix_tensor
         self.m_dk: List = dk
@@ -99,7 +99,7 @@ class FEM_Input_Cube:
     # pylint: disable=dangerous-default-value
     def create_pixel_by_macro_variable(
         self,
-        shape: Tuple[int] = (100, 100, 100),
+        shape: Tuple[int] = (10, 10, 10),
         edge_length: float = 1.0e-6,
         volume_frac_dict: Dict = {},
         seed: int = 42,
@@ -160,19 +160,20 @@ class FEM_Input_Cube:
                 "Setting rotated conductivity tensor for each element..."
             )
         nz, ny, nx = shape
+        rot_mat_const = None
+        if isinstance(rotation_setting, tuple) and len(rotation_setting) == 3:
+            rot_mat_const: np.ndarray = calc_rotation_matrix(rotation_setting)
         for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
                     instance = np.random.choice(instance_set_ls, p=frac_ls)
                     tensor_center = getattr(instance, "get_cond_tensor", None)()
-                    assert tensor_center is not None
+                    assert tensor_center is not None, f"instance: {instance}"
                     _rot_mat = None
                     if rotation_setting == "random":
                         _rot_mat = calc_rotation_matrix()
-                    elif isinstance(rotation_setting, tuple):
-                        assert len(rotation_setting) == 3
-                        _x, _y, _z = rotation_setting
-                        _rot_mat = calc_rotation_matrix(_x, _y, _z)
+                    elif rot_mat_const is not None:
+                        _rot_mat = rot_mat_const
                     else:
                         raise RuntimeError("rotation_setting argument is not valid")
                     assert _rot_mat is not None
@@ -190,7 +191,7 @@ class FEM_Input_Cube:
             self.m_logger.info("Modifying element assignments...")
             self.m_logger.info(f"instance_set_ls: {instance_set_ls}")
         ns = nx * ny * nz
-        frac_unit = 1.0 / ns
+        frac_unit = 1.0 / float(ns)
         for cou, instance in enumerate(instance_set_ls):
             if cou == len(instance_set_ls) - 1:
                 break
@@ -212,9 +213,11 @@ class FEM_Input_Cube:
             lower, upper = frac_targ - frac_unit, frac_targ + frac_unit
             # second modify the fraction
             # If the requirements are met
-            if lower <= frac_asigned <= upper:
+            if lower < frac_asigned < upper:
                 continue
-            num_diff: int = int(abs(frac_asigned - frac_targ) / frac_unit)
+            num_diff = int(Decimal(abs(frac_asigned - frac_targ) / frac_unit).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP
+            ))
             # If more than the target value
             if frac_asigned > upper:
                 m_delete_ls: List = random.sample(m_ls, k=num_diff)
@@ -229,9 +232,14 @@ class FEM_Input_Cube:
                     )
             # If less than the target value
             if frac_asigned < lower:
-                _m_all: set = set([m for m in range(nx * ny * nz)])
+                _m_next = set()
+                for k in range(nz):
+                    for j in range(ny):
+                        for i in range(nx):
+                            if instance_ls[k][j][i] is instance_next:
+                                _m_next.add(calc_m(i,j,k,nx,ny))
                 m_add_ls: List = random.sample(
-                    list(_m_all.difference(set(m_ls))), k=num_diff
+                    list(_m_next.difference(set(m_ls))), k=num_diff
                 )
                 for m in m_add_ls:
                     i, j, k = calc_ijk(m, nx, ny)
@@ -254,10 +262,9 @@ class FEM_Input_Cube:
                         _tensor = pix_tensor[k][j][i]
                         pix_tensor[k][j][i] = roundup_small_negative(_tensor)
             frac_targ: float = volume_frac_dict[instance]
-            # TODO: 合わない場合があるので修正
-            # assert frac_targ - frac_unit < frac < frac_targ + frac_unit, \
-            #     f"instance: {instance}, volume_frac_dict[instance]: {volume_frac_dict[instance]}, frac: {frac}"
-
+            assert (
+                frac_targ - frac_unit < frac < frac_targ + frac_unit
+            ), f"instance: {instance}, volume_frac_dict[instance]: {volume_frac_dict[instance]}, frac: {frac}"
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
         if self.m_logger is not None:
@@ -1028,7 +1035,8 @@ def calc_rotation_matrix(
     _rot = np.matmul(np.matmul(_x_rot, _y_rot), _z_rot)
     return _rot
 
-def roundup_small_negative(_arr: np.ndarray, threshold: float=-1.0e-16) -> np.ndarray:
+
+def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.ndarray:
     """Round up minute negative values
 
     Args:

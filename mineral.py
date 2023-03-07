@@ -1741,7 +1741,6 @@ class Kaolinite(Mineral):
     Args:
         Mineral: Mineral class
     """
-
     def __init__(
         self,
         nacl: NaCl,
@@ -1797,8 +1796,12 @@ class Kaolinite(Mineral):
 
 
 class Quartz(Mineral):
-    # TODO: docstring
-    # TODO: test
+    """Inherited class of Mineral, with surface adsorption site density, layer
+    charge, and layer width fixed to the physical properties of kaolinite
+
+    Args:
+        Mineral: Mineral class
+    """
     def __init__(self,
                 nacl: NaCl,
                 layer_width: float = 0.,
@@ -1812,6 +1815,25 @@ class Quartz(Mineral):
                 xd: float = None,
                 cond_stern_plus_edl: float = None,
                 logger: Logger = None,):
+        """Inherited classes from Mineral. Number density of
+            reactors on the surface and fixing the layer charge for
+            quartz case.
+
+        Args:
+            nacl (NaCl): Instance of NaCl class
+            layer_width (float): Distance between sheets of mineral minerals
+                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
+            potential_0 (float, optional): surface potential (unit: V).
+            potential_stern (float, optional): stern plane potential (unit: V).
+            potential_zeta (float, optional): zeta plane potential (unit: V).
+            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
+            charge_0 (float, optional): charges in surface layer (unit: C/m3).
+            charge_stern (float, optional): charges in stern layer (unit: C/m3).
+            charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
+            xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
+            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m).
+            logger (Logger): Logger for debugging.
+        """
         super().__init__(
             nacl=nacl,
             layer_width=layer_width,

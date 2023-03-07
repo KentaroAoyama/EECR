@@ -1001,7 +1001,7 @@ class Phyllosilicate:
         # DEBUG
         if self.m_logger is not None:
             self.m_logger.info(
-                "Finished the calculation of electrical"
+                "Finished the calculation of electrical "
                 "properties for an infinite diffusion layer"
             )
             self.m_logger.debug(f"m_potential_0: {self.m_potential_0}")
@@ -1133,7 +1133,7 @@ class Phyllosilicate:
         # DEBUG
         if self.m_logger is not None:
             self.m_logger.info(
-                "Finished the calculation of electrical"
+                "Finished the calculation of electrical "
                 "properties for an truncated diffusion layer"
             )
             self.m_logger.debug(f"m_potential_0: {self.m_potential_0}")
@@ -1504,7 +1504,7 @@ class Phyllosilicate:
         self.m_cond_stern_plus_edl = cond
         if self.m_logger is not None:
             self.m_logger.info(
-                "Finished the calculation of infinite diffuse " "layer conductivity"
+                "Finished the calculation of infinite diffuse layer conductivity"
             )
             self.m_logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
             self.m_logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")

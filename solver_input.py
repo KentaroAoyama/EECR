@@ -126,11 +126,16 @@ class FEM_Input_Cube:
             _sum += frac
         assert isclose(_sum, 1.0, abs_tol=1.0e-10)
 
-        # Check to see if the values in shape are valid
+        # Check to see if shape is valid
         for n in shape:
             assert isinstance(n, int) and n > 0
         nx, ny, nz = shape
         shape = (nz, ny, nx)  # change order
+
+        rot_mat_const = None
+        if isinstance(rotation_setting, tuple):
+            if len(rotation_setting) == 3:
+                rot_mat_const: np.ndarray = calc_rotation_matrix(rotation_setting)
 
         # first create pixel as 3d list
         instance_set_ls: List = []
@@ -152,105 +157,52 @@ class FEM_Input_Cube:
         rotation_angle_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
         # instance will be stored for each element
         instance_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
+        # build pix_tensor, rotation_angle_ls, instance_ls
         np.random.seed(seed)
         random.seed(seed)
+        ns = nx * ny * nz
+        frac_unit = 1.0 / float(ns)
+        m_all = set([_m for _m in range(ns)])
+        error_cuml: float = 0.0
         # set rotated conductivity tensor for each element
         if self.m_logger is not None:
             self.m_logger.info(
                 "Setting rotated conductivity tensor for each element..."
             )
-        nz, ny, nx = shape
-        rot_mat_const = None
-        if isinstance(rotation_setting, tuple) and len(rotation_setting) == 3:
-            rot_mat_const: np.ndarray = calc_rotation_matrix(rotation_setting)
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    instance = np.random.choice(instance_set_ls, p=frac_ls)
-                    tensor_center = getattr(instance, "get_cond_tensor", None)()
-                    assert tensor_center is not None, f"instance: {instance}"
-                    _rot_mat = None
-                    if rotation_setting == "random":
-                        _rot_mat = calc_rotation_matrix()
-                    elif rot_mat_const is not None:
-                        _rot_mat = rot_mat_const
-                    else:
-                        raise RuntimeError("rotation_setting argument is not valid")
-                    assert _rot_mat is not None
-                    rotation_angle_ls[k][j][i] = _rot_mat
-                    instance_ls[k][j][i] = instance
-                    tensor_center: np.ndarray = np.matmul(
-                        np.matmul(_rot_mat, tensor_center), _rot_mat.T
-                    )
-                    pix_tensor[k][j][i]: np.ndarray = tensor_center
-        self.m_rotation_angle = rotation_angle_ls
-
-        # Check whether the elements are assigned to satisfy the volume_frac_dict and correct
-        # it if the error is too large.
-        if self.m_logger is not None:
-            self.m_logger.info("Modifying element assignments...")
-            self.m_logger.info(f"instance_set_ls: {instance_set_ls}")
-        ns = nx * ny * nz
-        frac_unit = 1.0 / float(ns)
-        for cou, instance in enumerate(instance_set_ls):
-            if cou == len(instance_set_ls) - 1:
-                break
-            cond_tensor = getattr(instance, "get_cond_tensor", None)()
-            instance_next = instance_set_ls[cou + 1]
-            cond_tensor_next = getattr(
-                instance_set_ls[cou + 1], "get_cond_tensor", None
-            )()
-            frac_targ = volume_frac_dict[instance]
-            # first, get the volume fraction of each phase
-            frac_asigned: float = 0.0
-            m_ls: List[int] = []
-            for k in range(nz):
-                for j in range(ny):
-                    for i in range(nx):
-                        if instance_ls[k][j][i] is instance:
-                            frac_asigned += frac_unit
-                            m_ls.append(calc_m(i, j, k, nx, ny))
-            lower, upper = frac_targ - frac_unit, frac_targ + frac_unit
-            # second modify the fraction
-            # If the requirements are met
-            if lower < frac_asigned < upper:
-                continue
-            num_diff = int(Decimal(abs(frac_asigned - frac_targ) / frac_unit).quantize(
-                Decimal("1"), rounding=ROUND_HALF_UP
-            ))
-            # If more than the target value
-            if frac_asigned > upper:
-                m_delete_ls: List = random.sample(m_ls, k=num_diff)
-                for m in m_delete_ls:
-                    i, j, k = calc_ijk(m, nx, ny)
-                    # Re-set instance
-                    instance_ls[k][j][i] = instance_next
-                    # Re-set conductivity tensor
-                    rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
-                    pix_tensor[k][j][i] = np.matmul(
-                        np.matmul(rot_mat, cond_tensor_next), rot_mat.T
-                    )
-            # If less than the target value
-            if frac_asigned < lower:
-                _m_next = set()
-                for k in range(nz):
-                    for j in range(ny):
-                        for i in range(nx):
-                            if instance_ls[k][j][i] is instance_next:
-                                _m_next.add(calc_m(i,j,k,nx,ny))
-                m_add_ls: List = random.sample(
-                    list(_m_next.difference(set(m_ls))), k=num_diff
+        for _instance, _frac in volume_frac_dict.items():
+            _num = int(
+                Decimal(_frac / frac_unit).quantize(
+                    Decimal("1"), rounding=ROUND_HALF_UP
                 )
-                for m in m_add_ls:
-                    i, j, k = calc_ijk(m, nx, ny)
-                    # Re-set instance
-                    instance_ls[k][j][i] = instance
-                    # Re-set conductivity tensor
-                    rot_mat: np.ndarray = self.m_rotation_angle[k][j][i]
-                    pix_tensor[k][j][i] = np.matmul(
-                        np.matmul(rot_mat, cond_tensor), rot_mat.T
-                    )
-        # final check for fraction & conductivity tensor
+            )
+            error_cuml += float(_num) / ns - _frac
+            if error_cuml >= frac_unit:
+                _num -= 1
+                error_cuml -= frac_unit
+            if error_cuml <= -1.0 * frac_unit:
+                _num += 1
+                error_cuml += frac_unit
+            _m_selected: List = random.sample(list(m_all), k=_num)
+            m_all = m_all.difference(set(_m_selected))
+            tensor_center = getattr(_instance, "get_cond_tensor", None)()
+            assert tensor_center is not None, f"instance: {_instance}"
+            _rot_mat: np.ndarray = None
+            for _m in _m_selected:
+                i, j, k = calc_ijk(_m, nx, ny)
+                if rot_mat_const is not None:
+                    _rot_mat = rot_mat_const
+                elif rotation_setting == "random":
+                    _rot_mat = calc_rotation_matrix()
+                else:
+                    raise RuntimeError("rotation_setting argument is not valid")
+                assert _rot_mat is not None
+                pix_tensor[k][j][i] = np.matmul(
+                    np.matmul(_rot_mat, tensor_center), _rot_mat.T
+                )
+                rotation_angle_ls[k][j][i] = _rot_mat
+                instance_ls[k][j][i] = _instance
+
+        # check for fraction & conductivity tensor
         for instance in instance_set_ls:
             frac = 0.0
             for k in range(nz):
@@ -262,9 +214,14 @@ class FEM_Input_Cube:
                         _tensor = pix_tensor[k][j][i]
                         pix_tensor[k][j][i] = roundup_small_negative(_tensor)
             frac_targ: float = volume_frac_dict[instance]
+            if not frac_targ - frac_unit < frac < frac_targ + frac_unit:
+                print("wrong")  #!
             assert (
                 frac_targ - frac_unit < frac < frac_targ + frac_unit
             ), f"instance: {instance}, volume_frac_dict[instance]: {volume_frac_dict[instance]}, frac: {frac}"
+
+        self.rotation_angle_ls = rotation_angle_ls
+
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the Stern and diffusion layers.
         if self.m_logger is not None:

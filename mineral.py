@@ -1820,8 +1820,11 @@ class Quartz(Mineral):
         logger: Logger = None,
     ):
         """Inherited classes from Mineral. Number density of
-            reactors on the surface and fixing the layer charge for
-            quartz case.
+        reactors on the surface and fixing the layer charge for
+        quartz case.
+            As pointed out in Revil and Glover (1997), surfface site density
+        of quartz varies widely from 1.5~25 sites/nm2, but here we assume
+        5.5 to be consistent with kaolinite and smectite parameters.
 
         Args:
             nacl (NaCl): Instance of NaCl class

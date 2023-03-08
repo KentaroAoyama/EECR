@@ -216,8 +216,6 @@ class FEM_Input_Cube:
                         _tensor = pix_tensor[k][j][i]
                         pix_tensor[k][j][i] = roundup_small_negative(_tensor)
             frac_targ: float = volume_frac_dict[instance]
-            if not frac_targ - frac_unit < frac < frac_targ + frac_unit:
-                print("wrong")  #!
             assert (
                 frac_targ - frac_unit < frac < frac_targ + frac_unit
             ), f"instance: {instance}, volume_frac_dict[instance]: {volume_frac_dict[instance]}, frac: {frac}"
@@ -278,13 +276,14 @@ class FEM_Input_Cube:
         Args:
             fpth (str): File path to be read
         """
+        # TODO: 仕様見直し
+        # TODO: idx_tensor_mapは引数として与える仕様に変更する
         nx = 3
         ny = 3
         nz = 1
         assert isinstance(nx, int) and nx > 0
         assert isinstance(ny, int) and ny > 0
         assert isinstance(nz, int) and nz > 0
-        # TODO: idx_tensor_mapは引数として与える仕様に変更する
         idx_tensor_map: Dict = {
             0: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
             1: [[0.5, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.5]],
@@ -909,7 +908,7 @@ class FEM_Input_Cube:
 def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
     """Calculate the one dimensional labbeling index (m)
         m is calculated as follows:
-            m=nx*ny*(k-1)+nx*(j-1)+i
+            m=nx*ny*k+nx*j+i
 
     Args:
         i (int): Index of x direction.

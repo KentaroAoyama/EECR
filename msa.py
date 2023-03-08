@@ -1,4 +1,4 @@
-"""Calculate ion mobility by mean spherical approximation
+"""Calculate ion mobility by mean spherical approximation (MSA)
     References:
         Gaëlle M. Roger, Serge Durand-Vidal, Olivier Bernard, and Pierre Turq
             The Journal of Physical Chemistry B 2009 113 (25), 8670-8674

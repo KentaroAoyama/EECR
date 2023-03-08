@@ -89,7 +89,9 @@ class NaCl(Fluid):
                 continue
             _m = msa_props[_s]["mobility"]
             _prop[IonProp.MobilityInfDiffuse.name] = _m
+            # based on https://doi.org/10.1029/2008JB006114
             _prop[IonProp.MobilityTrunDiffuse.name] = _m * 0.1
+            # based on https://doi.org/10.1016/j.jcis.2015.03.047
             if _s == Species.H.name:
                 _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
                     IonProp.MobilityTrunDiffuse.name

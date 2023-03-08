@@ -1329,7 +1329,6 @@ class Mineral:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant (search temperature dependence or etc)..
         assert self.m_kappa_stern is not None, "self.m_kappa_stern is None"
         assert _x <= self.m_xd, "self.m_xd < _x"
 
@@ -1387,7 +1386,6 @@ class Mineral:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant (search temperature dependence or etc)..
         assert self.m_kappa_stern is not None, "self.m_kappa_stern is None"
         assert _x <= self.m_xd, "self.m_xd < _x"
         _na = const.AVOGADRO_CONST

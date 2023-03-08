@@ -15,6 +15,7 @@ import time
 import pickle
 from os import path, getcwd, listdir
 from copy import deepcopy
+from math import isclose
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -22,7 +23,10 @@ from mineral import Smectite, Kaolinite, Quartz
 import constants as const
 from fluid import NaCl
 from msa import calc_mobility
+from solver import FEM_Cube
 from solver_input import FEM_Input_Cube
+from main import exec_single_condition
+
 
 def create_logger(i, fpth="./debug.txt"):
     # create logger
@@ -50,7 +54,7 @@ def Revil_etal_1998_fig3():
     # カオリナイトに関しては, オーダー・傾向ともにあっていない. 拡散層が間隙水に占める割合は実際の岩石では非常に小さいのだと
     # すると, この結果で説明がつく. コード側に不備は確認できなかった (23/01/11)
     temperature = 298.15
-    ph = 7.
+    ph = 7.0
     cnacl_interval = (2.4 - 0.01) / 100
     cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
     kaolinite_cond_ls: List = []
@@ -92,7 +96,7 @@ def Leroy_Revil_2004_fig4():
     # c1, k2, k4をfixすれば合う (論文中のoptimized, KClでの実験値なので, 比較対象として不適かも)
     print("test: Leroy & Revil, 2004 fig4")
     temperature = 298.15
-    ph = 8.
+    ph = 8.0
     cnacl_interval = (0.1 - 0.001) / 100
     cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
     potential_zeta_ls: List = []
@@ -125,9 +129,7 @@ def Leroy_Revil_2004_fig5_a():
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        kaolinite = Kaolinite(
-            nacl=nacl
-        )
+        kaolinite = Kaolinite(nacl=nacl)
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.m_potential_zeta * 1000.0)
     # plot
@@ -196,7 +198,7 @@ def goncalves_fig6():
     # layer width vs zeta potential
     print("test: Goncalves et al., fig6")
     cna = 1.0e-3
-    ph_ls = [7., 5., 4., 3.]
+    ph_ls = [7.0, 5.0, 4.0, 3.0]
     temperature = 298.15
     ph_r_zeta: Dict = {}
     for ph in ph_ls:
@@ -642,8 +644,7 @@ def search_ill_cond():
 
 
 def Grieser_and_Healy():
-    """Grieser & Healy (1989)で測定されたQuarzのゼータ電位とあっているかどうかテストする
-    """
+    """Grieser & Healy (1989)で測定されたQuarzのゼータ電位とあっているかどうかテストする"""
     temperature = 298.15
     ph = 5.9
     # a_k2 = np.arange(17.7, 17.9, 0.01).tolist()
@@ -651,8 +652,18 @@ def Grieser_and_Healy():
     # # a_c2 = np.arange(1.6, 1.7, 0.01).tolist()
     # a_c1 = [2.28]
     # a_c2 = [1.67]
-    _x_data = [0.10163604555319171, 0.010035704616274973, 0.0010470361117482126, 0.00010696056608526546]
-    _y_data = [-25.324768769868783, -43.21354282499772, -70.07810149269352, -88.14660966244529]
+    _x_data = [
+        0.10163604555319171,
+        0.010035704616274973,
+        0.0010470361117482126,
+        0.00010696056608526546,
+    ]
+    _y_data = [
+        -25.324768769868783,
+        -43.21354282499772,
+        -70.07810149269352,
+        -88.14660966244529,
+    ]
     # rms_ls = np.zeros((len(a_k2), len(a_c1), len(a_c2))).tolist()
     # for i, ak2 in enumerate(a_k2):
     #     for j, ac1 in enumerate(a_c1):
@@ -681,9 +692,19 @@ def Grieser_and_Healy():
         quartz.calc_potentials_and_charges_inf()
         quartz.calc_cond_infdiffuse()
         quartz.calc_cond_tensor()
-        zeta_ls.append(quartz.m_potential_zeta * 1000.)
-    _x_data = [0.10163604555319171, 0.010035704616274973, 0.0010470361117482126, 0.00010339940482242445]
-    _y_data = [-25.324768769868783, -43.21354282499772, -70.07810149269352, -88.22328915867556]
+        zeta_ls.append(quartz.m_potential_zeta * 1000.0)
+    _x_data = [
+        0.10163604555319171,
+        0.010035704616274973,
+        0.0010470361117482126,
+        0.00010339940482242445,
+    ]
+    _y_data = [
+        -25.324768769868783,
+        -43.21354282499772,
+        -70.07810149269352,
+        -88.22328915867556,
+    ]
     fig, ax = plt.subplots()
     ax.plot(_x_data, zeta_ls)
     ax.scatter(_x_data, _y_data)
@@ -715,25 +736,26 @@ def test_mobility():
     mu_na_ls: List = []
     mu_cl_ls: List = []
     cond_ls: List = []
-    _cna = 1.
+    _cna = 1.0
     for i in _ls:
         print("=======")
         print(f"Tempe: {i}")  #!
         ion_props["Na"]["Concentration"] = _cna
         ion_props["Cl"]["Concentration"] = _cna
-        _msa_props: Dict = calc_mobility(ion_props, i+273.15)
+        _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
         m_na = _msa_props["Na"]["mobility"]
         m_cl = _msa_props["Cl"]["mobility"]
-        print(m_na) #!
+        print(m_na)  #!
         mu_na_ls.append(m_na)
         mu_cl_ls.append(m_cl)
-        _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.
+        _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.0
 
         cond_ls.append(_coeff * (m_na + m_cl))
     _, ax = plt.subplots()
     ax.plot(_ls, cond_ls)
     ax.set_yscale("log")
     plt.show()
+
 
 def tmp():
     nacl = NaCl()
@@ -754,9 +776,119 @@ def tmp():
     sol_input.create_pixel_by_macro_variable(volume_frac_dict=_frac)
 
 
-
 def compare_WS_shaly():
-    out_dir: str = test_dir()
+    _t = 298.15
+    _ph = 7.0
+    # smectite (25, 26, 27)
+    # mS/cm
+    cw_ls = [
+        2.085,
+        4.049,
+        7.802,
+        14.92,
+        28.22,
+        52.49,
+        94.5,
+        139.8,
+        160.0,
+        192.2,
+        233.5,
+        250.5,
+    ]
+    cond_calc_ls = []
+    cnacl_ref = np.logspace(np.log10(1.0e-3), np.log10(5.), num=1000, base=10.).tolist()
+    for _cnacl in cnacl_ref:
+        nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph)
+        nacl.sen_and_goode_1992()
+        cond_calc_ls.append(nacl.m_conductivity)
+    cnacl_pred = []
+    for _cw in cw_ls:
+        cnacl_pred.append(
+            cnacl_ref[np.argmin(np.square(np.array(cond_calc_ls) - _cw / 10.0))]
+        )
+    core_props = {
+        26: {
+            "bulk": [
+                1.503,
+                1.597,
+                1.826,
+                2.046,
+                2.48,
+                3.14,
+                4.13,
+                5.21,
+                None,
+                6.49,
+                7.5,
+                None,
+            ],
+            "porosity": 22.9,
+            "xsmec": 1.0,
+            "xkaol": 0.0,
+        }
+    }
+    for _id, _prop in core_props.items():
+        _poros = _prop["porosity"]
+        _label_ls_tmp: List = _prop["bulk"]
+        label_ls, cnacl_ls = [], []
+        for _label, _cnacl in zip(_label_ls_tmp, cnacl_pred):
+            if _label is None:
+                continue
+            label_ls.append(_label)
+            cnacl_ls.append(_cnacl)
+
+        _xsmec = _prop["xsmec"]
+        _xkaol = _prop["xkaol"]
+        assert _xsmec + _xkaol <= 1.0
+        _pred_ls = []
+        for _cnacl in cnacl_ls:
+            # nacl
+            nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph)
+            nacl.sen_and_goode_1992()
+            nacl.calc_cond_tensor_cube_oxyz()
+            # smectite (layer_widthはとりあえずデフォルト)
+            smectite = Smectite(nacl=nacl)
+            smectite.calc_potentials_and_charges_truncated()
+            smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+            smectite.calc_cond_interlayer()
+            smectite.calc_cond_tensor()
+            # kaolinite
+            kaolinite = Kaolinite(nacl=nacl)
+            kaolinite.calc_potentials_and_charges_inf()
+            kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+            kaolinite.calc_cond_tensor()
+            # quartz
+            quartz = Quartz(nacl=nacl)
+            quartz.calc_potentials_and_charges_inf()
+            quartz.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+            quartz.calc_cond_tensor()
+            # set solver_input
+            solver_input = FEM_Input_Cube()
+            solver_input.create_pixel_by_macro_variable(
+                shape=(10, 10, 10),
+                edge_length=1.0e-6,
+                volume_frac_dict={
+                    nacl: _poros,
+                    smectite: (1.0 - _poros) * _xsmec,
+                    kaolinite: (1.0 - _poros) * _xkaol,
+                    quartz: (1.0 - _poros) * (1.0 - _xsmec - _xkaol),
+                },
+            )
+            solver_input.set_ib()
+            solver_input.femat()
+            # run
+            solver = FEM_Cube(solver_input)
+            solver.run(100, 30, 1.0e-9)
+            cond_x, cond_y, cond_z = solver.m_cond_x, solver.m_cond_y, solver.m_cond_z
+            _pred_ls.append((cond_x + cond_y + cond_z) / 3.)
+        _prop["pred"] = _pred_ls
+        # plot
+        fig, ax = plt.subplots()
+        ax.scatter()
+        ax.plot(cnacl_ls, _pred_ls)
+        ax.set_xscale("log")
+        ax.set_title(_id)
+        fig.savefig(path.join(test_dir(), f"WS_{_id}.png"), dpi=200, bbox_inches="tight")
     return
 
 
@@ -780,4 +912,4 @@ if __name__ == "__main__":
     # test_mobility()
 
     # Grieser_and_Healy()
-    tmp()
+    compare_WS_shaly()

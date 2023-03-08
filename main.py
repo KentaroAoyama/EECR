@@ -226,7 +226,7 @@ def experiment():
                         )
         pool.shutdown(wait=True)
 
-# TODO: error bar
+
 def output_fig():
     pickle_dir = path.join(getcwd(), "output", "pickle")
     conditions_ye: Dict = {}

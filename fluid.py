@@ -1,5 +1,5 @@
 """Calculate electrical properties of fluid"""
-
+# TODO: H+とOH-の移動度の温度依存性を実装する
 # pylint: disable=import-error
 from typing import Dict
 from copy import deepcopy
@@ -91,11 +91,11 @@ class NaCl(Fluid):
             _prop[IonProp.MobilityInfDiffuse.name] = _m
             # based on https://doi.org/10.1029/2008JB006114
             _prop[IonProp.MobilityTrunDiffuse.name] = _m * 0.1
-            # based on https://doi.org/10.1016/j.jcis.2015.03.047
             if _s == Species.H.name:
                 _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
                     IonProp.MobilityTrunDiffuse.name
                 ]
+            # based on https://doi.org/10.1016/j.jcis.2015.03.047
             _prop[IonProp.MobilityStern.name] = _m * 0.5
 
         self.m_ion_props: Dict = ion_props
@@ -115,6 +115,14 @@ class NaCl(Fluid):
         right = (2.36 + 0.099 * temperature) / (1.0 + 0.214 * _m**0.5) * _m**1.5
         self.m_conductivity = left - right
         return self.m_conductivity
+
+    def set_cond(self, _cond: float) -> None:
+        """Set fluid conductivity
+
+        Args:
+            _cond (float): Fluid conductivity
+        """
+        self.m_conductivity = _cond
 
     def calc_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor. The T-O-T plane is the xy-plane,

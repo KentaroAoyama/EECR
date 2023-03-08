@@ -27,24 +27,27 @@ def plot_smec_frac_cond(
         error_bar_ls = [0.0] * len(smectite_frac_ls)
 
     label_xy: Dict = {}
-    for smec_frac, _cond, label_val in zip(smectite_frac_ls, cond_ls, label_val_ls):
-        xy_ls: List = label_xy.setdefault(label_val, [[], []])
+    for smec_frac, _cond, _err, label_val in zip(
+        smectite_frac_ls, cond_ls, error_bar_ls, label_val_ls
+    ):
+        xy_ls: List = label_xy.setdefault(label_val, [[], [], []])
         xy_ls[0].append(smec_frac)
         xy_ls[1].append(_cond)
+        xy_ls[2].append(_err)
 
     fig, ax = plt.subplots()
     ax.grid(linestyle="-", linewidth=1)
     keys_sorted = sorted(list(label_xy.keys()))
     for i, _label in enumerate(keys_sorted):
-        _xy = label_xy[_label]
-        _x, _y = zip(*sorted(zip(*_xy)))
+        _xye = label_xy[_label]
+        _x, _y, _e = zip(*sorted(zip(*_xye)))
         if float("nan") in _x:
             continue
         if float("nan") in _y:
             continue
 
         ax.errorbar(
-            _x, _y, label=str(_label), color=cm.jet(float(i) / len(keys_sorted))
+            _x, _y, _e, label=str(_label), color=cm.jet(float(i) / len(keys_sorted))
         )
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
     ax.set_xlabel("Smectite Fraction")

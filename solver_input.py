@@ -169,17 +169,19 @@ class FEM_Input_Cube:
             self.m_logger.info(
                 "Setting rotated conductivity tensor for each element..."
             )
-        for _instance, _frac in volume_frac_dict.items():
+        for _i, (_instance, _frac) in enumerate(volume_frac_dict.items()):
             _num = int(
                 Decimal(_frac / frac_unit).quantize(
                     Decimal("1"), rounding=ROUND_HALF_UP
                 )
             )
             error_cuml += float(_num) / ns - _frac
-            if error_cuml >= frac_unit:
+            if _i == len(volume_frac_dict) - 1:
+                _num = len(m_all)
+            elif error_cuml >= frac_unit:
                 _num -= 1
                 error_cuml -= frac_unit
-            if error_cuml <= -1.0 * frac_unit:
+            elif error_cuml <= -1.0 * frac_unit:
                 _num += 1
                 error_cuml += frac_unit
             _m_selected: List = random.sample(list(m_all), k=_num)

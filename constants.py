@@ -18,6 +18,11 @@ def calc_dielectric_const_water(temperature: float) -> float:
     return coeff * DIELECTRIC_VACUUM
 
 
+def calc_mobility(mobility, temperature) -> float:
+    coeff = 1 + 0.0414 * (temperature - 273.15 - 22.0)
+    return coeff * mobility
+
+
 DIELECTRIC_VACUUM = 8.8541878128e-12
 ELEMENTARY_CHARGE = 1.60217663e-19  # 電気素量
 BOLTZMANN_CONST = 1.380649e-23  # ボルツマン定数
@@ -95,7 +100,9 @@ class Species(IntEnum):
 class IonProp(IntEnum):
     Concentration = auto()
     Activity = auto()
-    Mobility = auto()
+    MobilityInfDiffuse = auto()
+    MobilityTrunDiffuse = auto()
+    MobilityStern = auto()
     Valence = auto()
 
 
@@ -109,25 +116,31 @@ ion_props_default = {
     Species.Na.name: {
         IonProp.Concentration.name: 1.0e-3,
         IonProp.Activity.name: 1.0e-3,
-        IonProp.Mobility.name: 5.19e-8,
+        IonProp.MobilityInfDiffuse.name: 5.19e-8,
+        IonProp.MobilityTrunDiffuse.name: 0.52e-8,
+        IonProp.MobilityStern.name: 2.59e-8,
         IonProp.Valence.name: 1,
     },
     Species.Cl.name: {
         IonProp.Concentration.name: 1.0e-3,
         IonProp.Activity.name: 1.0e-3,
-        IonProp.Mobility.name: 7.91e-8,
+        IonProp.MobilityInfDiffuse.name: 7.91e-8,
+        IonProp.MobilityTrunDiffuse.name: 0.791e-8,
+        IonProp.MobilityStern.name: 3.95e-8,
         IonProp.Valence.name: -1,
     },
     Species.H.name: {
         IonProp.Concentration.name: 1.0e-7,
         IonProp.Activity.name: 1.0e-7,
-        IonProp.Mobility.name: 36.3e-8,
+        IonProp.MobilityInfDiffuse.name: 36.3e-8,
+        IonProp.MobilityTrunDiffuse.name: 1.6e-8,
         IonProp.Valence.name: 1,
     },
     Species.OH.name: {
         IonProp.Concentration.name: 1.0e-7,
         IonProp.Activity.name: 1.0e-7,
-        IonProp.Mobility.name: 20.5e-8,
+        IonProp.MobilityInfDiffuse.name: 20.5e-8,
+        IonProp.MobilityTrunDiffuse.name: 2.05e-8,
         IonProp.Valence.name: -1,
     },
 }

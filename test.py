@@ -822,11 +822,10 @@ def compare_WS_shaly():
                 7.5,
                 None,
             ],
-            "porosity": 22.9 * 0.01,
+            "porosity": 22.9,
             "xsmec": 1.0,
             "xkaol": 0.0,
-        },
-
+        }
     }
     for _id, _prop in core_props.items():
         _poros = _prop["porosity"]
@@ -843,9 +842,6 @@ def compare_WS_shaly():
         assert _xsmec + _xkaol <= 1.0
         _pred_ls = []
         for _cnacl in cnacl_ls:
-            if _cnacl < 0.28259814851988035:
-                continue
-            print(f"NaCl: {_cnacl}")
             # nacl
             nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph)
             nacl.sen_and_goode_1992()
@@ -885,11 +881,10 @@ def compare_WS_shaly():
             solver.run(100, 30, 1.0e-9)
             cond_x, cond_y, cond_z = solver.m_cond_x, solver.m_cond_y, solver.m_cond_z
             _pred_ls.append((cond_x + cond_y + cond_z) / 3.)
-            print((cond_x + cond_y + cond_z) / 3.)
         _prop["pred"] = _pred_ls
         # plot
         fig, ax = plt.subplots()
-        ax.scatter(cnacl_ls, label_ls)
+        ax.scatter()
         ax.plot(cnacl_ls, _pred_ls)
         ax.set_xscale("log")
         ax.set_title(_id)

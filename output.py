@@ -257,6 +257,3 @@ def __plot_cond_grid(
     fig.savefig(save_pth, dpi=100, bbox_inches="tight")
     plt.clf()
     plt.close()
-
-if __name__ == "__main__":
-    pass

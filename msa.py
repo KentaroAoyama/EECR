@@ -152,7 +152,7 @@ def __calc_gamma(_msa_props: Dict, _t: float) -> float:
         _cou += 1
     assert _cou <= 4
     __callback = partial(__calc_eq18, _msa_props=_msa_props, _t=_t)
-    return bisect(__callback, 0.0, 1.0e14)
+    return bisect(__callback, 0.0, 1.0e10)
 
 
 def __calc_di(
@@ -303,7 +303,6 @@ def __calc_eq12(alpha: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -
         if _bottom == 0.0:
             _bottom = float_info.min
         _sum += _ti / _bottom
-    # TODO: OverFlowWarning appears frequently, so check here
     _ret = -1.0 * _omega_bar * alpha * _sum
     _ret_abs = abs(_ret)
     if _ret < 0.0 and _ret_abs == float("inf"):

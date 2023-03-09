@@ -345,6 +345,6 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    # experiment()
-    output_fig()
+    experiment()
+    # output_fig()
     # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

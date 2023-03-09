@@ -88,15 +88,15 @@ class NaCl(Fluid):
             if _s not in msa_props:
                 continue
             _m = msa_props[_s]["mobility"]
-            _prop[IonProp.Mobility.name] = _m
-            # # based on https://doi.org/10.1029/2008JB006114 and Raythatha and Sen (1986)
-            # _prop[IonProp.MobilityTrunDiffuse.name] = _m
-            # if _s == Species.H.name:
-            #     _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
-            #         IonProp.MobilityTrunDiffuse.name
-            #     ]
-            # # based on https://doi.org/10.1016/j.jcis.2015.03.047
-            # _prop[IonProp.MobilityStern.name] = _m * 0.5
+            _prop[IonProp.MobilityInfDiffuse.name] = _m
+            # based on https://doi.org/10.1029/2008JB006114
+            _prop[IonProp.MobilityTrunDiffuse.name] = _m * 0.1
+            if _s == Species.H.name:
+                _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
+                    IonProp.MobilityTrunDiffuse.name
+                ]
+            # based on https://doi.org/10.1016/j.jcis.2015.03.047
+            _prop[IonProp.MobilityStern.name] = _m * 0.5
 
         self.m_ion_props: Dict = ion_props
         self.m_dielec_water = calc_dielectric_const_water(self.m_temperature)
@@ -158,14 +158,6 @@ class NaCl(Fluid):
             float: Absolute temperature
         """
         return self.m_temperature
-
-    def get_pressure(self) -> float:
-        """Getter for the pressure
-
-        Returns:
-            float: Absolute pressure
-        """
-        return self.m_pressure
 
     def get_dielec_water(self) -> float:
         """Getter for the permittivity of water

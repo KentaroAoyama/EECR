@@ -151,6 +151,13 @@ class NaCl(Fluid):
         """
         return deepcopy(self.m_ion_props)
 
+    def get_pressure(self) -> float:
+        """Getter for the pressure
+        Returns:
+            float: Absolute pressure
+        """
+        return self.m_pressure
+
     def get_temperature(self) -> float:
         """Getter for the temperature
 

@@ -124,6 +124,7 @@ class Mineral:
         # Parameters related to the external environment
         ####################################################
         self.m_temperature: float = nacl.get_temperature()
+        self.m_pressure: float = nacl.get_pressure()
         self.m_ion_props: Dict = nacl.get_ion_props()
         self.m_dielec_water: float = nacl.get_dielec_water()
         ####################################################

@@ -1,4 +1,5 @@
 """Calculate electrical properties of mineral"""
+# TODO: diffuse layer, stern layerの移動度をMSAモデルで計算する仕様に変更する
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -16,7 +17,7 @@ from scipy.integrate import quad
 import constants as const
 from constants import Species, IonProp
 from fluid import NaCl
-
+from msa import calc_mobility
 
 # load global parameters
 # for smectite, infinite diffuse layer case
@@ -124,6 +125,7 @@ class Mineral:
         # Parameters related to the external environment
         ####################################################
         self.m_temperature: float = nacl.get_temperature()
+        self.m_pressure: float = nacl.get_pressure()
         self.m_ion_props: Dict = nacl.get_ion_props()
         self.m_dielec_water: float = nacl.get_dielec_water()
         ####################################################
@@ -1229,15 +1231,13 @@ class Mineral:
         assert self.m_kappa is not None, "self.m_kappa is None"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         _cond = 0.0
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa * _x)
-        for _, prop in self.m_ion_props.items():
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        for _, prop in ion_props_tmp.items():
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityInfDiffuse.name]
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _mobility = prop[IonProp.Mobility.name]
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1254,14 +1254,12 @@ class Mineral:
         assert self.m_kappa is not None, "self.m_kappa is None"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa * _x)
-        prop_na = self.m_ion_props[Species.Na.name]
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        prop_na = ion_props_tmp[Species.Na.name]
         _conc = 1000.0 * prop_na[IonProp.Concentration.name]
         _v = prop_na[IonProp.Valence.name]
-        _mobility = prop_na[IonProp.MobilityInfDiffuse.name]
-        _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+        _mobility = prop_na[IonProp.Mobility.name]
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1276,20 +1274,17 @@ class Mineral:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant (search temperature dependence or etc).
         assert self.m_kappa_truncated is not None, "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         _cond = 0.0
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa_truncated * _x)
-        for _, prop in self.m_ion_props.items():
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        for _, prop in ion_props_tmp.items():
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityTrunDiffuse.name]
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _mobility = prop[IonProp.Mobility.name]
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1302,7 +1297,6 @@ class Mineral:
         Returns:
             float: Specific conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant (search temperature dependence or etc).
         assert self.m_kappa_truncated is not None, "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
         _na = const.AVOGADRO_CONST
@@ -1310,10 +1304,11 @@ class Mineral:
         kb = const.BOLTZMANN_CONST
         _t = self.m_temperature
         potential = self.m_potential_zeta * np.exp((-1.0) * self.m_kappa_truncated * _x)
-        prop_na = self.m_ion_props[Species.Na.name]
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        prop_na = ion_props_tmp[Species.Na.name]
         _conc = 1000.0 * prop_na[IonProp.Concentration.name]
         _v = prop_na[IonProp.Valence.name]
-        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name]
+        _mobility = prop_na[IonProp.Mobility.name]
         _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1334,18 +1329,13 @@ class Mineral:
 
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         _cond = 0.0
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
-        for _, prop in self.m_ion_props.items():
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        for _, prop in ion_props_tmp.items():
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
-            # 参考文献：doi:10.1029/2008JB006114.
-            # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-            _mobility = prop[IonProp.MobilityInfDiffuse.name] * 0.5
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _mobility = prop[IonProp.Mobility.name]
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1364,14 +1354,12 @@ class Mineral:
         assert _x <= self.m_xd, "self.m_xd < _x"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
-        prop_na: Dict = self.m_ion_props[Species.Na.name]
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        prop_na: Dict = ion_props_tmp[Species.Na.name]
         _conc = 1000.0 * prop_na[IonProp.Concentration.name]
         _v = prop_na[IonProp.Valence.name]  # 1
-        _mobility = prop_na[IonProp.MobilityStern.name]
-        _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+        _mobility = prop_na[IonProp.Mobility.name]
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1390,16 +1378,13 @@ class Mineral:
         assert _x <= self.m_xd, "self.m_xd < _x"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         _cond = 0.0
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
-        for _, prop in self.m_ion_props.items():
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        for _, prop in ion_props_tmp.items():
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-            _mobility = prop[IonProp.MobilityTrunDiffuse.name] * 0.5
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _mobility = prop[IonProp.Mobility.name]
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1418,17 +1403,12 @@ class Mineral:
         assert _x <= self.m_xd, "self.m_xd < _x"
         _na = const.AVOGADRO_CONST
         _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.m_temperature
         potential = self.m_potential_stern * np.exp((-1.0) * self.m_kappa_stern * _x)
-        prop_na: Dict = self.m_ion_props[Species.Na.name]
+        ion_props_tmp = self.calc_ion_props_in_edl(potential)
+        prop_na: Dict = ion_props_tmp[Species.Na.name]
         _conc = 1000.0 * prop_na[IonProp.Concentration.name]
         _v = prop_na[IonProp.Valence.name]  # 1
-        # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする. 他に方法がないか調べる
-        # 参考文献：doi:10.1029/2008JB006114.
-        # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name] * 0.5
-        _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
+        _mobility = prop_na[IonProp.Mobility.name]
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1449,6 +1429,32 @@ class Mineral:
         self.m_kappa_stern = (
             1.0 / self.m_xd * np.log(self.m_potential_stern / self.m_potential_zeta)
         )
+
+    def calc_ion_props_in_edl(self, potential: float) -> Dict:
+        """Calculate the concentration and mobility of ions at arbitrary electrical potentials
+
+        Args:
+            potential (float): Electrical potential
+
+        Returns:
+            Dict: Ion properties
+        """
+        _e = const.ELEMENTARY_CHARGE
+        _kb = const.BOLTZMANN_CONST
+        _t = self.m_temperature
+        _p = self.m_pressure
+        # modify concentration
+        ion_props_tmp = deepcopy(self.m_ion_props)
+        for _, _prop in ion_props_tmp.items():
+            _conc = _prop[IonProp.Concentration.name]
+            _v = _prop[IonProp.Valence.name]
+            _conc *= np.exp((-1.0) * _v * _e * potential / (_kb * _t))
+            _prop[IonProp.Concentration.name] = _conc
+        # modify mobility
+        msa_props = calc_mobility(ion_props_tmp, temperature=_t, pressure=_p)
+        for _s, _msa_prop in msa_props.items():
+            ion_props_tmp[_s][IonProp.Mobility.name] = _msa_prop["mobility"]
+        return ion_props_tmp
 
     def calc_cond_interlayer(self) -> Tuple[float]:
         """Calculate the Stern + EDL conductivity of the inter layer

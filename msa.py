@@ -299,9 +299,9 @@ def __calc_eq12(alpha: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -
     """
     _sum = 0.0
     for _ti, _omegai in zip(_t_ls, _omega_ls):
-        _bottom = _omegai - alpha
+        _bottom = _omegai**2 - alpha**2
         if _bottom == 0.0:
-            _bottom = float_info.min
+            return -1.0 * float_info.max
         _sum += _ti / _bottom
     _ret = -1.0 * _omega_bar * alpha * _sum
     _ret_abs = abs(_ret)
@@ -606,7 +606,7 @@ def calc_mobility(
         _interval = (_alpha_max - _alpha_min) / 100.0
         while _alpha_min < _alpha_max:
             _val_min: float = __calc_eq12(_alpha_min, _omega_mean, _omega_ls, _t_ls)
-            if _val_min * _val_max < 0.0:
+            if (_val_min / abs(_val_min)) * (_val_max / abs(_val_max)) < 0.0:
                 break
             _alpha_min += _interval
 

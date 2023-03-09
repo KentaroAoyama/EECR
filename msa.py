@@ -152,7 +152,7 @@ def __calc_gamma(_msa_props: Dict, _t: float) -> float:
         _cou += 1
     assert _cou <= 4
     __callback = partial(__calc_eq18, _msa_props=_msa_props, _t=_t)
-    return bisect(__callback, 0.0, 1.0e10)
+    return bisect(__callback, 0.0, 1.0e14)
 
 
 def __calc_di(

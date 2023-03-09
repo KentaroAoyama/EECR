@@ -18,11 +18,6 @@ def calc_dielectric_const_water(temperature: float) -> float:
     return coeff * DIELECTRIC_VACUUM
 
 
-def calc_mobility(mobility, temperature) -> float:
-    coeff = 1 + 0.0414 * (temperature - 273.15 - 22.0)
-    return coeff * mobility
-
-
 DIELECTRIC_VACUUM = 8.8541878128e-12
 ELEMENTARY_CHARGE = 1.60217663e-19  # 電気素量
 BOLTZMANN_CONST = 1.380649e-23  # ボルツマン定数

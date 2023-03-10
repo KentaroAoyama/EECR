@@ -1277,7 +1277,6 @@ class Mineral:
         Returns:
             float: Conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant (search temperature dependence or etc).
         assert self.m_kappa_truncated is not None, "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
         _na = const.AVOGADRO_CONST
@@ -1303,7 +1302,6 @@ class Mineral:
         Returns:
             float: Specific conductivity at a point _x away from the zeta plane
         """
-        # TODO: Verify that the mobility is a constant (search temperature dependence or etc).
         assert self.m_kappa_truncated is not None, "self.m_kappa_truncated is None"
         assert self.m_xd <= _x, "self.m_xd > _x"
         _na = const.AVOGADRO_CONST
@@ -1447,6 +1445,7 @@ class Mineral:
         the stern layer. Assume the thickness of the stern layer is
         equal to xd (O layer thickness is assumed negligibly small)
         """
+        # TODO: layer_width=13e-9, Cnacl>3で m_potential_zetaが0になり, エラーとなる
         self.m_kappa_stern = (
             1.0 / self.m_xd * np.log(self.m_potential_stern / self.m_potential_zeta)
         )

@@ -40,7 +40,8 @@ kaolinite_init_pth: PathLike = path.join(
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
-
+# TODO: rename to phyllosilicate (file name is to clay)
+# TODO: remove "m_" from member variable name
 class Mineral:
     """
     Mineral Class
@@ -197,6 +198,8 @@ class Mineral:
         _kb = const.BOLTZMANN_CONST
 
         # Ionic strength (based on Leroy & Revil, 2004)
+        # Note that the definition of ionic strength differs between Gonçalvès et al (2007)
+        # and Leroy & Revil (2004).
         strength = 0.0
         for elem, props in self.m_ion_props.items():
             if elem in (Species.Na.name, Species.Cl.name):

@@ -50,11 +50,11 @@ def run():
     smectite = Smectite(nacl=deepcopy(nacl))
     kaolinite = Kaolinite(nacl=deepcopy(nacl))
     smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
     smectite.calc_cond_interlayer()
     smectite.calc_cond_tensor()
     kaolinite.calc_potentials_and_charges_inf()
-    kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+    kaolinite.calc_cond_infdiffuse()  # to get self.double_layer_length
     kaolinite.calc_cond_tensor()
 
     # set solver input
@@ -122,11 +122,11 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         logger=logger,
     )
     smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
     smectite.calc_cond_interlayer()
     smectite.calc_cond_tensor()
     kaolinite.calc_potentials_and_charges_inf()
-    kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
+    kaolinite.calc_cond_infdiffuse()  # to get self.double_layer_length
     kaolinite.calc_cond_tensor()
 
     # set solver input
@@ -253,7 +253,7 @@ def output_fig():
             solver_pth = path.join(date_dir, "solver.pkl")
             with open(solver_pth, "rb") as pkf:
                 solver: FEM_Cube = pickle.load(pkf)
-            cond_x, cond_y, cond_z = solver.m_cond_x, solver.m_cond_y, solver.m_cond_z
+            cond_x, cond_y, cond_z = solver.cond_x, solver.cond_y, solver.cond_z
             if None in (cond_x, cond_y, cond_z):
                 continue
             cond_ave_ls.append(np.mean([cond_x, cond_y, cond_z]))

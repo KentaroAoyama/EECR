@@ -31,38 +31,38 @@ class FEM_Cube:
         """
         assert fem_input is not None
         self.fem_input: FEM_Input_Cube = fem_input
-        self.m_logger: Logger = logger
-        self.m_u: np.ndarray = None
-        self.m_u2d: np.ndarray = None
-        self.m_a: np.ndarray = None
-        self.m_gb: np.ndarray = None
-        self.m_u_tot: np.float64 = None
-        self.m_gg: np.float64 = None
-        self.m_h: np.ndarray = None
-        self.m_h2d: np.ndarray = None
+        self.logger: Logger = logger
+        self.u: np.ndarray = None
+        self.u2d: np.ndarray = None
+        self.a: np.ndarray = None
+        self.gb: np.ndarray = None
+        self.u_tot: np.float64 = None
+        self.gg: np.float64 = None
+        self.h: np.ndarray = None
+        self.h2d: np.ndarray = None
         self.__init_default()
-        self.m_currx_m: List = None
-        self.m_curry_m: List = None
-        self.m_currz_m: List = None
-        self.m_currx_ave: float = None
-        self.m_curry_ave: float = None
-        self.m_currz_ave: float = None
-        self.m_cond_x: float = None
-        self.m_cond_y: float = None
-        self.m_cond_z: float = None
+        self.currx_m: List = None
+        self.curry_m: List = None
+        self.currz_m: List = None
+        self.currx_ave: float = None
+        self.curry_ave: float = None
+        self.currz_ave: float = None
+        self.cond_x: float = None
+        self.cond_y: float = None
+        self.cond_z: float = None
 
     def __init_default(self) -> None:
         """Initialize the following member variables:
-        self.m_u (np.ndarray): 1d array of the electrical potential (shape is m).
-        self.m_a (np.ndarray): 2d array of global matrix (m rows and 27 colums)
+        self.u (np.ndarray): 1d array of the electrical potential (shape is m).
+        self.a (np.ndarray): 2d array of global matrix (m rows and 27 colums)
             described at pp.11 to 12 in Garboczi (1998). By computing the inner
-            product with self.m_u[m] in each row self.a[m], the gradient vector can
+            product with self.u[m] in each row self.a[m], the gradient vector can
             be computed.
-        self.m_gb (np.ndarray): 1d array of the gradient: ∂En/∂um described at pp.11
+        self.gb (np.ndarray): 1d array of the gradient: ∂En/∂um described at pp.11
             in Garboczi (1998).
-        self.m_u_tot (np.float64): Total electrical energy held by the system.
-        self.m_gg (np.float64): The sum of the self.m_gb**2.
-        self.m_h (np.ndarray): Conjugate gradient vector (shape is m).
+        self.u_tot (np.float64): Total electrical energy held by the system.
+        self.gg (np.float64): The sum of the self.gb**2.
+        self.h (np.ndarray): Conjugate gradient vector (shape is m).
         """
         # m_u
         pix_tensor: np.ndarray = self.fem_input.get_pix_tensor()
@@ -82,28 +82,28 @@ class FEM_Cube:
                     z = float(k)
                     u[m] = -x * ex - y * ey - z * ez
         assert None not in u
-        self.m_u: np.ndarray = np.array(u, dtype=np.float64)
+        self.u: np.ndarray = np.array(u, dtype=np.float64)
 
         # m_u2d
-        if self.m_logger is not None:
-            self.m_logger.info("Expand u 2d")
-        u_2d: List = [None for _ in range(self.m_u.shape[0])]
+        if self.logger is not None:
+            self.logger.info("Expand u 2d")
+        u_2d: List = [None for _ in range(self.u.shape[0])]
         for m in range(nxyz):
-            self.__expand_2d(deepcopy(self.m_u), u_2d, m, deepcopy(ib))
+            self.__expand_2d(deepcopy(self.u), u_2d, m, deepcopy(ib))
         assert None not in u_2d
         u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
-        self.m_u2d = u_2d
+        self.u2d = u_2d
 
         # m_a (2d array contains nxyz rows and 27 columns)
         a: List = [None for _ in range(nxyz)]
         dk = self.fem_input.get_dk()
         pix = self.fem_input.get_pix()
-        if self.m_logger is not None:
-            self.m_logger.info("Setting the global matrix A...")
+        if self.logger is not None:
+            self.logger.info("Setting the global matrix A...")
         for m in range(nxyz):
             self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
         assert None not in a
-        self.m_a = np.array(a, dtype=np.float64)
+        self.a = np.array(a, dtype=np.float64)
 
         # m_gb and u_tot
         self.__calc_energy()
@@ -114,19 +114,19 @@ class FEM_Cube:
         # is greater than 1, then this initialization step will be run every
         # a new microstructure is used, as kkk will be reset to 1 every time
         # the counter micro is increased.
-        self.m_h = deepcopy(self.m_gb)
+        self.h = deepcopy(self.gb)
         # h_2d
         h_2d: List = [None for _ in range(nxyz)]
         for m in range(nxyz):
-            self.__expand_2d(deepcopy(self.m_h), h_2d, m, deepcopy(ib))
+            self.__expand_2d(deepcopy(self.h), h_2d, m, deepcopy(ib))
         assert None not in h_2d
-        self.m_h2d = np.array(h_2d, dtype=np.float64)
+        self.h2d = np.array(h_2d, dtype=np.float64)
 
         # gg is the norm squared of the gradient (gg=gb*gb)
-        self.m_gg: np.ndarray = np.dot(self.m_gb, self.m_gb)
+        self.gg: np.ndarray = np.dot(self.gb, self.gb)
 
-        if self.m_logger is not None:
-            self.m_logger.info("__init__ (solver) done")
+        if self.logger is not None:
+            self.logger.info("__init__ (solver) done")
 
     def run(self, kmax: int = 40, ldemb: int = 50, gtest: float = None) -> None:
         """Calculate the distribution of electrical potentials that minimize the electrical
@@ -146,41 +146,41 @@ class FEM_Cube:
             gtest = 1.0e-16 * ns
         # Solve with conjugate gradient method
         cou = 0
-        if self.m_logger is not None:
-            self.m_logger.info("Start conjugate gradient calculation")
-        while self.m_gg > gtest:
-            if self.m_logger is not None:
-                self.m_logger.info(f"cou: {cou}, gg: {self.m_gg}")
+        if self.logger is not None:
+            self.logger.info("Start conjugate gradient calculation")
+        while self.gg > gtest:
+            if self.logger is not None:
+                self.logger.info(f"cou: {cou}, gg: {self.gg}")
             self.__calc_dembx(ldemb, gtest)
             # Call energy to compute energy after dembx call. If gg < gtest, this
             # will be the final energy. If gg is still larger than gtest, then this
             # will give an intermediate energy with which to check how the relaxation
             # process is coming along.
-            # update self.m_gb, self.m_u_tot
+            # update self.gb, self.u_tot
             self.__calc_energy()
             cou += 1
             if cou > kmax:
                 _msg = (
-                    f"Not sufficiently convergent.\nself.m_gg: {self.m_gg},"
+                    f"Not sufficiently convergent.\nself.gg: {self.gg},"
                     f"gtest: {gtest}"
                 )
                 warn(_msg)
-                if self.m_logger is not None:
-                    self.m_logger.warn(_msg)
+                if self.logger is not None:
+                    self.logger.warn(_msg)
                 break
         self.__calc_current_and_cond()
 
-        if self.m_logger is not None:
-            self.m_logger.info("run done")
-            self.m_logger.debug(f"curr x: {self.m_currx_ave}")
-            self.m_logger.debug(f"curr y: {self.m_curry_ave}")
-            self.m_logger.debug(f"curr z: {self.m_currz_ave}")
-            self.m_logger.debug(f"cond x: {self.m_cond_x}")
-            self.m_logger.debug(f"cond y: {self.m_cond_y}")
-            self.m_logger.debug(f"cond z: {self.m_cond_z}")
+        if self.logger is not None:
+            self.logger.info("run done")
+            self.logger.debug(f"curr x: {self.currx_ave}")
+            self.logger.debug(f"curr y: {self.curry_ave}")
+            self.logger.debug(f"curr z: {self.currz_ave}")
+            self.logger.debug(f"cond x: {self.cond_x}")
+            self.logger.debug(f"cond y: {self.cond_y}")
+            self.logger.debug(f"cond z: {self.cond_z}")
 
     def __set_a_m(self, a: List, m: int, ib: List, dk: List, pix: List) -> List:
-        """Set self.m_a[m] value
+        """Set self.a[m] value
 
         Args:
             a (List): 2d list of global matrix A.
@@ -277,12 +277,12 @@ class FEM_Cube:
         ls2d[m] = hm
 
     def __calc_energy(self) -> None:
-        """Calculate the gradient (self.m_gb), the amount of electrostatic energy (self.m_u_tot),
-        and the square value of the step width (self.m_gg), and update the these member variables.
+        """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
+        and the square value of the step width (self.gg), and update the these member variables.
         """
-        assert isinstance(self.m_u, np.ndarray)
-        assert isinstance(self.m_u2d, np.ndarray)
-        assert isinstance(self.m_a, np.ndarray)
+        assert isinstance(self.u, np.ndarray)
+        assert isinstance(self.u2d, np.ndarray)
+        assert isinstance(self.a, np.ndarray)
 
         b = self.fem_input.get_b()
         c = self.fem_input.get_c()
@@ -290,10 +290,10 @@ class FEM_Cube:
         assert isinstance(c, float)
 
         # m_gb (1d array for gradient), m_u_tot
-        gb: np.ndarray = np.sum(self.m_a * self.m_u2d, axis=1)
-        u_tot = 0.5 * np.dot(self.m_u, gb) + np.dot(b, self.m_u) + c
-        self.m_u_tot = u_tot
-        self.m_gb = gb + b
+        gb: np.ndarray = np.sum(self.a * self.u2d, axis=1)
+        u_tot = 0.5 * np.dot(self.u, gb) + np.dot(b, self.u) + c
+        self.u_tot = u_tot
+        self.gb = gb + b
 
     def __calc_dembx(self, ldemb: int, gtest: float) -> None:
         """Function that carries out the conjugate gradient relaxation process.
@@ -301,45 +301,45 @@ class FEM_Cube:
         Args:
             ldemb (int): Maximum number of conjugate gradient iterations.
         """
-        nxyz = self.m_u.shape[0]
+        nxyz = self.u.shape[0]
         ib = self.fem_input.get_ib()
 
         # Conjugate gradient loop
         for _ in range(ldemb):
             # expand h
-            h_1d: List = self.m_h.tolist()
+            h_1d: List = self.h.tolist()
             h_2d: List = [None for _ in range(nxyz)]
             for m in range(nxyz):
                 self.__expand_2d(h_1d, h_2d, m, ib)
             assert None not in h_2d
-            self.m_h2d = np.array(h_2d, dtype=np.float64)
+            self.h2d = np.array(h_2d, dtype=np.float64)
 
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
-            ah: np.ndarray = np.sum(self.m_a * self.m_h2d, axis=1)  # 1d
-            hah: float = np.dot(self.m_h, ah)
-            lamda = self.m_gg / hah
+            ah: np.ndarray = np.sum(self.a * self.h2d, axis=1)  # 1d
+            hah: float = np.dot(self.h, ah)
+            lamda = self.gg / hah
 
             # update u
-            self.m_u -= lamda * self.m_h
-            self.m_u2d -= lamda * self.m_h2d
+            self.u -= lamda * self.h
+            self.u2d -= lamda * self.h2d
 
             # update gb
-            self.m_gb -= lamda * ah
+            self.gb -= lamda * ah
 
             # update gg
-            gglast = self.m_gg
-            self.m_gg: float = np.dot(self.m_gb, self.m_gb)
-            if self.m_gg < gtest:
+            gglast = self.gg
+            self.gg: float = np.dot(self.gb, self.gb)
+            if self.gg < gtest:
                 return
 
             # update h
-            gamma = self.m_gg / gglast
-            self.m_h = self.m_gb + gamma * self.m_h
+            gamma = self.gg / gglast
+            self.h = self.gb + gamma * self.h
 
     def __calc_current_and_cond(self):
-        """Calculate and update macro currents (self.m_currx_ave, m_curry_ave, m_currz_ave)
-        and micro currents (self.m_currx_m, m_curry_m, m_currz_m) and macro conductivity
-        (self.m_cond_x, self.m_cond_y, self.m_cond_z). af is the average field matrix, average
+        """Calculate and update macro currents (self.currx_ave, m_curry_ave, m_currz_ave)
+        and micro currents (self.currx_m, m_curry_m, m_currz_m) and macro conductivity
+        (self.cond_x, self.cond_y, self.cond_z). af is the average field matrix, average
         field in a pixel is af*u(pixel). The matrix af relates the nodal voltages to the
         average field in the pixel.
         """
@@ -387,14 +387,14 @@ class FEM_Cube:
             for j in range(ny):
                 for i in range(nx):
                     m = calc_m(i, j, k, nx, ny)
-                    uu[0] = self.m_u[m]
-                    uu[1] = self.m_u[ib[m][2]]
-                    uu[2] = self.m_u[ib[m][1]]
-                    uu[3] = self.m_u[ib[m][0]]
-                    uu[4] = self.m_u[ib[m][25]]
-                    uu[5] = self.m_u[ib[m][18]]
-                    uu[6] = self.m_u[ib[m][17]]
-                    uu[7] = self.m_u[ib[m][16]]
+                    uu[0] = self.u[m]
+                    uu[1] = self.u[ib[m][2]]
+                    uu[2] = self.u[ib[m][1]]
+                    uu[3] = self.u[ib[m][0]]
+                    uu[4] = self.u[ib[m][25]]
+                    uu[5] = self.u[ib[m][18]]
+                    uu[6] = self.u[ib[m][17]]
+                    uu[7] = self.u[ib[m][16]]
                     # Correct for periodic boundary conditions, some voltages are wrong
                     # for a pixel on a periodic boundary. Since they come from an opposite
                     # face, need to put in applied fields to correct them.
@@ -426,9 +426,9 @@ class FEM_Cube:
                     curry_m[m] = cur2
                     currz_m[m] = cur3
 
-        self.m_currx_m = currx_m
-        self.m_curry_m = curry_m
-        self.m_currz_m = currz_m
+        self.currx_m = currx_m
+        self.curry_m = curry_m
+        self.currz_m = currz_m
 
         # Volume average currents
         ns = nx * ny * nz
@@ -436,12 +436,12 @@ class FEM_Cube:
         curry_ave = sum(curry_m) / float(ns)
         currz_ave = sum(currz_m) / float(ns)
         # set macroscopic values
-        self.m_currx_ave = currx_ave
-        self.m_curry_ave = curry_ave
-        self.m_currz_ave = currz_ave
-        self.m_cond_x = currx_ave / ex
-        self.m_cond_y = curry_ave / ey
-        self.m_cond_z = currz_ave / ez
+        self.currx_ave = currx_ave
+        self.curry_ave = curry_ave
+        self.currz_ave = currz_ave
+        self.cond_x = currx_ave / ex
+        self.cond_y = curry_ave / ey
+        self.cond_z = currz_ave / ez
 
     # getters methods for member variables
     # pylint: disable=missing-docstring
@@ -449,58 +449,58 @@ class FEM_Cube:
         return deepcopy(self.fem_input)
 
     def get_logger(self) -> None or Logger:
-        return deepcopy(self.m_logger)
+        return deepcopy(self.logger)
 
     def get_u(self) -> None or np.ndarray:
-        return deepcopy(self.m_u)
+        return deepcopy(self.u)
 
     def get_u2d(self):
-        return deepcopy(self.m_u2d)
+        return deepcopy(self.u2d)
 
     def get_a(self):
-        return deepcopy(self.m_a)
+        return deepcopy(self.a)
 
     def get_gb(self):
-        return deepcopy(self.m_gb)
+        return deepcopy(self.gb)
 
     def get_u_tot(self):
-        return deepcopy(self.m_u_tot)
+        return deepcopy(self.u_tot)
 
     def get_gg(self):
-        return deepcopy(self.m_gg)
+        return deepcopy(self.gg)
 
     def get_h(self):
-        return deepcopy(self.m_h)
+        return deepcopy(self.h)
 
     def get_h2d(self):
-        return deepcopy(self.m_h2d)
+        return deepcopy(self.h2d)
 
     def get_cuurx(self):
-        return deepcopy(self.m_currx_m)
+        return deepcopy(self.currx_m)
 
     def get_cuury(self):
-        return deepcopy(self.m_curry_m)
+        return deepcopy(self.curry_m)
 
     def get_cuurz(self):
-        return deepcopy(self.m_currz_m)
+        return deepcopy(self.currz_m)
 
     def get_currx_ave(self):
-        return deepcopy(self.m_currx_ave)
+        return deepcopy(self.currx_ave)
 
     def get_curry_ave(self):
-        return deepcopy(self.m_curry_ave)
+        return deepcopy(self.curry_ave)
 
     def get_currz_ave(self):
-        return deepcopy(self.m_currz_ave)
+        return deepcopy(self.currz_ave)
 
     def get_cond_x(self):
-        return deepcopy(self.m_cond_x)
+        return deepcopy(self.cond_x)
 
     def get_cond_y(self):
-        return deepcopy(self.m_cond_y)
+        return deepcopy(self.cond_y)
 
     def get_cond_z(self):
-        return deepcopy(self.m_cond_z)
+        return deepcopy(self.cond_z)
 
     def save(self, _pth: str) -> None:
         """Save FEM_Cube class as pickle

@@ -91,7 +91,7 @@ class Quartz:
                 * log(_x)
             )
 
-        # κ (inverted eq.37)
+        # κ (inverted eq.37 modified)
         _if = 0.0  # ionic strength
         for _s, _prop in self.ion_props.items():
             if _s in (Species.Na.name, Species.Cl.name):
@@ -99,7 +99,7 @@ class Quartz:
                     _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Concentration.name]
                 )
         _if *= 0.5
-        _top = 2.0 * const.ELEMENTARY_CHARGE**2 * _if
+        _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
         _bottom = (
             const.calc_dielectric_const_water(self.temperature)
             * const.BOLTZMANN_CONST

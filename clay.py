@@ -1,4 +1,4 @@
-"""Calculate electrical properties of mineral"""
+"""Calculate electrical properties of phyllosilicate"""
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -42,10 +42,10 @@ with open(kaolinite_init_pth, "rb") as pkf:
 
 # TODO: rename to phyllosilicate (file name is to clay)
 # TODO: remove "m_" from member variable name
-class Mineral:
+class Phyllosilicate:
     """
-    Mineral Class
-    It has a function to calculate the conductivity of mineral particles and
+    Phyllosilicate Class
+    It has a function to calculate the conductivity of phyllosilicate particles and
     the member variables necessary for the calculation.
 
     To calculate the surface potential, we use the equation proposed by
@@ -91,11 +91,11 @@ class Mineral:
         # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
         # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
         # TODO: external_propsクラス (or Dict)を引数としてメンバ変数を減らす
-        """Initialize mineral class.
+        """Initialize phyllosilicate class.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of mineral minerals
+            layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
             gamma_2 (float): Surface site densities of sianol (unit: sites/nm2).
@@ -129,7 +129,7 @@ class Mineral:
         self.m_ion_props: Dict = nacl.get_ion_props()
         self.m_dielec_water: float = nacl.get_dielec_water()
         ####################################################
-        # Parameters held by mineral
+        # Specific parameters of phyllosilicate
         ####################################################
         self.m_layer_width: float = layer_width
         self.m_gamma_1: float = gamma_1
@@ -157,7 +157,7 @@ class Mineral:
         self.m_charge_diffuse: float = charge_diffuse
         self.m_xd = xd
         self.m_cond_stern_plus_edl = cond_stern_plus_edl
-        # Parameters subordinate to those required for mineral initialization,
+        # Parameters subordinate to those required for phyllosilicate initialization,
         # but useful to be obtained in advance
         self.m_ionic_strength = None
         self.m_kappa = None
@@ -179,7 +179,7 @@ class Mineral:
 
         # START DEBUGGING
         if self.m_logger is not None:
-            self.m_logger.info("Initialize mineral")
+            self.m_logger.info("Initialize phyllosilicate")
             for name, value in vars(self).items():
                 _msg = f"name: {name}, value: {value}"
                 self.m_logger.debug(_msg)
@@ -1661,7 +1661,7 @@ class Mineral:
         return self.m_double_layer_length
 
     def save(self, _pth: str) -> None:
-        """Save mineral class as pickle
+        """Save phyllosilicate class as pickle
 
         Args:
             _pth (str): path to save
@@ -1671,12 +1671,12 @@ class Mineral:
 
 
 # pylint: disable=dangerous-default-value
-class Smectite(Mineral):
-    """Inherited class of Mineral, with surface adsorption site density and layer
+class Smectite(Phyllosilicate):
+    """Inherited class of Phyllosilicate, with surface adsorption site density and layer
     charge fixed to the physical properties of smectite
 
     Args:
-        mineral: mineral class
+        Phyllosilicate: Phyllosilicate class
     """
 
     def __init__(
@@ -1694,13 +1694,13 @@ class Smectite(Mineral):
         cond_stern_plus_edl: float = None,
         logger: Logger = None,
     ):
-        """Inherited classes from Mineral. Number density of
+        """Inherited classes from Phyllosilicate. Number density of
             reactors on the surface and fixing the layer charge for
             smectite case.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of mineral minerals
+            layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             potential_0 (float, optional): surface potential (unit: V).
             potential_stern (float, optional): stern plane potential (unit: V).
@@ -1735,12 +1735,12 @@ class Smectite(Mineral):
 
 
 # pylint: disable=dangerous-default-value
-class Kaolinite(Mineral):
-    """Inherited class of Mineral, with surface adsorption site density, layer
+class Kaolinite(Phyllosilicate):
+    """Inherited class of Phyllosilicate, with surface adsorption site density, layer
     charge, and layer width fixed to the physical properties of kaolinite
 
     Args:
-        Mineral: Mineral class
+        Phyllosilicate: Phyllosilicate class
     """
 
     def __init__(
@@ -1758,13 +1758,13 @@ class Kaolinite(Mineral):
         cond_stern_plus_edl: float = None,
         logger: Logger = None,
     ):
-        """Inherited classes from Mineral. Number density of
+        """Inherited classes from Phyllosilicate. Number density of
             reactors on the surface and fixing the layer charge for
             kaolinite case.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of mineral minerals
+            layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
             potential_0 (float, optional): surface potential (unit: V).
             potential_stern (float, optional): stern plane potential (unit: V).
@@ -1783,71 +1783,6 @@ class Kaolinite(Mineral):
             gamma_1=5.5,
             gamma_2=5.5,
             gamma_3=5.5,
-            qi=0.0,
-            potential_0=potential_0,
-            potential_stern=potential_stern,
-            potential_zeta=potential_zeta,
-            potential_r=potential_r,
-            charge_0=charge_0,
-            charge_stern=charge_stern,
-            charge_diffuse=charge_diffuse,
-            xd=xd,
-            cond_stern_plus_edl=cond_stern_plus_edl,
-            logger=logger,
-        )
-
-
-class Quartz(Mineral):
-    """Inherited class of Mineral, with surface adsorption site density, layer
-    charge, and layer width fixed to the physical properties of kaolinite
-
-    Args:
-        Mineral: Mineral class
-    """
-
-    def __init__(
-        self,
-        nacl: NaCl,
-        layer_width: float = 0.0,
-        potential_0: float = None,
-        potential_stern: float = None,
-        potential_zeta: float = None,
-        potential_r: float = None,
-        charge_0: float = None,
-        charge_stern: float = None,
-        charge_diffuse: float = None,
-        xd: float = None,
-        cond_stern_plus_edl: float = None,
-        logger: Logger = None,
-    ):
-        """Inherited classes from Mineral. Number density of
-        reactors on the surface and fixing the layer charge for
-        quartz case.
-            As pointed out in Revil and Glover (1997), surfface site density
-        of quartz varies widely from 1.5~25 sites/nm2, but here we assume
-        5.5 to be consistent with kaolinite and smectite parameters.
-
-        Args:
-            nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of mineral minerals
-                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            potential_0 (float, optional): surface potential (unit: V).
-            potential_stern (float, optional): stern plane potential (unit: V).
-            potential_zeta (float, optional): zeta plane potential (unit: V).
-            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
-            charge_0 (float, optional): charges in surface layer (unit: C/m3).
-            charge_stern (float, optional): charges in stern layer (unit: C/m3).
-            charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
-            xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
-            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m).
-            logger (Logger): Logger for debugging.
-        """
-        super().__init__(
-            nacl=nacl,
-            layer_width=layer_width,
-            gamma_1=0.0,
-            gamma_2=5.5,
-            gamma_3=0.0,
             qi=0.0,
             potential_0=potential_0,
             potential_stern=potential_stern,

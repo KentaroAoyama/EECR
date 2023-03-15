@@ -11,7 +11,9 @@ from copy import deepcopy
 from yaml import safe_load
 import pickle
 import numpy as np
-from mineral import Smectite, Kaolinite, Quartz
+
+from clay import Smectite, Kaolinite
+from quartz import Quartz
 from fluid import NaCl
 from solver_input import FEM_Input_Cube
 from solver import FEM_Cube
@@ -126,9 +128,6 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     kaolinite.calc_potentials_and_charges_inf()
     kaolinite.calc_cond_infdiffuse()  # to get self.m_double_layer_length
     kaolinite.calc_cond_tensor()
-    quartz.calc_potentials_and_charges_inf()
-    quartz.calc_cond_infdiffuse()  # to get self.m_double_layer_length
-    quartz.calc_cond_tensor()
 
     # set solver input
     solver_input = FEM_Input_Cube(logger=logger)

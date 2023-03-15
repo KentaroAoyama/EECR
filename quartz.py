@@ -3,6 +3,7 @@
     Reference:
         A.Revil and P.W.J.Glover, Theory of ionic-surface electrical conduction
         in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
+        DOI:https://doi.org/10.1103/PhysRevB.55.1757
 """
 from math import sqrt, exp, log, log10
 from logging import Logger
@@ -20,6 +21,7 @@ from fluid import NaCl
 
 class Quartz:
     """Containing electrical properties of quartz"""
+
     def __init__(
         self,
         nacl: NaCl,
@@ -105,8 +107,9 @@ class Quartz:
         )
         self.kappa = sqrt(_top / _bottom)
 
-        self.cond_diffuse = None
-        self.cond_tensor = None
+        # calculate conductivity tensor
+        self.__calc_cond_diffuse()
+        self.__calc_cond_tensor()
 
     def __calc_eq106(self, _x: float) -> float:
         """Calculate eq.(106) in Revil & Glover (1997)
@@ -144,6 +147,7 @@ class Quartz:
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
         _na = const.AVOGADRO_CONST
+        _cond = 0.
         for _, _prop in self.ion_props.items():
             _conc = 1000.0 * _prop[IonProp.Concentration.name]
             _v = _prop[IonProp.Valence.name]
@@ -152,18 +156,16 @@ class Quartz:
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
-    def calc_cond_diffuse(self) -> None:
-        """Calculate the specific conductivity of diffuse layer
-        """
+    def __calc_cond_diffuse(self) -> None:
+        """Calculate the specific conductivity of diffuse layer"""
         _xdl = 1.0 / self.kappa
         cond_ohmic_diffuse, _ = quad(
             self.__calc_cond_at_x_inf_diffuse, 0.0, 1.0 / self.kappa
         )
         self.cond_diffuse = cond_ohmic_diffuse / _xdl
 
-    def calc_cond_tensor(self):
-        """Calculate the conductivity tensor
-        """
+    def __calc_cond_tensor(self):
+        """Calculate the conductivity tensor"""
         cond_silica = 1.0e-12
         cond_tensor = np.array(
             [[cond_silica, 0.0, 0.0], [0.0, cond_silica, 0.0], [0.0, 0.0, cond_silica]],
@@ -181,8 +183,16 @@ class Quartz:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
-    def get_cond_infdiffuse(self) -> float or None:
+    def get_potential_stern(self) -> float or None:
         """Getter for the stern potential
+
+        Returns:
+            float: Stern plane potential
+        """
+        return self.potential_stern
+
+    def get_cond_infdiffuse(self) -> float or None:
+        """Getter for the conductivity of infinite diffuse layer
 
         Returns:
             float: Conductivity of the stern layer (Unit: S/m)
@@ -199,5 +209,4 @@ class Quartz:
 
 
 if __name__ == "__main__":
-    nacl = NaCl(ph=9)
-    _q = Quartz(nacl=nacl)
+    pass

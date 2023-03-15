@@ -50,11 +50,11 @@ class NaCl(Fluid):
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
             logger (Logger): Logger
         """
-        self.m_temperature = temperature
-        self.m_pressure = pressure
-        self.m_conductivity = conductivity
-        self.m_cond_tensor = cond_tensor
-        self.m_logger = logger
+        self.temperature = temperature
+        self.pressure = pressure
+        self.conductivity = conductivity
+        self.cond_tensor = cond_tensor
+        self.logger = logger
 
         # TODO: 活量を計算する仕様に変更する (それにあわせてTLMのパラメータもfixする必要ある)
         # Set ion_props and activities other than mobility
@@ -83,7 +83,7 @@ class NaCl(Fluid):
             _prop[IonProp.Activity.name] = cnacl
 
         # Calculate sodium ion mobility by MSA model
-        msa_props = calc_mobility(ion_props, self.m_temperature, self.m_pressure)
+        msa_props = calc_mobility(ion_props, self.temperature, self.pressure)
         for _s, _prop in ion_props.items():
             if _s not in msa_props:
                 continue
@@ -98,8 +98,8 @@ class NaCl(Fluid):
             # based on https://doi.org/10.1016/j.jcis.2015.03.047
             _prop[IonProp.MobilityStern.name] = _m * 0.5
 
-        self.m_ion_props: Dict = ion_props
-        self.m_dielec_water = calc_dielectric_const_water(self.m_temperature)
+        self.ion_props: Dict = ion_props
+        self.dielec_water = calc_dielectric_const_water(self.temperature)
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -109,12 +109,12 @@ class NaCl(Fluid):
             float: Conductivity of NaCl fluid in liquid phase
         """
         # convert Kelvin to Celsius
-        temperature = self.m_temperature - 273.15
-        _m = self.m_ion_props[Species.Na.name]["Concentration"]
+        temperature = self.temperature - 273.15
+        _m = self.ion_props[Species.Na.name]["Concentration"]
         left = (5.6 + 0.27 * temperature - 1.5 * 1.0e-4 * temperature**2) * _m
         right = (2.36 + 0.099 * temperature) / (1.0 + 0.214 * _m**0.5) * _m**1.5
-        self.m_conductivity = left - right
-        return self.m_conductivity
+        self.conductivity = left - right
+        return self.conductivity
 
     def set_cond(self, _cond: float) -> None:
         """Set fluid conductivity
@@ -122,7 +122,7 @@ class NaCl(Fluid):
         Args:
             _cond (float): Fluid conductivity
         """
-        self.m_conductivity = _cond
+        self.conductivity = _cond
 
     def calc_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor. The T-O-T plane is the xy-plane,
@@ -133,15 +133,15 @@ class NaCl(Fluid):
         """
         cond_tensor = np.array(
             [
-                [self.m_conductivity, 0.0, 0.0],
-                [0.0, self.m_conductivity, 0.0],
-                [0.0, 0.0, self.m_conductivity],
+                [self.conductivity, 0.0, 0.0],
+                [0.0, self.conductivity, 0.0],
+                [0.0, 0.0, self.conductivity],
             ]
         )
-        self.m_cond_tensor = cond_tensor
-        if self.m_logger is not None:
-            self.m_logger.info(f"{__name__} cond tensor: {self.m_cond_tensor}")
-        return deepcopy(self.m_cond_tensor)
+        self.cond_tensor = cond_tensor
+        if self.logger is not None:
+            self.logger.info(f"{__name__} cond tensor: {self.cond_tensor}")
+        return deepcopy(self.cond_tensor)
 
     def get_ion_props(self) -> Dict:
         """Getter for the ion_props
@@ -149,14 +149,14 @@ class NaCl(Fluid):
         Returns:
             Dict: Ion properties
         """
-        return deepcopy(self.m_ion_props)
+        return deepcopy(self.ion_props)
 
     def get_pressure(self) -> float:
         """Getter for the pressure
         Returns:
             float: Absolute pressure
         """
-        return self.m_pressure
+        return self.pressure
 
     def get_temperature(self) -> float:
         """Getter for the temperature
@@ -164,7 +164,7 @@ class NaCl(Fluid):
         Returns:
             float: Absolute temperature
         """
-        return self.m_temperature
+        return self.temperature
 
     def get_dielec_water(self) -> float:
         """Getter for the permittivity of water
@@ -172,7 +172,7 @@ class NaCl(Fluid):
         Returns:
             float: permittivity of water
         """
-        return self.m_dielec_water
+        return self.dielec_water
 
     def get_cond_tensor(self) -> np.ndarray or None:
         """Getter for the conductivity tensor
@@ -180,9 +180,9 @@ class NaCl(Fluid):
         Returns:
             np.ndarray: Conductivity tensor with 3 rows and 3 columns
         """
-        if self.m_cond_tensor is not None:
-            return deepcopy(self.m_cond_tensor)
-        return self.m_cond_tensor
+        if self.cond_tensor is not None:
+            return deepcopy(self.cond_tensor)
+        return self.cond_tensor
 
     def save(self, _pth: str) -> None:
         """Save NaCl class as pickle

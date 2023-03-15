@@ -18,6 +18,7 @@ from copy import deepcopy
 from concurrent import futures
 
 from matplotlib import pyplot as plt
+import matplotlib.cm as cm
 import numpy as np
 from clay import Smectite, Kaolinite
 from quartz import Quartz
@@ -749,6 +750,11 @@ def tmp():
 
 
 def compare_WS_shaly():
+    """Compare with the core data in Waxman & Smits (1968)
+    """
+    # あわない
+    # 改善案：
+    # Cl除く
     _t = 298.15
     _ph = 7.0
     # smectite (25, 26, 27)
@@ -781,6 +787,25 @@ def compare_WS_shaly():
             cnacl_ref[np.argmin(np.square(np.array(cond_calc_ls) - _cw / 10.0))]
         )
     core_props = {
+        25: {
+            "bulk": [
+                None,
+                None,
+                None,
+                1.481,
+                1.77,
+                2.24,
+                2.97,
+                3.76,
+                None,
+                4.72,
+                5.46,
+                None,
+            ],
+            "porosity": 18.7 * 0.01,
+            "xsmec": 1.0,
+            "xkaol": 0.0,
+        },
         26: {
             "bulk": [
                 1.503,
@@ -799,7 +824,26 @@ def compare_WS_shaly():
             "porosity": 22.9 * 0.01,
             "xsmec": 1.0,
             "xkaol": 0.0,
-        }
+        },
+        27: {
+            "bulk": [
+                None,
+                None,
+                None,
+                2.309,
+                2.41,
+                2.97,
+                3.88,
+                4.90,
+                None,
+                6.10,
+                7.04,
+                None,
+            ],
+            "porosity": 20.9 * 0.01,
+            "xsmec": 1.0,
+            "xkaol": 0.0,
+        },
     }
     for _id, _prop in core_props.items():
         _poros = _prop["porosity"]
@@ -814,10 +858,10 @@ def compare_WS_shaly():
         _xsmec = _prop["xsmec"]
         _xkaol = _prop["xkaol"]
         assert _xsmec + _xkaol <= 1.0
-        _pred_ls = []
         range_ls = [float(i) / 10.0 for i in range(10)]
         _xmineral_result: Dict = {}
         for i in range_ls:
+            _pred_ls = []
             _xsmec_tmp = _xsmec * i
             _xkaol_tmp = _xkaol * i
             for _cnacl in cnacl_ls:
@@ -866,17 +910,25 @@ def compare_WS_shaly():
         # plot
         fig, ax = plt.subplots()
         ax.scatter(cnacl_ls, label_ls)
-        for (_xkaol_tmp, _xsmec_tmp), _pred_ls in _xmineral_result.items():
-            ax.plot(cnacl_ls, _pred_ls, label=f"Xsmec: {_xsmec_tmp}")  #!
+        # color=cm.jet(float(i) / len(keys_sorted)
+        cou = 0
+        for (_xsmec_tmp, _xkaol_tmp), _pred_ls in _xmineral_result.items():
+            ax.plot(cnacl_ls, _pred_ls, label=str(_xsmec_tmp), color=cm.jet(float(cou) / len(_xmineral_result)))
+            cou += 1
         ax.legend()
         ax.set_xscale("log")
         ax.set_title(_id)
         fig.savefig(
             path.join(test_dir(), f"WS_{_id}.png"), dpi=200, bbox_inches="tight"
         )
-        with open("tmp.pkl", "wb") as pkf:
-            pickle.dump(pkf, protocol=pickle.HIGHEST_PROTOCOL)
+        with open(f"{_id}.pkl", "wb") as pkf:
+            pickle.dump(_xmineral_result, pkf, protocol=pickle.HIGHEST_PROTOCOL)
     return
+
+
+def test_levy_etal_2018():
+
+    pass
 
 
 def main():

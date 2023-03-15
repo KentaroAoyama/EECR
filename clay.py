@@ -82,7 +82,8 @@ class Phyllosilicate:
         charge_stern: float = None,
         charge_diffuse: float = None,
         xd: float = None,
-        cond_stern_plus_edl: float = None,
+        cond_intra: float = None,
+        cond_outer: float = None,
         logger: Logger = None,
     ):
         # TODO: m_layer_widthのassertionを電位, 電荷を計算する関数に加える
@@ -108,7 +109,8 @@ class Phyllosilicate:
             charge_stern (float, optional): Charges in stern layer (unit: C/m3).
             charge_zeta (float, optional): Charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
-            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m).
+            cond_intra (float): Inter layer conductivity (unit: S/m).
+            cond_outer (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
         """
         # Check input values
@@ -155,7 +157,8 @@ class Phyllosilicate:
         self.charge_stern: float = charge_stern
         self.charge_diffuse: float = charge_diffuse
         self.xd = xd
-        self.cond_stern_plus_edl = cond_stern_plus_edl
+        self.cond_intra = cond_intra
+        self.cond_outer = cond_outer
         # Parameters subordinate to those required for phyllosilicate initialization,
         # but useful to be obtained in advance
         self.ionic_strength = None
@@ -1489,7 +1492,7 @@ class Phyllosilicate:
             self.__calc_cond_at_x_stern_truncated, 0.0, self.xd
         )
         cond = (cond_ohmic_diffuse + cond_ohmic_stern) / _xdl
-        self.cond_stern_plus_edl = cond
+        self.cond_intra = cond
         if self.logger is not None:
             self.logger.info("Finished the calculation of interlayer conductivity")
             self.logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
@@ -1525,7 +1528,7 @@ class Phyllosilicate:
         # Based on eq.(26) of Leroy & Revil (2004), we assume that Na
         # ions are densely charged on the surface
         cond = (cond_ohmic_diffuse + cond_ohmic_stern) / xdl
-        self.cond_stern_plus_edl = cond
+        self.cond_outer = cond
         if self.logger is not None:
             self.logger.info(
                 "Finished the calculation of infinite diffuse layer conductivity"
@@ -1580,7 +1583,7 @@ class Phyllosilicate:
             "Before calculating the conductivity of the smectite cell, we should"
             "calculate electrical parameters for truncated diffuse layer case"
         )
-        sigma_intra = self.cond_stern_plus_edl
+        sigma_intra = self.cond_intra
         assert sigma_intra is not None, (
             "Before calculating the conductivity"
             "of the smectite cell, we should calculate interlayer conductivity"
@@ -1690,7 +1693,8 @@ class Smectite(Phyllosilicate):
         charge_stern: float = None,
         charge_diffuse: float = None,
         xd: float = None,
-        cond_stern_plus_edl: float = None,
+        cond_intra: float = None,
+        cond_outer: float = None,
         logger: Logger = None,
     ):
         """Inherited classes from Phyllosilicate. Number density of
@@ -1709,7 +1713,8 @@ class Smectite(Phyllosilicate):
             charge_stern (float, optional): charges in stern layer (unit: C/m3).
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
-            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m).
+            cond_intra (float, optional): Inter layer conductivity (unit: S/m).
+            cond_outer (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
             flag_truncated (bool): True if truncated parameters will be calculate.
         """
@@ -1728,7 +1733,8 @@ class Smectite(Phyllosilicate):
             charge_stern=charge_stern,
             charge_diffuse=charge_diffuse,
             xd=xd,
-            cond_stern_plus_edl=cond_stern_plus_edl,
+            cond_intra=cond_intra,
+            cond_outer=cond_outer,
             logger=logger,
         )
 
@@ -1754,7 +1760,8 @@ class Kaolinite(Phyllosilicate):
         charge_stern: float = None,
         charge_diffuse: float = None,
         xd: float = None,
-        cond_stern_plus_edl: float = None,
+        cond_intra: float = None,
+        cond_outer: float = None,
         logger: Logger = None,
     ):
         """Inherited classes from Phyllosilicate. Number density of
@@ -1773,7 +1780,8 @@ class Kaolinite(Phyllosilicate):
             charge_stern (float, optional): charges in stern layer (unit: C/m3).
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
-            cond_stern_plus_edl (float, optional): Conductivity of Stern layer + EDL (unit: S/m).
+            cond_intra (float, optional): Inter layer conductivity (unit: S/m).
+            cond_outer (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
         """
         super().__init__(
@@ -1791,6 +1799,16 @@ class Kaolinite(Phyllosilicate):
             charge_stern=charge_stern,
             charge_diffuse=charge_diffuse,
             xd=xd,
-            cond_stern_plus_edl=cond_stern_plus_edl,
+            cond_intra=cond_intra,
+            cond_outer=cond_outer,
             logger=logger,
         )
+
+if __name__ == "__main__":
+    nacl = NaCl()
+    smectite = Smectite(nacl)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    pass

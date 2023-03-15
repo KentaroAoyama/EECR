@@ -5,6 +5,7 @@
         in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
         DOI:https://doi.org/10.1103/PhysRevB.55.1757
 """
+from typing import Dict
 from math import sqrt, exp, log, log10
 from logging import Logger
 from sys import float_info
@@ -44,13 +45,13 @@ class Quartz:
             logger (Logger): Logger
         """
         assert pzc is not None or k_plus is not None, "Either pzc or k_plus must be set"
-        self.gamma_o = gamma_o * 1.0e18
-        self.k_plus = k_plus
-        self.k_minus = k_minus
-        self.potential_stern = None
-        self.ion_props = nacl.get_ion_props()
-        self.temperature = nacl.get_temperature()
-        self.logger = logger
+        self.gamma_o: float = gamma_o * 1.0e18
+        self.k_plus: float = k_plus
+        self.k_minus: float = k_minus
+        self.potential_stern: float = None
+        self.ion_props: Dict = nacl.get_ion_props()
+        self.temperature: float = nacl.get_temperature()
+        self.logger: Logger = logger
         # set pH
         self.ph = -1.0 * log10(
             self.ion_props[Species.H.name][IonProp.Concentration.name]
@@ -91,7 +92,7 @@ class Quartz:
                 * log(_x)
             )
 
-        # κ (inverted eq.37 modified)
+        # κ (inverted eq.37 of Revil & Glover (1997), modified)
         _if = 0.0  # ionic strength
         for _s, _prop in self.ion_props.items():
             if _s in (Species.Na.name, Species.Cl.name):

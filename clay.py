@@ -17,7 +17,6 @@ import constants as const
 from constants import Species, IonProp
 from fluid import NaCl
 
-
 # load global parameters
 # for smectite, infinite diffuse layer case
 smectite_inf_init_pth: PathLike = path.join(
@@ -1214,11 +1213,13 @@ class Phyllosilicate:
         _t = self.temperature
         _cond = 0.0
         potential = self.potential_zeta * np.exp((-1.0) * self.kappa * _x)
-        for _, prop in self.ion_props.items():
+        for _s, prop in self.ion_props.items():
+            if _s not in (Species.Na.name, Species.Cl.name):
+                continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
             _mobility = prop[IonProp.MobilityInfDiffuse.name]
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1265,7 +1266,9 @@ class Phyllosilicate:
         _t = self.temperature
         _cond = 0.0
         potential = self.potential_zeta * np.exp((-1.0) * self.kappa_truncated * _x)
-        for _, prop in self.ion_props.items():
+        for _s, prop in self.ion_props.items():
+            if _s not in (Species.Na.name, Species.Cl.name):
+                continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
             _mobility = prop[IonProp.MobilityTrunDiffuse.name]
@@ -1317,14 +1320,16 @@ class Phyllosilicate:
         _t = self.temperature
         _cond = 0.0
         potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
-        for _, prop in self.ion_props.items():
+        for _s, prop in self.ion_props.items():
+            if _s not in (Species.Na.name, Species.Cl.name):
+                continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
             # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
             # 参考文献：doi:10.1029/2008JB006114.
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
             _mobility = prop[IonProp.MobilityInfDiffuse.name] * 0.5
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1373,7 +1378,9 @@ class Phyllosilicate:
         _t = self.temperature
         _cond = 0.0
         potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
-        for _, prop in self.ion_props.items():
+        for _s, prop in self.ion_props.items():
+            if _s not in (Species.Na.name, Species.Cl.name):
+                continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
@@ -1425,7 +1432,7 @@ class Phyllosilicate:
         the stern layer. Assume the thickness of the stern layer is
         equal to xd (O layer thickness is assumed negligibly small)
         """
-        # TODO: layer_width=13e-9, Cnacl>3で m_potential_zetaが0になり, エラーとなる
+        # TODO: layer_width=13e-9, Cnacl>3でlogの中身がマイナスになり, エラーとなる
         self.kappa_stern = (
             1.0 / self.xd * np.log(self.potential_stern / self.potential_zeta)
         )
@@ -1778,9 +1785,12 @@ class Kaolinite(Phyllosilicate):
         )
 
 if __name__ == "__main__":
-    nacl = NaCl()
+    nacl = NaCl(cnacl=4.3)
     smectite = Smectite(nacl)
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    print(smectite.calc_cond_interlayer())
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    print(smectite.get_cond_tensor())
+    print(nacl.sen_and_goode_1992())
     pass

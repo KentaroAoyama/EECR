@@ -40,7 +40,6 @@ kaolinite_init_pth: PathLike = path.join(
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
-# TODO: remove "m_" from member variable name
 class Phyllosilicate:
     """
     Phyllosilicate Class
@@ -192,10 +191,8 @@ class Phyllosilicate:
         """
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             self.__set_constant_for_smectite_truncated()
-        elif self.qi == 0.0 and self.gamma_1 > 0.0:
-            self.__set_constant_for_kaolinite()
         else:
-            self.__set_constant_for_qurtz()
+            self.__set_constant_for_kaolinite()
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
 
@@ -219,23 +216,6 @@ class Phyllosilicate:
         )
         bottom = self.dielec_water * _kb * self.temperature
         self.kappa = np.sqrt(top / bottom)
-
-    def __set_constant_for_qurtz(self) -> None:
-        """Set the constants for the case of quartz and infinite diffuse layer"""
-        self.k1: float = const.calc_equibilium_const(
-            const.dg_aloh_quartz, self.temperature
-        )
-        self.k2: float = const.calc_equibilium_const(
-            const.dg_sioh_quartz, self.temperature
-        )
-        self.k3: float = const.calc_equibilium_const(
-            const.dg_xh_quartz, self.temperature
-        )
-        self.k4: float = const.calc_equibilium_const(
-            const.dg_xna_quartz, self.temperature
-        )
-        self.c1: float = const.c1_quartz
-        self.c2: float = const.c2_quartz
 
     def __set_constant_for_kaolinite(self) -> None:
         """Set the constants for the case of kaolinite and infinite diffuse layer"""
@@ -918,9 +898,6 @@ class Phyllosilicate:
         oscillation_tol: float = 1.0e-04,
         beta: float = 0.75,
         lamda: float = 2.0,
-        _k2: float = None,
-        _c1: float = None,
-        _c2: float = None,
     ) -> List:
         """Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
@@ -951,10 +928,8 @@ class Phyllosilicate:
         # TODO: May need to consider other cases (e.g., illite, etc.)
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()
-        elif self.qi == 0.0 and self.gamma_1 > 0.0:
-            self.__set_constant_for_kaolinite()
         else:
-            self.__set_constant_for_qurtz()
+            self.__set_constant_for_kaolinite()
         if x_init is None:
             # Set initial electrical parameters
             if self.qi < 0 and self.gamma_1 == 0.0:
@@ -1271,7 +1246,7 @@ class Phyllosilicate:
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
-    def __calc_cond_at_x_truncated_diffuse(self, _x: float) -> float:
+    def __calc_cond_at_x_diffuse_truncated(self, _x: float) -> float:
         """Calculate the conductivity of the inter layer.
             The following assumptions are made:
             1. Mobility is assumed to be a constant following Leroy & Revil(2009).
@@ -1294,7 +1269,7 @@ class Phyllosilicate:
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
             _mobility = prop[IonProp.MobilityTrunDiffuse.name]
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1403,7 +1378,7 @@ class Phyllosilicate:
             _v = prop[IonProp.Valence.name]
             # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
             _mobility = prop[IonProp.MobilityTrunDiffuse.name] * 0.5
-            _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
+            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
@@ -1486,7 +1461,7 @@ class Phyllosilicate:
             self.__calc_kappa_stern()
         _xdl = self.layer_width * 0.5
         cond_ohmic_diffuse, _err1 = quad(
-            self.__calc_cond_at_x_truncated_diffuse, self.xd, _xdl
+            self.__calc_cond_at_x_diffuse_truncated, self.xd, _xdl
         )
         cond_ohmic_stern, _err2 = quad(
             self.__calc_cond_at_x_stern_truncated, 0.0, self.xd
@@ -1497,7 +1472,7 @@ class Phyllosilicate:
             self.logger.info("Finished the calculation of interlayer conductivity")
             self.logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
             self.logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
-        return cond, _err1 + _err2
+        return self.cond_intra, _err1 + _err2
 
     def calc_cond_infdiffuse(self) -> Tuple[float]:
         """Calculate the Stern + EDL conductivity for the inifinite diffuse
@@ -1509,10 +1484,8 @@ class Phyllosilicate:
         # TODO: May need to consider other cases (e.g., illite, etc.)
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()
-        elif self.qi == 0.0 and self.gamma_1 > 0.0:
-            self.__set_constant_for_kaolinite()
         else:
-            self.__set_constant_for_qurtz()
+            self.__set_constant_for_kaolinite()
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
         if self.xd is None:
@@ -1809,6 +1782,5 @@ if __name__ == "__main__":
     smectite = Smectite(nacl)
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
+    print(smectite.calc_cond_interlayer())
     pass

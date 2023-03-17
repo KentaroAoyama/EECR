@@ -13,7 +13,7 @@ import pickle
 import numpy as np
 
 from clay import Smectite, Kaolinite
-from quartz import Quartz
+from mineral import Quartz
 from fluid import NaCl
 from solver_input import FEM_Input_Cube
 from solver import FEM_Cube

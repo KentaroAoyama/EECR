@@ -21,7 +21,7 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
 from clay import Smectite, Kaolinite
-from quartz import Quartz
+from mineral import Quartz
 import constants as const
 from fluid import NaCl
 from msa import calc_mobility

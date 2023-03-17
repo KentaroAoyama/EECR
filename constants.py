@@ -9,7 +9,8 @@ def calc_standard_gibbs_energy(k_25: float) -> float:
 def calc_equibilium_const(dg_25, temperature) -> float:
     return exp(-dg_25 / (GAS_CONST * temperature))
 
-
+# TODO: 圧力依存性を考慮
+# e.g., https://www.jstage.jst.go.jp/article/jshpreview/11/2/11_2_99/_pdf
 def calc_dielectric_const_water(temperature: float) -> float:
     # 十分低い周波数における値であることに注意!
     # http://www.isc.meiji.ac.jp/~nkato/Useful_Info.files/water.html
@@ -52,14 +53,6 @@ k_xna_kaol = 5.04e-2  # Leroy and Revil, 2004, table 2
 c1_kaol = 1.49  # Leroy and Revil, 2004, table 2
 c2_kaol = 0.2  # Leroy and Revil, 2004, table 1
 
-# Quartz (inf only)
-k_aloh_quartz = k_aloh_kaol  # Leroy and Revil, 2004, table 1
-k_sioh_quartz = 17.81 * k_sioh_kaol # Leroy and Revil, 2004, table 2
-k_xh_quartz = k_xh_kaol  # Leroy and Revil, 2004, table 1
-k_xna_quartz = k_xna_kaol  # Leroy and Revil, 2004, table 2
-c1_quartz = 2.28 * c1_kaol  # Leroy and Revil, 2004, table 2
-c2_quartz = 1.67 * c2_kaol  # Leroy and Revil, 2004, table 1
-
 # 標準ギブスエネルギー
 # Smectite & inf
 dg_aloh_smec_inf = calc_standard_gibbs_energy(k_aloh_smec_inf)
@@ -79,11 +72,6 @@ dg_sioh_kaol = calc_standard_gibbs_energy(k_sioh_kaol)
 dg_xh_kaol = calc_standard_gibbs_energy(k_xh_kaol)
 dg_xna_kaol = calc_standard_gibbs_energy(k_xna_kaol)
 
-# Quartz (inf only)
-dg_aloh_quartz = calc_standard_gibbs_energy(k_aloh_quartz)
-dg_sioh_quartz = calc_standard_gibbs_energy(k_sioh_quartz)
-dg_xh_quartz = calc_standard_gibbs_energy(k_xh_quartz)
-dg_xna_quartz = calc_standard_gibbs_energy(k_xna_quartz)
 
 class Species(IntEnum):
     Na = auto()

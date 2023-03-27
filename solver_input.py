@@ -11,6 +11,9 @@ from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
 from fluid import Fluid
 
+#!
+from time import time
+from tqdm import tqdm
 
 # pylint: disable=invalid-name
 class FEM_Input_Cube:
@@ -254,7 +257,7 @@ class FEM_Input_Cube:
                             cond_infdiffuse,
                             double_layer_length,
                         )
-        self.pix_tensor = pix_tensor
+        self.pix_tensor = np.array(pix_tensor)
 
         # construct self.sigma and self.pix
         sigma_ls: List = []
@@ -271,6 +274,40 @@ class FEM_Input_Cube:
 
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
+
+    def create_tmp(self, nacl, quartz, poros, shape=(10,10,10)):
+        self.pix_tensor = None
+        self.sigma = None
+        self.pix = None
+        self.instance_ls = None
+        nz, ny, nx = shape
+        elem_vert = int(nz * ny * nx * poros)
+        self.pix_tensor = np.zeros(shape).tolist()
+        self.instance_ls = np.zeros(shape).tolist()
+        cou = 0
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    if i < 3 and cou <= elem_vert:
+                        self.pix_tensor[k][j][i] = nacl.get_cond_tensor()
+                        self.instance_ls[k][j][i] = nacl
+                        cou += 1
+                    else:
+                        self.pix_tensor[k][j][i] = quartz.get_cond_tensor()
+                        self.instance_ls[k][j][i] = quartz
+        self.pix_tensor = np.array(self.pix_tensor)
+        # construct self.sigma and self.pix
+        sigma_ls: List = []
+        pix_ls: List = []
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    m = calc_m(i, j, k, nx, ny)
+                    sigma_ls.append(self.pix_tensor[k][j][i].tolist())
+                    pix_ls.append(m)  # TODO: remove pix
+        self.sigma = sigma_ls
+        self.pix = pix_ls
+        pass
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -600,30 +637,25 @@ class FEM_Input_Cube:
                     dndz[7] = (1.0 - x) * y
                     # now build electric field matrix
                     es[k][j][i] = [dndx, dndy, dndz]
-        # construct stiffness
+        # construct stiffness matrix
         dk: List = [None for _ in range(n_phase)]
-        zeros_ls: List = np.zeros(shape=(8, 8), dtype=np.float64).tolist()
-        for ijk in range(n_phase):
-            _ls = deepcopy(zeros_ls)
-            for k in range(3):
-                for j in range(3):
-                    for i in range(3):
-                        # now do matrix multiply to determine value at (x,y,z), multiply by
-                        # proper weight, and sum into dk, the stiffness matrix
-                        for ii in range(8):
-                            for jj in range(8):
-                                _sum = 0.0
-                                for kk in range(3):
-                                    for ll in range(3):
-                                        _sum += (
-                                            es[k][j][i][kk][ii]
-                                            * self.sigma[ijk][kk][ll]
-                                            * es[k][j][i][ll][jj]
-                                        )
-                                _ls[ii][jj] += g[i][j][k] * _sum / 216.0
-            dk[ijk] = roundup_small_negative(np.array(_ls))
-        # add 1.0e-16 because rounding errors may have accumulated and the value is
-        # no longer positive definite.
+        es_expanded = []
+        g_expanded = []
+        for k in range(3):
+            for j in range(3):
+                for i in range(3):
+                    es_expanded.append(np.array(es[k][j][i]))
+                    g_expanded.append(g[i][j][k] / 216.0) #!
+        es_expanded = np.array(es_expanded)
+        g_expanded = np.array(g_expanded)
+        es_t = np.transpose(es_expanded, (0, 2, 1))
+        es = es_expanded
+        for ijk in tqdm(range(n_phase)):
+            sigma = np.array(self.sigma[ijk])
+            dk_tmp = np.matmul(np.matmul(es_t, sigma), es)
+            dk_tmp = np.dot(np.transpose(dk_tmp, (1, 2, 0)), g_expanded)
+            dk[ijk] = roundup_small_negative(np.array(dk_tmp))
+            
         self.dk = np.array(dk, dtype=np.float64)
         # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,
@@ -648,7 +680,7 @@ class FEM_Input_Cube:
         _is[5] = 18
         _is[6] = 17
         _is[7] = 16
-
+        # TODO: 高速化
         xn: List = list(range(8))
         # x=nx face
         i = nx - 1
@@ -905,6 +937,17 @@ class FEM_Input_Cube:
                 at pp.11 in Garboczi (1998). If c is not calculated, return None.
         """
         return self.c
+
+    def get_shape(self) -> Tuple[int] or None:
+        """Getter for the shpe of the cubic FEM mesh
+
+        Returns:
+            Tuple[int] or None: shape
+        """
+        if self.pix_tensor is None:
+            return
+        nz, ny, nx, _, _ = self.pix_tensor.shape
+        return nz, ny, nx
 
 
 def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:

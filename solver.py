@@ -89,8 +89,7 @@ class FEM_Cube:
             self.logger.info("Expand u 2d")
         u_2d: List = [None for _ in range(self.u.shape[0])]
         for m in range(nxyz):
-            self.__expand_2d(deepcopy(self.u), u_2d, m, deepcopy(ib))
-        assert None not in u_2d
+            self.__expand_2d(self.u, u_2d, m, ib)
         u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
         self.u2d = u_2d
 
@@ -102,7 +101,6 @@ class FEM_Cube:
             self.logger.info("Setting the global matrix A...")
         for m in range(nxyz):
             self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
-        assert None not in a
         self.a = np.array(a, dtype=np.float64)
 
         # m_gb and u_tot
@@ -118,8 +116,7 @@ class FEM_Cube:
         # h_2d
         h_2d: List = [None for _ in range(nxyz)]
         for m in range(nxyz):
-            self.__expand_2d(deepcopy(self.h), h_2d, m, deepcopy(ib))
-        assert None not in h_2d
+            self.__expand_2d(self.h, h_2d, m, ib)
         self.h2d = np.array(h_2d, dtype=np.float64)
 
         # gg is the norm squared of the gradient (gg=gb*gb)
@@ -261,20 +258,16 @@ class FEM_Cube:
         )
         a[m] = am
 
-    def __expand_2d(self, ls1d: List, ls2d: List, m: int, ib: List) -> None:
+    def __expand_2d(self, arr1d: np.ndarray, ls2d: List, m: int, ib: List) -> None:
         """Convert a 1d list with m elements to an m x 27 2d list
-
+        TODO: docstring
         Args:
             ls1d (List): 1d list
-            h_2d (List): 2d list. 27 values adjacent to m are stored in the second dimension
+            ls2d (List): 2d array. 27 values adjacent to m are stored in the second dimension
             m (int): Global 1d lablling index.
             ib (List): Neighbor labeling list
         """
-        hm = [0.0 for _ in range(27)]
-        ib_m: List = ib[m]
-        for i in range(27):
-            hm[i] = ls1d[ib_m[i]]
-        ls2d[m] = hm
+        ls2d[m] = arr1d[ib[m]]
 
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
@@ -307,11 +300,9 @@ class FEM_Cube:
         # Conjugate gradient loop
         for _ in range(ldemb):
             # expand h
-            h_1d: List = self.h.tolist()
             h_2d: List = [None for _ in range(nxyz)]
             for m in range(nxyz):
-                self.__expand_2d(h_1d, h_2d, m, ib)
-            assert None not in h_2d
+                self.__expand_2d(self.h, h_2d, m, ib)
             self.h2d = np.array(h_2d, dtype=np.float64)
 
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
@@ -439,9 +430,12 @@ class FEM_Cube:
         self.currx_ave = currx_ave
         self.curry_ave = curry_ave
         self.currz_ave = currz_ave
-        self.cond_x = currx_ave / ex
-        self.cond_y = curry_ave / ey
-        self.cond_z = currz_ave / ez
+        if ex != 0.:
+            self.cond_x = currx_ave / ex
+        if ey != 0.:
+            self.cond_y = curry_ave / ey
+        if ez != 0.:
+            self.cond_z = currz_ave / ez
 
     # getters methods for member variables
     # pylint: disable=missing-docstring

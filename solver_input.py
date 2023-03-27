@@ -11,10 +11,6 @@ from decimal import Decimal, ROUND_HALF_UP
 import numpy as np
 from fluid import Fluid
 
-#!
-from time import time
-from tqdm import tqdm
-
 # pylint: disable=invalid-name
 class FEM_Input_Cube:
     """Class for creating finite element method inputs when using cubic elements.
@@ -169,9 +165,7 @@ class FEM_Input_Cube:
         error_cuml: float = 0.0
         # set rotated conductivity tensor for each element
         if self.logger is not None:
-            self.logger.info(
-                "Setting rotated conductivity tensor for each element..."
-            )
+            self.logger.info("Setting rotated conductivity tensor for each element...")
         for _i, (_instance, _frac) in enumerate(volume_frac_dict.items()):
             _num = int(
                 Decimal(_frac / frac_unit).quantize(
@@ -275,7 +269,7 @@ class FEM_Input_Cube:
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
 
-    def create_tmp(self, nacl, quartz, poros, shape=(10,10,10)):
+    def create_tmp(self, nacl, quartz, poros, shape=(10, 10, 10)):
         self.pix_tensor = None
         self.sigma = None
         self.pix = None
@@ -556,7 +550,6 @@ class FEM_Input_Cube:
                         m1 = calc_m(i1, j1, k1, nx, ny)
                         ib[m][n] = m1
         self.ib = ib
-
         if self.logger is not None:
             self.logger.info("set_ib done")
 
@@ -637,6 +630,7 @@ class FEM_Input_Cube:
                     dndz[7] = (1.0 - x) * y
                     # now build electric field matrix
                     es[k][j][i] = [dndx, dndy, dndz]
+
         # construct stiffness matrix
         dk: List = [None for _ in range(n_phase)]
         es_expanded = []
@@ -645,17 +639,17 @@ class FEM_Input_Cube:
             for j in range(3):
                 for i in range(3):
                     es_expanded.append(np.array(es[k][j][i]))
-                    g_expanded.append(g[i][j][k] / 216.0) #!
+                    g_expanded.append(g[i][j][k] / 216.0)
         es_expanded = np.array(es_expanded)
         g_expanded = np.array(g_expanded)
         es_t = np.transpose(es_expanded, (0, 2, 1))
         es = es_expanded
-        for ijk in tqdm(range(n_phase)):
+        for ijk in range(n_phase):
             sigma = np.array(self.sigma[ijk])
             dk_tmp = np.matmul(np.matmul(es_t, sigma), es)
             dk_tmp = np.dot(np.transpose(dk_tmp, (1, 2, 0)), g_expanded)
             dk[ijk] = roundup_small_negative(np.array(dk_tmp))
-            
+
         self.dk = np.array(dk, dtype=np.float64)
         # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,

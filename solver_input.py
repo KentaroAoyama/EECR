@@ -3,13 +3,18 @@
 # pylint: disable=import-error
 from copy import deepcopy
 from logging import Logger
-from typing import List, Dict, Tuple
+from typing import Set, List, Dict, Tuple, OrderedDict, Union
 from math import isclose
 import random
 from sys import float_info
 from decimal import Decimal, ROUND_HALF_UP
+
 import numpy as np
+from pykrige.ok3d import OrdinaryKriging3D as OK3D
+
 from fluid import Fluid
+
+DictLike = Union[Dict, OrderedDict]
 
 # pylint: disable=invalid-name
 class FEM_Input_Cube:
@@ -100,7 +105,8 @@ class FEM_Input_Cube:
         self,
         shape: Tuple[int] = (10, 10, 10),
         edge_length: float = 1.0e-6,
-        volume_frac_dict: Dict = {},
+        volume_frac_dict: DictLike = {},
+        instance_range_dict: DictLike = {},
         seed: int = 42,
         rotation_setting: str or Tuple[float] = "random",
     ) -> None:
@@ -110,8 +116,10 @@ class FEM_Input_Cube:
         Args:
             shape (Tuple[int]): Pixel size of (nz, ny, nx).
             edge_length (float): Length of a edge of a cube pixel.
-            volume_frac_dict (Dict): Dictionary whose key is the class of the mineral or fluid
-                and value is the volume fraction.
+            volume_frac_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
+                and value is the volume fraction. The phases are assigned in the order of the keys,
+                so if you need to consider the order, give OrderedDict
+            # TODO
             rotation_setting (str or Tuple): Argument that control the rotation of the
                 conductivity tensor of each element. If you set as "rondom", conductivity tensor
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
@@ -161,12 +169,13 @@ class FEM_Input_Cube:
         random.seed(seed)
         ns = nx * ny * nz
         frac_unit = 1.0 / float(ns)
-        m_all = set([_m for _m in range(ns)])
+        m_remain = set([_m for _m in range(ns)])
         error_cuml: float = 0.0
         # set rotated conductivity tensor for each element
         if self.logger is not None:
             self.logger.info("Setting rotated conductivity tensor for each element...")
         for _i, (_instance, _frac) in enumerate(volume_frac_dict.items()):
+            print(f"_instance: {_instance}") #!
             _num = int(
                 Decimal(_frac / frac_unit).quantize(
                     Decimal("1"), rounding=ROUND_HALF_UP
@@ -174,15 +183,22 @@ class FEM_Input_Cube:
             )
             error_cuml += float(_num) / ns - _frac
             if _i == len(volume_frac_dict) - 1:
-                _num = len(m_all)
+                _num = len(m_remain)
             elif error_cuml >= frac_unit:
                 _num -= 1
                 error_cuml -= frac_unit
             elif error_cuml <= -1.0 * frac_unit:
                 _num += 1
                 error_cuml += frac_unit
-            _m_selected: List = random.sample(list(m_all), k=_num)
-            m_all = m_all.difference(set(_m_selected))
+            # TODO: 空隙の周りに分布するケースも追加する
+            if _instance in instance_range_dict:
+                range_yz = instance_range_dict[_instance]
+                _m_selected = self.__calc_anisotropic_distribution(
+                    m_remain, _num, shape, range_yz
+                )
+            else:
+                _m_selected = self.__assign_by_nugget(m_remain, _num)
+            m_remain = m_remain.difference(set(_m_selected))
             tensor_center = getattr(_instance, "get_cond_tensor", None)()
             assert tensor_center is not None, f"instance: {_instance}"
             _rot_mat: np.ndarray = None
@@ -268,40 +284,6 @@ class FEM_Input_Cube:
 
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
-
-    def create_tmp(self, nacl, quartz, poros, shape=(10, 10, 10)):
-        self.pix_tensor = None
-        self.sigma = None
-        self.pix = None
-        self.instance_ls = None
-        nz, ny, nx = shape
-        elem_vert = int(nz * ny * nx * poros)
-        self.pix_tensor = np.zeros(shape).tolist()
-        self.instance_ls = np.zeros(shape).tolist()
-        cou = 0
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    if i < 3 and cou <= elem_vert:
-                        self.pix_tensor[k][j][i] = nacl.get_cond_tensor()
-                        self.instance_ls[k][j][i] = nacl
-                        cou += 1
-                    else:
-                        self.pix_tensor[k][j][i] = quartz.get_cond_tensor()
-                        self.instance_ls[k][j][i] = quartz
-        self.pix_tensor = np.array(self.pix_tensor)
-        # construct self.sigma and self.pix
-        sigma_ls: List = []
-        pix_ls: List = []
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    m = calc_m(i, j, k, nx, ny)
-                    sigma_ls.append(self.pix_tensor[k][j][i].tolist())
-                    pix_ls.append(m)  # TODO: remove pix
-        self.sigma = sigma_ls
-        self.pix = pix_ls
-        pass
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -638,7 +620,7 @@ class FEM_Input_Cube:
         for k in range(3):
             for j in range(3):
                 for i in range(3):
-                    es_expanded.append(np.array(es[k][j][i]))
+                    es_expanded.append(es[k][j][i])
                     g_expanded.append(g[i][j][k] / 216.0)
         es_expanded = np.array(es_expanded)
         g_expanded = np.array(g_expanded)
@@ -649,8 +631,8 @@ class FEM_Input_Cube:
             dk_tmp = np.matmul(np.matmul(es_t, sigma), es)
             dk_tmp = np.dot(np.transpose(dk_tmp, (1, 2, 0)), g_expanded)
             dk[ijk] = roundup_small_negative(np.array(dk_tmp))
-
         self.dk = np.array(dk, dtype=np.float64)
+
         # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,
         # and the periodic terms in the applied field that come in at the boundary
@@ -810,6 +792,112 @@ class FEM_Input_Cube:
         self.c = np.float64(c)
         if self.logger is not None:
             self.logger.info("femat done")
+
+    def __assign_by_nugget(
+        self,
+        m_set: Set,
+        _num: int,
+    ) -> List:
+        """Gives a completely random distribution (i.e., nugget model)
+
+        Args:
+            m_set (Set): Flatten global indices set
+            _num (int): Number to select
+
+        Returns:
+            List: Selected global flatten indecies
+        """
+        _m_selected: List = random.sample(list(m_set), k=_num)
+        return _m_selected
+
+    def __calc_anisotropic_distribution(
+        self,
+        m_set: Set,
+        _num: int,
+        nxyz: Tuple[int],
+        range_yz: Tuple,
+    ) -> List:
+        """Calculate the anisotropic distribution of pore
+
+        Args:
+            m_set (Set): Flatten global indices set
+            _num (int): Number to select
+            nxyz (Tuple[int]): Tuple containing nx, ny, nz
+            range_yz (Tuple): Anisotoropic scaling of y and z axis
+
+        Returns:
+            List: Selected global flatten indecies
+        """
+        assert _num >= 0, f"_num: {_num}"
+        # wn = S(X)^-1 S(X - xn)
+        nx, ny, nz = nxyz
+        ay, az = range_yz
+        range_scale: np.ndarray = np.array([1.0, 1.0 / ay, 1.0 / az])
+        # initial point (observation points)
+        inital_num = int(_num / 10)
+        if inital_num == 0:
+            inital_num = 1
+        m_inital: List = random.sample(list(m_set), k=inital_num)
+        m_remain: List = list(m_set.difference(m_inital))
+        points_ls: List[np.ndarray] = []
+        for m in m_inital:
+            i, j, k = calc_ijk(m, nx, ny)
+            points_ls.append(
+                np.array(
+                    [float(i) / float(nx), float(j) / float(ny), float(k) / float(nz)]
+                )
+            )
+
+        # generate distance matrix
+        dist_initial: List = np.zeros((inital_num, inital_num)).tolist()
+        for idx1 in range(inital_num):
+            for idx2 in range(inital_num)[idx1:]:
+                point1 = points_ls[idx1]
+                point2 = points_ls[idx2]
+                dist_initial[idx1][idx2] = np.sqrt(
+                    np.square(np.dot(point1 - point2, range_scale)).sum()
+                )
+        dist_initial: np.ndarray = np.array(dist_initial, dtype=np.float64)
+        # make dist_initial symmetrical (diagonal elements are zero)
+        dist_initial += dist_initial.T
+
+        # dist to initial points to interpolation points (Γ(X - xn)^T)
+        dist_interp: List = []
+        points_arr = np.array(points_ls)
+        for m in m_remain:
+            i, j, k = calc_ijk(m, nx, ny)
+            point_n = np.array(
+                [float(i) / float(nx), float(j) / float(ny), float(k) / float(nz)]
+            )
+            # n_initial × 3
+            _dist_aniso = (points_arr - point_n) * range_scale
+            # 1 × n_initial
+            dist_interp.append(np.sqrt(np.square(_dist_aniso).sum(axis=1)).T)
+        # n_initial × n_remain
+        dist_interp: np.ndarray = np.array(dist_interp, dtype=np.float64).T
+
+        # calculate wight
+        cov_init = 1.0 - self.__calc_vario_exp(dist_initial)
+        cov_init_inv = np.linalg.inv(cov_init)
+        cov_interp = 1.0 - self.__calc_vario_exp(dist_interp)
+        wn = np.matmul(cov_init_inv, cov_interp)
+
+        # get m
+        idx_arr = np.argsort(-1.0 * wn.sum(axis=0))[: _num - inital_num]
+        m_selected: List = np.array(m_remain)[idx_arr].tolist()
+        m_selected.extend(m_inital)
+        return m_selected
+
+    def __calc_vario_exp(self, _dist: np.ndarray) -> np.ndarray:
+        """Calculate semivariance by exponential variogram
+
+        Args:
+            _dist (np.ndarray): Distance matrix
+
+        Returns:
+            np.ndarray: Array containing semivariance
+        """
+        return 1.0 - np.exp(-1.0 * _dist)
 
     def get_pix_tensor(self) -> np.ndarray or None:
         """Getter for the pix in 5d shape.

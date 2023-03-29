@@ -1,11 +1,15 @@
 from typing import List, Dict
 from os import path, makedirs
+from copy import deepcopy
 
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 
-
+from solver import FEM_Cube
+from solver_input import calc_ijk
+# TODO: docstring
+# TODO: plot electrical potential
 def plot_smec_frac_cond(
     smectite_frac_ls: List[float],
     cond_ls: List[float],
@@ -60,13 +64,25 @@ def plot_smec_frac_cond(
 
 
 def plot_curr_all(
-    currx_ls: List,
-    curry_ls: List,
-    currz_ls: List,
+    solver: FEM_Cube,
     axis: str,
     edge_length: float,
     out_dir: str,
 ):
+    # first convert cuurent list in solver to 3d array
+    currx_m = solver.get_cuurx()
+    curry_m = solver.get_cuury()
+    currz_m = solver.get_cuurz()
+    nz, ny, nx = solver.get_fem_input().get_shape()
+    assert nz * ny * nx == len(currx_m) == len(curry_m) == len(currz_m)
+    currx_ls = np.zeros((nz, ny, nx)).tolist()
+    curry_ls = deepcopy(currx_ls)
+    currz_ls = deepcopy(currx_ls)
+    for m in range(len(currx_m)):
+        i, j, k = calc_ijk(m, nx, ny)
+        currx_ls[k][j][i] = currx_m[m]
+        curry_ls[k][j][i] = curry_m[m]
+        currz_ls[k][j][i] = currz_m[m]
     currx_arr: np.ndarray = np.array(currx_ls)
     curry_arr: np.ndarray = np.array(curry_ls)
     currz_arr: np.ndarray = np.array(currz_ls)
@@ -146,7 +162,7 @@ def __plot_current_grid(
     save_pth: str,
 ) -> None:
     fig, ax = plt.subplots()
-    mappable = ax.pcolormesh([grid_x, grid_y], val)
+    mappable = ax.pcolormesh(grid_x, grid_y, val)
     ax.set_xlabel(label_x)
     ax.set_ylabel(label_y)
 
@@ -156,6 +172,63 @@ def __plot_current_grid(
     ax.set_aspect("equal")
     ax.set_title(title)
     fig.savefig(save_pth, dpi=100, bbox_inches="tight")
+
+
+def plot_instance(solver: FEM_Cube,
+                  edge_length: float,
+                  out_dir: str,):
+    fem_input = solver.get_fem_input()
+    instance_ls = fem_input.instance_ls
+    # TODO: なんのインスタンスかを示す凡例追加する
+    indicator_ls = np.zeros((np.array(instance_ls).shape)).tolist()
+    isinstance_indicator: Dict = {}
+    cou = 0
+    for k, yx in enumerate(instance_ls):
+        for j, x in enumerate(yx):
+            for i, instance in enumerate(x):
+                if instance not in isinstance_indicator:
+                    isinstance_indicator.setdefault(instance, cou)
+                    cou += 1
+                indicator_ls[k][j][i] = isinstance_indicator[instance]
+    instance_arr = np.array(indicator_ls)
+
+    # x
+    _tmp = np.transpose(instance_arr, (2, 0, 1))
+    _, ax1, ax2 = _tmp.shape
+    grid_x, grid_y = np.meshgrid(
+        np.array([edge_length * i for i in range(ax2)]),
+        np.array([edge_length * i for i in range(ax1)]),
+    )
+    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "x")
+
+    # y
+    _tmp = np.transpose(instance_arr, (1, 2, 0))
+    _, ax1, ax2 = _tmp.shape
+    grid_x, grid_y = np.meshgrid(
+        np.array([edge_length * i for i in range(ax2)]),
+        np.array([edge_length * i for i in range(ax1)]),
+    )
+    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "y")
+
+    # z
+    _tmp = deepcopy(instance_arr)
+    _, ax1, ax2 = _tmp.shape
+    grid_x, grid_y = np.meshgrid(
+        np.array([edge_length * i for i in range(ax2)]),
+        np.array([edge_length * i for i in range(ax1)]),
+    )
+    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "z")
+
+
+
+def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dirpath: str, prefix: str):
+    for i, val in enumerate(_arr):
+        fig, ax = plt.subplots()
+        ax.pcolormesh(grid_x, grid_y, val)
+        ax.set_aspect("equal")
+        fig.savefig(path.join(dirpath, prefix, str(i)), dpi=200, bbox_inches="tight")
+        plt.clf()
+        plt.close()
 
 
 def plot_cond_all(
@@ -184,8 +257,8 @@ def plot_cond_all(
 
     ax0, ax1, ax2 = condx_arr.shape
     grid_x, grid_y = np.meshgrid(
-        np.array([edge_length * i for i in range(ax1)]),
         np.array([edge_length * i for i in range(ax2)]),
+        np.array([edge_length * i for i in range(ax1)]),
     )
 
     # path

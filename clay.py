@@ -84,11 +84,7 @@ class Phyllosilicate:
         cond_outer: float = None,
         logger: Logger = None,
     ):
-        # TODO: m_layer_widthのassertionを電位, 電荷を計算する関数に加える
-        # TODO: oからStern層までの長さを計算する関数作り、積分区間を変更する
-        # TODO: 中性条件以外の条件だと, f6, f7はH+, OH-の寄与を考慮する必要がでてくるので修正する.
         # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
-        # TODO: external_propsクラス (or Dict)を引数としてメンバ変数を減らす
         """Initialize phyllosilicate class.
 
         Args:
@@ -390,7 +386,9 @@ class Phyllosilicate:
         return phib - phid + qs / self.c2
 
     def __calc_f6(self, phid: float, qs: float) -> float:
-        """Calculate eq.(21) of Gonçalvès et al. (2004)
+        """Calculate eq.(21) of Gonçalvès et al. (2004).
+        When pH is shifted from 7, we need to take
+        into account the contribution of H+ and OH-.
 
         Args:
             phid (float): zeta place potential
@@ -411,6 +409,8 @@ class Phyllosilicate:
 
     def __calc_f6_truncated(self, phid: float, phir: float, qs: float) -> float:
         """Calculate eq.(32) of Gonçalvès et al. (2004)
+        When pH is shifted from 7, we need to take
+        into account the contribution of H+ and OH-.
 
         Args:
             phid (float): zeta place potential
@@ -433,6 +433,8 @@ class Phyllosilicate:
 
     def __calc_f7_truncated(self, phid: float, phir: float) -> float:
         """Calculate eq.(33) of Gonçalvès et al. (2004)
+        When pH is shifted from 7, we need to take
+        into account the contribution of H+ and OH-.
 
         Args:
             phid (float): zeta place potential
@@ -854,8 +856,9 @@ class Phyllosilicate:
         return flag
 
     def calc_xd(self) -> Tuple[float]:
-        """Calculate the distance from the surface to the zeta plane (xd)
-
+        """Calculate the distance from the surface to the zeta plane (shear plane)
+        Assume that Qs is not changed between infinite diffuse layer case and truncated case
+        
         Returns:
             Tuple[float]: xd, integral error
         """
@@ -863,13 +866,9 @@ class Phyllosilicate:
             "Before calculating xd, we should obtain electrical"
             "arameters for infinite diffuse layer case"
         )
-        assert (
-            not self._check_if_calculated_electrical_params_truncated()
-        )  # TODO?: infとtruncatedでパラメータを場合分けしたほうがいいかも
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
         _qs = self.charge_diffuse
-        # xd_ls: List = [1.0e-12 + float(i) * 1.0e-10 for i in range(100)]
         xd_ls: List = np.logspace(-15, -7, 1000, base=10.0).tolist()
         qs_ls: List = []
         err_ls: List = []
@@ -881,9 +880,8 @@ class Phyllosilicate:
         qs_diff = np.square(np.array(qs_ls) - _qs)
         _idx = np.argmin(qs_diff)
         _xd = xd_ls[_idx]
-        # TODO: 以下加えたほうがよいのか検討する
-        # if self.layer_width * 0.5 < _xd:
-        #     _xd = self.layer_width * 0.5
+        if self.layer_width * 0.5 < _xd:
+            _xd = self.layer_width * 0.5
         self.xd = _xd
         _err = err_ls[_idx]
         assert _err < abs(_qs), "Integral error exceeds the value of qs"
@@ -1046,6 +1044,7 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, phir, q0, qb, qs]
         """
+        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
 
@@ -1079,9 +1078,7 @@ class Phyllosilicate:
         # The convergence condition is that the L2 norm in eqs.1~7
         # becomes sufficiently small.
         cou = 0
-        history_ls: List = []  # TODO: currently not used
         while convergence_condition < norm_fn:
-            history_ls.append(norm_fn)
             _j = self._calc_Goncalves_jacobian_truncated(
                 xn[0][0], xn[1][0], xn[2][0], xn[3][0]
             )
@@ -1325,10 +1322,7 @@ class Phyllosilicate:
                 continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする
-            # 参考文献：doi:10.1029/2008JB006114.
-            # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-            _mobility = prop[IonProp.MobilityInfDiffuse.name] * 0.5
+            _mobility = prop[IonProp.MobilityInfDiffuse.name]
             _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1383,8 +1377,7 @@ class Phyllosilicate:
                 continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            # TODO?: __calc_cond_at_x_stern_infと__calc_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-            _mobility = prop[IonProp.MobilityTrunDiffuse.name] * 0.5
+            _mobility = prop[IonProp.MobilityTrunDiffuse.name]
             _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1409,11 +1402,8 @@ class Phyllosilicate:
         potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
         prop_na: Dict = self.ion_props[Species.Na.name]
         _conc = 1000.0 * prop_na[IonProp.Concentration.name]
-        _v = prop_na[IonProp.Valence.name]  # 1
-        # TODO: H+とOH-のStern層における移動度がわからないので, とりあえず拡散層の1/2とする. 他に方法がないか調べる
-        # 参考文献：doi:10.1029/2008JB006114.
-        # TODO?: __calc_specific_cond_at_x_stern_infと__calc_specific_cond_at_x_stern_truncatedの違いはここだけなので, flagで制御したほうがいいかも？
-        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name] * 0.5
+        _v = prop_na[IonProp.Valence.name]
+        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name]
         _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
         _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1654,7 +1644,7 @@ class Phyllosilicate:
 
 # pylint: disable=dangerous-default-value
 class Smectite(Phyllosilicate):
-    """Inherited class of Phyllosilicate, with surface adsorption site density and layer
+    """Inherited class from Phyllosilicate, with surface adsorption site density and layer
     charge fixed to the physical properties of smectite
 
     Args:
@@ -1677,7 +1667,7 @@ class Smectite(Phyllosilicate):
         cond_outer: float = None,
         logger: Logger = None,
     ):
-        """Inherited classes from Phyllosilicate. Number density of
+        """Inherited class from Phyllosilicate. Number density of
             reactors on the surface and fixing the layer charge for
             smectite case.
 
@@ -1721,7 +1711,7 @@ class Smectite(Phyllosilicate):
 
 # pylint: disable=dangerous-default-value
 class Kaolinite(Phyllosilicate):
-    """Inherited class of Phyllosilicate, with surface adsorption site density, layer
+    """Inherited class from Phyllosilicate, with surface adsorption site density, layer
     charge, and layer width fixed to the physical properties of kaolinite
 
     Args:
@@ -1744,7 +1734,7 @@ class Kaolinite(Phyllosilicate):
         cond_outer: float = None,
         logger: Logger = None,
     ):
-        """Inherited classes from Phyllosilicate. Number density of
+        """Inherited class from Phyllosilicate. Number density of
             reactors on the surface and fixing the layer charge for
             kaolinite case.
 
@@ -1785,12 +1775,4 @@ class Kaolinite(Phyllosilicate):
         )
 
 if __name__ == "__main__":
-    nacl = NaCl(cnacl=4.3)
-    smectite = Smectite(nacl)
-    smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
-    print(smectite.get_cond_tensor())
-    print(nacl.sen_and_goode_1992())
     pass

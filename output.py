@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 
 from solver import FEM_Cube
-from solver_input import calc_ijk
+from cube import calc_ijk
 # TODO: docstring
 # TODO: plot electrical potential
 def plot_smec_frac_cond(

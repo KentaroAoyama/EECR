@@ -15,7 +15,7 @@ import numpy as np
 from clay import Smectite, Kaolinite
 from mineral import Quartz
 from fluid import NaCl
-from solver_input import FEM_Input_Cube
+from cube import FEM_Input_Cube
 from solver import FEM_Cube
 from output import plot_smec_frac_cond
 

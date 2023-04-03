@@ -27,6 +27,7 @@ class Fluid:
 
 class NaCl(Fluid):
     """Class of fluid dissolved only in NaCl"""
+    # TODO: external_propsクラス (or Dict)をメンバ変数とする
     # pylint: disable=dangerous-default-value
     def __init__(
         self,
@@ -55,7 +56,7 @@ class NaCl(Fluid):
         self.cond_tensor = cond_tensor
         self.logger = logger
 
-        # TODO: 活量を計算する (それにあわせてTLMのパラメータも修正する必要ある)
+        # TODO: 活量を計算する仕様に変更する (それにあわせてTLMのパラメータもfixする必要ある)
         # Set ion_props and activities other than mobility
         ion_props: Dict = deepcopy(ion_props_default)
         for _s, _prop in ion_props.items():
@@ -87,7 +88,7 @@ class NaCl(Fluid):
             if _s not in msa_props:
                 continue
             _m = msa_props[_s]["mobility"]
-            _prop[IonProp.MobilityInfDiffuse.name] = _m * 0.1
+            _prop[IonProp.MobilityInfDiffuse.name] = _m
             # based on https://doi.org/10.1029/2008JB006114
             _prop[IonProp.MobilityTrunDiffuse.name] = _m * 0.1
             if _s == Species.H.name:
@@ -95,7 +96,7 @@ class NaCl(Fluid):
                     IonProp.MobilityTrunDiffuse.name
                 ]
             # based on https://doi.org/10.1016/j.jcis.2015.03.047
-            _prop[IonProp.MobilityStern.name] = _m * 0.1
+            _prop[IonProp.MobilityStern.name] = _m * 0.5
 
         self.ion_props: Dict = ion_props
         self.dielec_water = calc_dielectric_const_water(self.temperature)

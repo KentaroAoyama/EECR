@@ -20,15 +20,13 @@ from concurrent import futures
 from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 import numpy as np
-
 from clay import Smectite, Kaolinite
 from mineral import Quartz
 import constants as const
 from fluid import NaCl
 from msa import calc_mobility
 from solver import FEM_Cube
-from cube import FEM_Input_Cube
-from output import plot_curr_all, plot_instance
+from solver_input import FEM_Input_Cube
 from main import exec_single_condition
 
 
@@ -758,7 +756,7 @@ def compare_WS_shaly():
     # データ側
 	# 	間隙率の測定誤差
 	# 	接触抵抗の補正に関する系統誤差
-
+    
     # シミュレーター側
 	# 	異方性
 	# 	移動度の仮定
@@ -784,7 +782,7 @@ def compare_WS_shaly():
     ]
     cond_calc_ls = []
     cnacl_ref = np.logspace(
-        np.log10(1.0e-3), np.log10(5.0), num=2000, base=10.0
+        np.log10(1.0e-3), np.log10(5.0), num=1000, base=10.0
     ).tolist()
     for _cnacl in cnacl_ref:
         nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph)
@@ -814,7 +812,6 @@ def compare_WS_shaly():
             "porosity": 18.7 * 0.01,
             "xsmec": 1.0,
             "xkaol": 0.0,
-            "Qv": 1.27,
         },
         26: {
             "bulk": [
@@ -834,7 +831,6 @@ def compare_WS_shaly():
             "porosity": 22.9 * 0.01,
             "xsmec": 1.0,
             "xkaol": 0.0,
-            "Qv": 1.47,
         },
         27: {
             "bulk": [
@@ -854,7 +850,6 @@ def compare_WS_shaly():
             "porosity": 20.9 * 0.01,
             "xsmec": 1.0,
             "xkaol": 0.0,
-            "Qv": 1.48,
         },
     }
     for _id, _prop in core_props.items():
@@ -870,21 +865,14 @@ def compare_WS_shaly():
         _xsmec = _prop["xsmec"]
         _xkaol = _prop["xkaol"]
         assert _xsmec + _xkaol <= 1.0
-        # calculate volume fraction of smectite from Qv
-        # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
-        qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
-        xsmec = qv2 / 202. * _poros * (1. - _poros)
-        # anisotoropic scaling factors
-        range_ls = np.logspace(-1, 1., 10, base=10).tolist()
-        xsmec_ls: List = [float(i)/10. for i in range(11)]
-        aniso_result: Dict = {}
-        for xsmec in xsmec_ls: #!
-            print("=========")
-            print(xsmec) 
-            # print(ayz) #!
+        range_ls = [float(i) / 10.0 for i in range(10)]
+        _xmineral_result: Dict = {}
+        for i in range_ls:
             _pred_ls = []
+            _xsmec_tmp = _xsmec * i
+            _xkaol_tmp = _xkaol * i
             for _cnacl in cnacl_ls:
-                print(f"Cnacl: {_cnacl}")
+                print(f"_cnacl: {_cnacl}")
                 # nacl
                 nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph)
                 nacl.sen_and_goode_1992()
@@ -895,38 +883,44 @@ def compare_WS_shaly():
                 smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
                 smectite.calc_cond_interlayer()
                 smectite.calc_cond_tensor()
+                # kaolinite
+                kaolinite = Kaolinite(nacl=nacl)
+                kaolinite.calc_potentials_and_charges_inf()
+                kaolinite.calc_cond_infdiffuse()  # to get self.double_layer_length
+                kaolinite.calc_cond_tensor()
                 # quartz
                 quartz = Quartz(nacl=nacl)
                 # set solver_input
-                solver_input = FEM_Input_Cube(ex=1.0, ey=0., ez=0.)
+                solver_input = FEM_Input_Cube()
                 solver_input.create_pixel_by_macro_variable(
                     shape=(10, 10, 10),
                     edge_length=1.0e-6,
                     volume_frac_dict={
                         nacl: _poros,
-                        smectite: (1.0 - _poros) * xsmec,
-                        quartz: (1.0 - _poros) * (1.0 - xsmec),
+                        smectite: (1.0 - _poros) * _xsmec_tmp,
+                        kaolinite: (1.0 - _poros) * _xkaol_tmp,
+                        quartz: (1.0 - _poros) * (1.0 - _xsmec_tmp - _xkaol_tmp),
                     },
-                    # instance_range_dict={nacl: (ayz, ayz)}, #!
-                    seed=42,
                 )
                 solver_input.set_ib()
                 solver_input.femat()
                 # run
                 solver = FEM_Cube(solver_input)
                 solver.run(100, 30, 1.0e-9)
-                _pred_ls.append(solver.cond_x)
-                print(solver.cond_x) #!
-                # plot_curr_all(solver, axis="x", edge_length=1.0e-6, out_dir="output/tmp")
-                # plot_instance(solver, edge_length=1.0e-6, out_dir="output/tmp")
-            aniso_result[xsmec] = _pred_ls #!
+                cond_x, cond_y, cond_z = (
+                    solver.cond_x,
+                    solver.cond_y,
+                    solver.cond_z,
+                )
+                _pred_ls.append((cond_x + cond_y + cond_z) / 3.0)
+            _xmineral_result[(_xsmec_tmp, _xkaol_tmp)] = _pred_ls
         # plot
         fig, ax = plt.subplots()
         ax.scatter(cnacl_ls, label_ls)
         # color=cm.jet(float(i) / len(keys_sorted)
         cou = 0
-        for ayz, _pred_ls in aniso_result.items():
-            ax.plot(cnacl_ls, _pred_ls, label=str(ayz), color=cm.jet(float(cou) / len(aniso_result)))
+        for (_xsmec_tmp, _xkaol_tmp), _pred_ls in _xmineral_result.items():
+            ax.plot(cnacl_ls, _pred_ls, label=str(_xsmec_tmp), color=cm.jet(float(cou) / len(_xmineral_result)))
             cou += 1
         ax.legend()
         ax.set_xscale("log")
@@ -935,7 +929,7 @@ def compare_WS_shaly():
             path.join(test_dir(), f"WS_{_id}.png"), dpi=200, bbox_inches="tight"
         )
         with open(f"{_id}.pkl", "wb") as pkf:
-            pickle.dump(aniso_result, pkf, protocol=pickle.HIGHEST_PROTOCOL)
+            pickle.dump(_xmineral_result, pkf, protocol=pickle.HIGHEST_PROTOCOL)
     return
 
 

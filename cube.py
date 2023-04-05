@@ -8,9 +8,12 @@ from math import isclose
 import random
 from sys import float_info
 from decimal import Decimal, ROUND_HALF_UP
+import os
+
+os.environ["OMP_NUM_THREADS"] = "1"
 
 import numpy as np
-from pykrige.ok3d import OrdinaryKriging3D as OK3D
+from sklearn.cluster import KMeans
 
 from fluid import Fluid
 
@@ -107,6 +110,7 @@ class FEM_Input_Cube:
         edge_length: float = 1.0e-6,
         volume_frac_dict: DictLike = {},
         instance_range_dict: DictLike = {},
+        instance_adj_rate_dict: DictLike = {},
         seed: int = 42,
         rotation_setting: str or Tuple[float] = "random",
     ) -> None:
@@ -119,11 +123,15 @@ class FEM_Input_Cube:
             volume_frac_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
                 and value is the volume fraction. The phases are assigned in the order of the keys,
                 so if you need to consider the order, give OrderedDict
-            # TODO
+            instance_range_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
+                and value is the tuple containing anisotoropic scaling factors of y and z axis.
+            instance_adj_rate_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
+                and value is the tuple containing instance to be considered adjacent or not and the
+                adjacent rate.
             rotation_setting (str or Tuple): Argument that control the rotation of the
                 conductivity tensor of each element. If you set as "rondom", conductivity tensor
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
-                conductivity tensor are rotated based on these angles (Defaults to ).
+                conductivity tensor are rotated based on these angles (Defaults to "random").
         """
         assert len(volume_frac_dict) > 0
 
@@ -172,15 +180,11 @@ class FEM_Input_Cube:
         m_remain = set([_m for _m in range(ns)])
         error_cuml: float = 0.0
         # set rotated conductivity tensor for each element
+        instance_m_selected: Dict = {}
         if self.logger is not None:
             self.logger.info("Setting rotated conductivity tensor for each element...")
         for _i, (_instance, _frac) in enumerate(volume_frac_dict.items()):
-            print(f"_instance: {_instance}") #!
-            _num = int(
-                Decimal(_frac / frac_unit).quantize(
-                    Decimal("1"), rounding=ROUND_HALF_UP
-                )
-            )
+            _num = round_half_up(_frac / frac_unit)
             error_cuml += float(_num) / ns - _frac
             if _i == len(volume_frac_dict) - 1:
                 _num = len(m_remain)
@@ -190,19 +194,39 @@ class FEM_Input_Cube:
             elif error_cuml <= -1.0 * frac_unit:
                 _num += 1
                 error_cuml += frac_unit
-            # TODO: 空隙の周りに分布するケースも追加する
+            _m_selected: Set = None
             if _instance in instance_range_dict:
+                # anisotoropic scale
                 range_yz = instance_range_dict[_instance]
                 _m_selected = self.__calc_anisotropic_distribution(
-                    m_remain, _num, shape, range_yz
+                    m_remain, _num, shape, range_yz, seed
                 )
+                if self.logger is not None:
+                    self.logger.info(f"Set by anisotoropic distoribution done for {_instance}")
+            elif _instance in instance_adj_rate_dict:
+                # adj rate
+                _instance_target, adj_rate = instance_adj_rate_dict[_instance]
+                _m_selected_target = instance_m_selected.get(_instance_target, None)
+                assert _m_selected_target is not None, instance_m_selected
+                _m_selected = self.__set_by_adjacent_rate(
+                    m_remain,
+                    _num,
+                    _m_selected_target,
+                    adj_rate,
+                    shape,
+                )
+                if self.logger is not None:
+                    self.logger.info(f"Set by adjacent rate done for {_instance}")
             else:
-                _m_selected = self.__assign_by_nugget(m_remain, _num)
-            m_remain = m_remain.difference(set(_m_selected))
+                _m_selected = self.__assign_random(m_remain, _num)
+                if self.logger is not None:
+                    self.logger.info(f"Set by random done for {_instance}")
+            instance_m_selected.setdefault(_instance, _m_selected)
+            m_remain = m_remain.difference(_m_selected)
             tensor_center = getattr(_instance, "get_cond_tensor", None)()
             assert tensor_center is not None, f"instance: {_instance}"
             _rot_mat: np.ndarray = None
-            for _m in _m_selected:
+            for _m in list(_m_selected):
                 i, j, k = calc_ijk(_m, nx, ny)
                 if rot_mat_const is not None:
                     _rot_mat = rot_mat_const
@@ -793,40 +817,42 @@ class FEM_Input_Cube:
         if self.logger is not None:
             self.logger.info("femat done")
 
-    def __assign_by_nugget(
+    def __assign_random(
         self,
-        m_set: Set,
+        m_remain: Set,
         _num: int,
-    ) -> List:
+    ) -> Set:
         """Gives a completely random distribution (i.e., nugget model)
 
         Args:
-            m_set (Set): Flatten global indices set
+            m_remain (Set): Flatten global indices set
             _num (int): Number to select
 
         Returns:
-            List: Selected global flatten indecies
+            Set: Selected global flatten indecies
         """
-        _m_selected: List = random.sample(list(m_set), k=_num)
-        return _m_selected
+        _m_selected: List = random.sample(list(m_remain), k=_num)
+        return set(_m_selected)
 
     def __calc_anisotropic_distribution(
         self,
-        m_set: Set,
+        m_remain: Set,
         _num: int,
         nxyz: Tuple[int],
         range_yz: Tuple,
-    ) -> List:
+        seed: int,
+    ) -> Set:
         """Calculate the anisotropic distribution of pore
 
         Args:
-            m_set (Set): Flatten global indices set
-            _num (int): Number to select
+            m_remain (Set): Flatten global indices set
+            _num (int): Number to be selected
             nxyz (Tuple[int]): Tuple containing nx, ny, nz
             range_yz (Tuple): Anisotoropic scaling of y and z axis
+            seed (int): Seed for KMeans clustering
 
         Returns:
-            List: Selected global flatten indecies
+            Set: Selected global flatten indecies
         """
         assert _num >= 0, f"_num: {_num}"
         # wn = S(X)^-1 S(X - xn)
@@ -834,24 +860,45 @@ class FEM_Input_Cube:
         ay, az = range_yz
         range_scale: np.ndarray = np.array([1.0, 1.0 / ay, 1.0 / az])
         # initial point (observation points)
-        inital_num = int(_num / 10)
-        if inital_num == 0:
-            inital_num = 1
-        m_inital: List = random.sample(list(m_set), k=inital_num)
-        m_remain: List = list(m_set.difference(m_inital))
-        points_ls: List[np.ndarray] = []
-        for m in m_inital:
+        num_initial = int(min(nxyz))
+        if num_initial == 0:
+            num_initial = 1
+        # set initial distribution by KMeans
+        x_all: List = []
+        for m in list(m_remain):
             i, j, k = calc_ijk(m, nx, ny)
+            x_all.append([float(i), float(j), float(k)])
+        x_all: np.ndarray = np.array(x_all)
+        n_clusters = int(_num / 10)
+        if n_clusters == 0:
+            n_clusters = 1
+        kmeans = KMeans(n_clusters=n_clusters, random_state=seed, n_init="auto").fit(
+            x_all
+        )
+        m_initial: List = []
+        for i, j, k in kmeans.cluster_centers_.tolist():
+            i: int = round_half_up(i)
+            j: int = round_half_up(j)
+            k: int = round_half_up(k)
+            m_initial.append(calc_m(i, j, k, nx, ny))
+
+        m_initial: List = random.sample(list(m_remain), k=num_initial)
+        m_remain = m_remain.difference(m_initial)
+        m_remain: List = list(m_remain)
+        points_ls: List[np.ndarray] = []
+        for m in m_initial:
+            i, j, k = calc_ijk(m, nx, ny)
+            # Give a random number to prevent the distance matrix from falling in rank.
             points_ls.append(
-                np.array(
-                    [float(i) / float(nx), float(j) / float(ny), float(k) / float(nz)]
-                )
+                np.array([float(i), float(j), float(k)])
+                + np.random.rand(3) / 10.0
+                - 0.05
             )
 
         # generate distance matrix
-        dist_initial: List = np.zeros((inital_num, inital_num)).tolist()
-        for idx1 in range(inital_num):
-            for idx2 in range(inital_num)[idx1:]:
+        dist_initial: List = np.zeros((num_initial, num_initial)).tolist()
+        for idx1 in range(num_initial):
+            for idx2 in range(num_initial)[idx1:]:
                 point1 = points_ls[idx1]
                 point2 = points_ls[idx2]
                 dist_initial[idx1][idx2] = np.sqrt(
@@ -860,7 +907,6 @@ class FEM_Input_Cube:
         dist_initial: np.ndarray = np.array(dist_initial, dtype=np.float64)
         # make dist_initial symmetrical (diagonal elements are zero)
         dist_initial += dist_initial.T
-
         # dist to initial points to interpolation points (Γ(X - xn)^T)
         dist_interp: List = []
         points_arr = np.array(points_ls)
@@ -876,28 +922,131 @@ class FEM_Input_Cube:
         # n_initial × n_remain
         dist_interp: np.ndarray = np.array(dist_interp, dtype=np.float64).T
 
-        # calculate wight
-        cov_init = 1.0 - self.__calc_vario_exp(dist_initial)
-        cov_init_inv = np.linalg.inv(cov_init)
-        cov_interp = 1.0 - self.__calc_vario_exp(dist_interp)
-        wn = np.matmul(cov_init_inv, cov_interp)
+        # calculate wight (n_initial × n_remain)
+        _c = 1.0 / np.sqrt(np.square([float(nx), float(ny), float(nz)]).sum())
+        gamma_init = self.__calc_vario_exp(dist_initial, c=_c)
+        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_initial))
+        gamma_interp = self.__calc_vario_exp(dist_interp, c=_c)
+        wn: np.ndarray = np.matmul(gamma_init_inv, gamma_interp)
 
         # get m
-        idx_arr = np.argsort(-1.0 * wn.sum(axis=0))[: _num - inital_num]
-        m_selected: List = np.array(m_remain)[idx_arr].tolist()
-        m_selected.extend(m_inital)
+        # The sum of weights is considered a probability
+        residual: np.ndarray = np.array([1.0 for _ in range(num_initial)])
+        prob = np.matmul(residual, wn)
+        m_selected: List = np.array(m_remain)[
+            np.argsort(-1.0 * prob)[: _num - num_initial]
+        ].tolist()
+        m_selected.extend(m_initial)
+        return set(m_selected)
+
+    def __set_by_adjacent_rate(
+        self, m_remain: Set, num: int, m_target: Set, adj_rate: float, shape: Tuple
+    ) -> Set:
+        """Set elements based on the lowest rate adjacent to a particular
+        element
+
+        Args:
+            m_remain (Set): Set of global indices that may be assigned
+            num (int): Number to be selected
+            m_target (Set): Set of elements to be considered adjacent or not
+            adj_rate (float): Lowest rate of adjacent
+            shape (int): Tuple containing nx, ny, nz
+
+        Returns:
+            Set: Set of global indecies selected.
+        """
+        # number of objective adjacent elements
+        num_adj_obs: int = int(float(num) * adj_rate)
+        # number of objective outside elements
+        num_out_obs: int = num - num_adj_obs
+
+        m_selected: Set = set()
+        while num_adj_obs > 0:
+            m_adj: Set = self.__get_adj_m(m_target, shape)
+            # m_adj ∧ m_remain - m_selected
+            m_adj.intersection_update(m_remain)
+            m_adj = m_adj.difference(m_selected)
+            m_adj_ls: List = list(m_adj)
+            k: int = None
+            if len(m_adj_ls) > num_adj_obs:
+                k = num_adj_obs
+            else:
+                k = len(m_adj_ls)
+            m_selected_tmp: Set = set(random.sample(m_adj_ls, k))
+
+            # update variables
+            m_target = m_target.union(m_selected_tmp)
+            m_selected = m_selected.union(m_selected_tmp)
+            num_adj_obs -= len(list(m_selected_tmp))
+
+        # number outside of the target
+        m_adj: Set = self.__get_adj_m(m_target, shape)
+        m_out = m_remain.difference(m_adj)
+        if num_out_obs > len(list(m_out)):
+            m_selected = m_selected.union(m_out)
+            m_selected = m_selected.union(
+                set(list(random.sample(list(m_adj), num_out_obs - len(list(m_out)))))
+            )
+        else:
+            m_selected = m_selected.union(set(random.sample(list(m_out), num_out_obs)))
         return m_selected
 
-    def __calc_vario_exp(self, _dist: np.ndarray) -> np.ndarray:
+    def __get_adj_m(self, m_target: Set, shape: Tuple) -> Set:
+        """Get adjacent indecies
+
+        Args:
+            m_target (Set): Set of global indices
+            shape (Tuple): Tuple containing nx, ny, nz
+
+        Returns:
+            Set: Set of adjacent global indeces
+        """
+        nz, ny, nx = shape
+        # search adjacent element
+        m_adj: Set = set()
+        for m in list(m_target):
+            i, j, k = calc_ijk(m, nx, ny)
+            for i_tmp in (i - 1, i, i + 1):
+                for j_tmp in (j - 1, j, j + 1):
+                    for k_tmp in (k - 1, k, k + 1):
+                        # continue when center
+                        if i_tmp == i and j_tmp == j and k_tmp == k:
+                            continue
+                        # continue when they are not adjacent on a plane.
+                        is_adj_face_x = j_tmp == j and k_tmp == k
+                        is_adj_face_y = i_tmp == i and k_tmp == k
+                        is_adj_face_z = i_tmp == i and j_tmp == j
+                        if not (is_adj_face_x or is_adj_face_y or is_adj_face_z):
+                            continue
+                        # correct i
+                        if i_tmp == -1:
+                            i_tmp = nx - 1
+                        elif i_tmp == nx:
+                            i_tmp = 0
+                        # correct j
+                        if j_tmp == -1:
+                            j_tmp = ny - 1
+                        elif j_tmp == ny:
+                            j_tmp = 0
+                        # correct k
+                        if k_tmp == -1:
+                            k_tmp = nz - 1
+                        elif k_tmp == nz:
+                            k_tmp = 0
+                        m_adj.add(calc_m(i_tmp, j_tmp, k_tmp, nx, ny))
+        return m_adj
+
+    def __calc_vario_exp(self, _dist: np.ndarray, c: float = 1.0) -> np.ndarray:
         """Calculate semivariance by exponential variogram
 
         Args:
             _dist (np.ndarray): Distance matrix
+            c (float): Range of the variogram
 
         Returns:
             np.ndarray: Array containing semivariance
         """
-        return 1.0 - np.exp(-1.0 * _dist)
+        return 1.0 - np.exp(-1.0 * c * _dist)
 
     def get_pix_tensor(self) -> np.ndarray or None:
         """Getter for the pix in 5d shape.
@@ -1032,6 +1181,18 @@ class FEM_Input_Cube:
         return nz, ny, nx
 
 
+def round_half_up(f: float) -> int:
+    """Round off a float number
+
+    Args:
+        f (float): Float number
+
+    Returns:
+        int: Int number
+    """
+    return int(Decimal(f).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
 def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
     """Calculate the one dimensional labbeling index (m)
         m is calculated as follows:
@@ -1057,7 +1218,6 @@ def calc_ijk(m: int, nx: int, ny: int) -> Tuple[int]:
         m (int): One dimensional labbeling index (m)
         nx (int): pix size of x direction.
         ny (int): pix size of y direction.
-        nz (int): pix size of z direction.
 
     Returns:
         int: i, j, k of a 3-dimensional list

@@ -84,7 +84,7 @@ class Phyllosilicate:
         cond_outer: float = None,
         logger: Logger = None,
     ):
-        # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する
+        # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する → 初期値追加
         """Initialize phyllosilicate class.
 
         Args:
@@ -1122,6 +1122,8 @@ class Phyllosilicate:
                 else:
                     break
         xn = xn.T.tolist()[0]
+        
+        # assign member variables
         self.potential_0 = xn[0]
         self.potential_stern = xn[1]
         self.potential_zeta = xn[2]
@@ -1129,6 +1131,18 @@ class Phyllosilicate:
         self.charge_0 = xn[4]
         self.charge_stern = xn[5]
         self.charge_diffuse = xn[6]
+
+        # fix minor error
+        if self.potential_zeta < 0. and math.isclose(self.potential_zeta, 0., abs_tol=1.0e-8):
+            self.potential_zeta -= 2. * self.potential_zeta
+        else:
+            raise RuntimeError(f"zeta potential grately exeeds 0")
+        
+        if self.potential_r < 0. and math.isclose(self.potential_r, 0., abs_tol=1.0e-8):
+            self.potential_r -= 2. * self.potential_r
+        else:
+            raise RuntimeError(f"truncated plane potential grately exeeds 0")
+
         # DEBUG
         if self.logger is not None:
             self.logger.info(
@@ -1359,7 +1373,7 @@ class Phyllosilicate:
             1. Mobility is assumed to be a constant following Leroy & Revil(2009).
 
         Args:
-            _x (float): Distance from zeta plane
+            _x (float): Distance from stern plane
 
         Returns:
             float: Conductivity at a point _x away from the zeta plane
@@ -1422,7 +1436,6 @@ class Phyllosilicate:
         the stern layer. Assume the thickness of the stern layer is
         equal to xd (O layer thickness is assumed negligibly small)
         """
-        # TODO: layer_width=13e-9, Cnacl>3でlogの中身がマイナスになり, エラーとなる
         self.kappa_stern = (
             1.0 / self.xd * np.log(self.potential_stern / self.potential_zeta)
         )
@@ -1775,4 +1788,14 @@ class Kaolinite(Phyllosilicate):
         )
 
 if __name__ == "__main__":
+    # nacl
+    nacl = NaCl(cnacl=3.)
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
+
+    smectite = Smectite(nacl=nacl, layer_width=1.3e-8)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
     pass

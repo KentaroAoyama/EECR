@@ -1211,7 +1211,7 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.potential_zeta * np.exp((-1.0) * self.kappa * _x)
         for _s, prop in self.ion_props.items():
-            if _s not in (Species.Na.name, Species.Cl.name):
+            if _s != Species.Na.name:
                 continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
@@ -1264,7 +1264,7 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.potential_zeta * np.exp((-1.0) * self.kappa_truncated * _x)
         for _s, prop in self.ion_props.items():
-            if _s not in (Species.Na.name, Species.Cl.name):
+            if _s != Species.Na.name:
                 continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
@@ -1318,11 +1318,11 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
         for _s, prop in self.ion_props.items():
-            if _s not in (Species.Na.name, Species.Cl.name):
+            if _s != Species.Na.name:
                 continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityInfDiffuse.name]
+            _mobility = prop[IonProp.MobilityStern.name]
             _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -1373,11 +1373,11 @@ class Phyllosilicate:
         _cond = 0.0
         potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
         for _s, prop in self.ion_props.items():
-            if _s not in (Species.Na.name, Species.Cl.name):
+            if _s not in Species.Na.name:
                 continue
             _conc = 1000.0 * prop[IonProp.Concentration.name]
             _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityTrunDiffuse.name]
+            _mobility = prop[IonProp.MobilityStern.name]
             _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond

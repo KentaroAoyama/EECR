@@ -494,7 +494,7 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
 
 def calc_mobility(
     ion_props: Dict, temperature: float, pressure: float = 2.0e6
-) -> Dict[str, Dict]:
+) -> OrderedDict[str, Dict]:
     """Calculate the mobility of each ion based on Roger et al. (2009)
 
     Args:
@@ -504,7 +504,7 @@ def calc_mobility(
         pressure (float): Absolute pressure (Pa)
 
     Returns:
-        Dict[str, Dict]: Dictionary containing MSA properties, etc.
+        OrderedDict[str, Dict]: Dictionary containing MSA properties, etc.
     """
     _ion_props = deepcopy(ion_props)
 

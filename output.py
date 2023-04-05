@@ -7,7 +7,7 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 
 from solver import FEM_Cube
-from solver_input import calc_ijk
+from cube import calc_ijk
 # TODO: docstring
 # TODO: plot electrical potential
 def plot_smec_frac_cond(
@@ -172,6 +172,8 @@ def __plot_current_grid(
     ax.set_aspect("equal")
     ax.set_title(title)
     fig.savefig(save_pth, dpi=100, bbox_inches="tight")
+    plt.clf()
+    plt.close()
 
 
 def plot_instance(solver: FEM_Cube,
@@ -179,17 +181,19 @@ def plot_instance(solver: FEM_Cube,
                   out_dir: str,):
     fem_input = solver.get_fem_input()
     instance_ls = fem_input.instance_ls
-    # TODO: なんのインスタンスかを示す凡例追加する
     indicator_ls = np.zeros((np.array(instance_ls).shape)).tolist()
+    title: str = ""
     isinstance_indicator: Dict = {}
     cou = 0
     for k, yx in enumerate(instance_ls):
         for j, x in enumerate(yx):
             for i, instance in enumerate(x):
-                if instance not in isinstance_indicator:
-                    isinstance_indicator.setdefault(instance, cou)
+                name = instance.__class__.__name__
+                if name not in isinstance_indicator:
+                    isinstance_indicator.setdefault(name, cou)
+                    title += f"{name}: {cou} "
                     cou += 1
-                indicator_ls[k][j][i] = isinstance_indicator[instance]
+                indicator_ls[k][j][i] = isinstance_indicator[name]
     instance_arr = np.array(indicator_ls)
 
     # x
@@ -199,7 +203,7 @@ def plot_instance(solver: FEM_Cube,
         np.array([edge_length * i for i in range(ax2)]),
         np.array([edge_length * i for i in range(ax1)]),
     )
-    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "x")
+    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "x", title)
 
     # y
     _tmp = np.transpose(instance_arr, (1, 2, 0))
@@ -208,7 +212,7 @@ def plot_instance(solver: FEM_Cube,
         np.array([edge_length * i for i in range(ax2)]),
         np.array([edge_length * i for i in range(ax1)]),
     )
-    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "y")
+    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "y", title)
 
     # z
     _tmp = deepcopy(instance_arr)
@@ -217,16 +221,22 @@ def plot_instance(solver: FEM_Cube,
         np.array([edge_length * i for i in range(ax2)]),
         np.array([edge_length * i for i in range(ax1)]),
     )
-    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "z")
+    __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "z", title)
 
 
 
-def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dirpath: str, prefix: str):
+def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dirpath: str, prefix: str, title: str = None):
+    savedir = path.join(dirpath, prefix)
+    if not path.exists(savedir):
+        makedirs(savedir)
     for i, val in enumerate(_arr):
         fig, ax = plt.subplots()
-        ax.pcolormesh(grid_x, grid_y, val)
+        im = ax.pcolormesh(grid_x, grid_y, val)
         ax.set_aspect("equal")
-        fig.savefig(path.join(dirpath, prefix, str(i)), dpi=200, bbox_inches="tight")
+        if title is not None:
+            ax.set_title(title)
+        fig.colorbar(im, ax=ax)
+        fig.savefig(path.join(savedir, str(i)), dpi=200, bbox_inches="tight")
         plt.clf()
         plt.close()
 

@@ -1133,14 +1133,15 @@ class Phyllosilicate:
         self.charge_diffuse = xn[6]
 
         # fix minor error
-        if self.potential_zeta < 0. and math.isclose(self.potential_zeta, 0., abs_tol=1.0e-8):
+        flag_zeta: bool = math.isclose(self.potential_zeta, 0., abs_tol=1.0e-8)
+        if self.potential_zeta > 0. and flag_zeta:
             self.potential_zeta -= 2. * self.potential_zeta
-        else:
-            raise RuntimeError(f"zeta potential grately exeeds 0")
-        
-        if self.potential_r < 0. and math.isclose(self.potential_r, 0., abs_tol=1.0e-8):
+        elif flag_zeta:
+            raise RuntimeError(f"zeta potential grately exeeds 0: {self.potential_zeta}")
+        flag_r: bool = math.isclose(self.potential_r, 0., abs_tol=1.0e-8)
+        if self.potential_r > 0. and flag_r:
             self.potential_r -= 2. * self.potential_r
-        else:
+        elif flag_r:
             raise RuntimeError(f"truncated plane potential grately exeeds 0")
 
         # DEBUG
@@ -1788,14 +1789,4 @@ class Kaolinite(Phyllosilicate):
         )
 
 if __name__ == "__main__":
-    # nacl
-    nacl = NaCl(cnacl=3.)
-    nacl.sen_and_goode_1992()
-    nacl.calc_cond_tensor_cube_oxyz()
-
-    smectite = Smectite(nacl=nacl, layer_width=1.3e-8)
-    smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
     pass

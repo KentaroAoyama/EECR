@@ -94,7 +94,6 @@ class IonProp(IntEnum):
 # 参考文献：doi:10.1029/2008JB006114
 # In the dynamic stern layer assumtion, stern layer has surtain
 # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
-# ↑ 現状, Stern層の移動度は設定しているが参照されていない(拡散層の移動度に0.5をかけている)
 ion_props_default = {
     Species.Na.name: {
         IonProp.Concentration.name: 1.0e-3,

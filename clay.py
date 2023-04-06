@@ -1227,146 +1227,6 @@ class Phyllosilicate:
             flag = False
         return flag
 
-    def __calc_cond_at_x_inf_diffuse(self, _x: float) -> float:
-        """Calculate the conductivity of the infinite diffuse layer.
-        The following assumptions are made:
-        1. Mobility is assumed to be a constant following Leroy & Revil(2009).
-
-        Args:
-            _x (float): Distance from zeta plane
-
-        Returns:
-            float: Conductivity at a point _x away from the zeta plane
-        """
-        assert self.kappa is not None, "self.kappa is None"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        _cond = 0.0
-        potential = self.potential_zeta * np.exp((-1.0) * self.kappa * _x)
-        for _s, prop in self.ion_props.items():
-            if _s != Species.Na.name:
-                continue
-            _conc = 1000.0 * prop[IonProp.Concentration.name]
-            _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityInfDiffuse.name]
-            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
-            _cond += _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
-    def __calc_specific_cond_at_x_inf_diffuse(self, _x: float) -> float:
-        """Calculate the specific conductivity of the infinite diffuse layer.
-        Specific conductivity is defined as eq.(26) in Leroy and Revil (2004)
-
-        Args:
-            _x (float): Distance from zeta plane
-
-        Returns:
-            float: Specific conductivity at a point _x away from the zeta plane
-        """
-        assert self.kappa is not None, "self.kappa is None"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        potential = self.potential_zeta * np.exp((-1.0) * self.kappa * _x)
-        prop_na = self.ion_props[Species.Na.name]
-        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
-        _v = prop_na[IonProp.Valence.name]
-        _mobility = prop_na[IonProp.MobilityInfDiffuse.name]
-        _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
-        _cond = _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
-    def __calc_cond_at_x_diffuse_truncated(self, _x: float) -> float:
-        """Calculate the conductivity of the inter layer.
-            The following assumptions are made:
-            1. Mobility is assumed to be a constant following Leroy & Revil(2009).
-
-        Args:
-            _x (float): Distance from zeta plane
-
-        Returns:
-            float: Conductivity at a point _x away from the zeta plane
-        """
-        assert self.kappa_truncated is not None, "self.kappa_truncated is None"
-        assert self.xd <= _x, "self.xd > _x"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        _cond = 0.0
-        potential = self.potential_zeta * np.exp((-1.0) * self.kappa_truncated * _x)
-        for _s, prop in self.ion_props.items():
-            if _s != Species.Na.name:
-                continue
-            _conc = 1000.0 * prop[IonProp.Concentration.name]
-            _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityTrunDiffuse.name]
-            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
-            _cond += _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
-    def __calc_cond_at_x_stern_inf(self, _x: float) -> float:
-        """Calculate the conductivity of the inter layer.
-            The following assumptions are made:
-            1. Mobility is assumed to be a constant following Leroy & Revil(2009).
-
-        Args:
-            _x (float): Distance from zeta plane
-
-        Returns:
-            float: Conductivity at a point _x away from the zeta plane
-        """
-        assert self.kappa_stern is not None, "self.kappa_stern is None"
-        assert _x <= self.xd, "self.xd < _x"
-
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        _cond = 0.0
-        potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
-        for _s, prop in self.ion_props.items():
-            if _s != Species.Na.name:
-                continue
-            _conc = 1000.0 * prop[IonProp.Concentration.name]
-            _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityStern.name]
-            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
-            _cond += _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
-    def __calc_cond_at_x_stern_truncated(self, _x: float) -> float:
-        """Calculate the conductivity of the inter layer.
-            The following assumptions are made:
-            1. Mobility is assumed to be a constant following Leroy & Revil(2009).
-
-        Args:
-            _x (float): Distance from stern plane
-
-        Returns:
-            float: Conductivity at a point _x away from the zeta plane
-        """
-        assert self.kappa_stern is not None, "self.kappa_stern is None"
-        assert _x <= self.xd, "self.xd < _x"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        _cond = 0.0
-        potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
-        for _s, prop in self.ion_props.items():
-            if _s not in Species.Na.name:
-                continue
-            _conc = 1000.0 * prop[IonProp.Concentration.name]
-            _v = prop[IonProp.Valence.name]
-            _mobility = prop[IonProp.MobilityStern.name]
-            _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
-            _cond += _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
     def __calc_kappa_truncated(self) -> None:
         """Calculate the kappa of the potential (instead of Eq. 11
         of Gonçalvès et al., 2004) when the diffuse layer is truncated
@@ -1382,37 +1242,6 @@ class Phyllosilicate:
         self.kappa_stern = (
             1.0 / self.xd * np.log(self.potential_stern / self.potential_zeta)
         )
-
-    def calc_specific_surface_cond_inf(self, cond_fluid: float) -> Tuple[float]:
-        """Calculate specific surface conductivity of infinite diffuse layer
-            Specific surface conductivity is defined as eq.(26) in Leroy and Revil (2004)
-            Prepared for the purpose of comparison with Fig. 9, Fig. 10 (a) of Leroy & Revil, 2004
-
-        Args:
-            cond_fluid (float): conductivity of the fluid
-
-        Returns:
-            Tuple[float]: Specific surface conductivity, integral error
-        """
-        # Leroy & Revil, 2004のFig.9, Fig10 (a)と比較するために作成した関数
-        if not self._check_if_calculated_electrical_params_inf():
-            self.calc_potentials_and_charges_inf()
-        if self.xd is None:
-            self.calc_xd()
-        if self.kappa_stern is None:
-            self.__calc_kappa_stern()
-        _xdl = self.xd + 1.0 / self.kappa
-        cond_ohmic_diffuse, _err1 = quad(
-            self.__calc_cond_at_x_inf_diffuse,
-            self.xd,
-            _xdl,
-        )
-        cond_ohmic_stern, _err2 = quad(self.__calc_cond_at_x_stern_inf, 0.0, self.xd)
-        cond_ohmic_fluid = cond_fluid * _xdl
-        cond_specific = cond_ohmic_diffuse + cond_ohmic_stern - cond_ohmic_fluid
-        # In the dynamic stern layer assumtion, stern layer has surtain
-        # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
-        return cond_specific, _err1 + _err2
 
     def __calc_n_diffuse(self, x: float) -> float:
         """Calculate Na+ number density in diffuse layer
@@ -1789,6 +1618,39 @@ class Kaolinite(Phyllosilicate):
             cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )
-
+from matplotlib import pyplot as plt #!
 if __name__ == "__main__":
+    cnacl_ls: List = np.logspace(-5, 0.7, 10, base=10.).tolist()
+    cond_nacl_ls: List = []
+    cond_smec_ls: List = []
+    potential_ls: List = []
+    # base
+    nacl = NaCl(cnacl=0.577, ph=7.0)
+    nacl.sen_and_goode_1992()
+    print(f"base cond: {nacl.conductivity}")  #!
+    smectite = Smectite(nacl=nacl, layer_width=1e-9)
+    smectite.calc_potentials_and_charges_truncated()
+    base = smectite.calc_cond_interlayer()
+    zeta_model = [-300., -250., -200., -140., -80., -25.,]
+    for i, cnacl in enumerate(cnacl_ls):
+        print(f"cnacl: {cnacl}")  #!
+        nacl = NaCl(cnacl=cnacl, ph=7.0)
+        nacl.sen_and_goode_1992()
+        smectite = Smectite(nacl=nacl, layer_width=2e-09)
+        # inf
+        # smectite.calc_potentials_and_charges_inf()
+        # smectite.calc_cond_infdiffuse()
+        # cond_nacl_ls.append(nacl.conductivity)
+        # cond_smec_ls.append(smectite.calc_cond_infdiffuse())
+        # potential_ls.append(smectite.potential_zeta)
+        # truncated
+        smectite.calc_potentials_and_charges_truncated()
+        cond_nacl_ls.append(nacl.conductivity)
+        potential_ls.append(smectite.potential_zeta * 1000.0)
+        cond_smec_ls.append(smectite.calc_cond_interlayer())
+    print(potential_ls)  #!
+    fig, ax = plt.subplots()
+    ax.plot(cond_nacl_ls, potential_ls)
+    ax.set_xscale("log")
+    plt.show()
     pass

@@ -39,6 +39,7 @@ kaolinite_init_pth: PathLike = path.join(
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
+
 class Phyllosilicate:
     """
     Phyllosilicate Class
@@ -150,20 +151,20 @@ class Phyllosilicate:
         self.charge_0: float = charge_0
         self.charge_stern: float = charge_stern
         self.charge_diffuse: float = charge_diffuse
-        self.xd = xd
-        self.cond_intra = cond_intra
-        self.cond_outer = cond_outer
+        self.xd: float = xd
+        self.cond_intra: float = cond_intra
+        self.cond_outer: float = cond_outer
         # Parameters subordinate to those required for phyllosilicate initialization,
         # but useful to be obtained in advance
-        self.ionic_strength = None
-        self.kappa = None
-        self.kappa_truncated = None
-        self.kappa_stern = None
-        self.qs_coeff1_inf = None
-        self.qs_coeff2_inf = None
-        self.cond_tensor = None
-        self.cond_infdiffuse = None
-        self.double_layer_length = None
+        self.ionic_strength: float = None
+        self.kappa: float = None
+        self.kappa_truncated: float = None
+        self.kappa_stern: float = None
+        self.qs_coeff1_inf: float = None
+        self.qs_coeff2_inf: float = None
+        self.cond_tensor: np.ndarray = None
+        self.cond_infdiffuse: float = None
+        self.double_layer_length: float = None
 
         ####################################################
         # DEBUG LOGGER
@@ -220,9 +221,7 @@ class Phyllosilicate:
         self.k2: float = const.calc_equibilium_const(
             const.dg_sioh_kaol, self.temperature
         )
-        self.k3: float = const.calc_equibilium_const(
-            const.dg_xh_kaol, self.temperature
-        )
+        self.k3: float = const.calc_equibilium_const(const.dg_xh_kaol, self.temperature)
         self.k4: float = const.calc_equibilium_const(
             const.dg_xna_kaol, self.temperature
         )
@@ -858,7 +857,7 @@ class Phyllosilicate:
     def calc_xd(self) -> Tuple[float]:
         """Calculate the distance from the surface to the zeta plane (shear plane)
         Assume that Qs is not changed between infinite diffuse layer case and truncated case
-        
+
         Returns:
             Tuple[float]: xd, integral error
         """
@@ -869,11 +868,14 @@ class Phyllosilicate:
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
         _qs = self.charge_diffuse
-        xd_ls: List = np.logspace(-15, -7, 1000, base=10.0).tolist()
+        xd_ls: List = np.logspace(
+            -15, np.log10(self.layer_width * 0.5), 1000, base=10.0
+        ).tolist()
         qs_ls: List = []
         err_ls: List = []
+        r_diffuse: float = 1.0 / self.kappa
         for _xd_tmp in xd_ls:
-            _xd_dl = _xd_tmp + 1.0 / self.kappa
+            _xd_dl = _xd_tmp + r_diffuse
             qs_tmp, _err = quad(self.__calc_qs_inf, _xd_tmp, _xd_dl, limit=1000)
             qs_ls.append(qs_tmp)
             err_ls.append(_err)
@@ -1017,6 +1019,7 @@ class Phyllosilicate:
         x_init: List = None,
         iter_max: int = 1000,
         convergence_condition: float = 1.0e-10,
+        step_tol: float = 1.0e-10,
         oscillation_tol: float = 1.0e-04,
         beta: float = 0.75,
         lamda: float = 2.0,
@@ -1031,6 +1034,10 @@ class Phyllosilicate:
             using the Newton-Raphson method. Defaults to 1000.
         convergence_condition (float): Convergence conditions for calculating potential
             nd charge using the Newton-Raphson method. Defaults to 1.0e-10.
+        step_tol (float): Tolerance of step. If the step width is smaller than
+            this value, the calculation is considered to have converged, even if the
+            calculation does not converge sufficiently up to iter_max. If you do not
+            want to use this value for convergence judgment, set it to a negative value.
         oscillation_tol (float): Oscillation tolerance. Defaults to 1.0e-5.
         beta (float): Hyper parameter for damping. The larger this value,
             the smaller the damping effect.
@@ -1110,7 +1117,11 @@ class Phyllosilicate:
             cou += 1
             if cou > iter_max:
                 norm_step = np.sum(np.sqrt(np.square(step)), axis=0)[0]
+                if step_tol < norm_step:
+                    break
                 if norm_step > oscillation_tol:
+                    break
+                else:
                     _msg: str = (
                         f"Loop count exceeded {iter_max} times &"
                         f" exceeds oscillation tolerance: {norm_step}"
@@ -1119,10 +1130,8 @@ class Phyllosilicate:
                     if self.logger is not None:
                         self.logger.error(_msg)
                     raise RuntimeError(_msg)
-                else:
-                    break
         xn = xn.T.tolist()[0]
-        
+
         # assign member variables
         self.potential_0 = xn[0]
         self.potential_stern = xn[1]
@@ -1133,15 +1142,21 @@ class Phyllosilicate:
         self.charge_diffuse = xn[6]
 
         # fix minor error
-        flag_zeta: bool = math.isclose(self.potential_zeta, 0., abs_tol=1.0e-8)
-        if self.potential_zeta > 0. and flag_zeta:
-            self.potential_zeta -= 2. * self.potential_zeta
-        elif flag_zeta:
-            raise RuntimeError(f"zeta potential grately exeeds 0: {self.potential_zeta}")
-        flag_r: bool = math.isclose(self.potential_r, 0., abs_tol=1.0e-8)
-        if self.potential_r > 0. and flag_r:
-            self.potential_r -= 2. * self.potential_r
-        elif flag_r:
+        # zeta potential
+        if self.potential_stern > 0:
+            pass
+        elif self.potential_zeta > 0.0 and math.isclose(self.potential_zeta, 0.0, abs_tol=1.0e-8):
+            self.potential_zeta -= 2.0 * self.potential_zeta
+        elif self.potential_zeta > 0.0:
+            raise RuntimeError(
+                f"zeta potential grately exeeds 0: {self.potential_zeta}"
+            )
+        # stern potential
+        if self.potential_stern > 0:
+            pass
+        elif self.potential_r > 0.0 and math.isclose(self.potential_r, 0.0, abs_tol=1.0e-8):
+            self.potential_r -= 2.0 * self.potential_r
+        elif self.potential_r > 0.0:
             raise RuntimeError(f"truncated plane potential grately exeeds 0")
 
         # DEBUG
@@ -1288,30 +1303,6 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
-    def __calc_specific_cond_at_x_truncated_diffuse(self, _x: float) -> float:
-        """Calculate the specific conductivity of the truncated diffuse layer.
-
-        Args:
-            _x (float): Distance from zeta plane
-
-        Returns:
-            float: Specific conductivity at a point _x away from the zeta plane
-        """
-        assert self.kappa_truncated is not None, "self.kappa_truncated is None"
-        assert self.xd <= _x, "self.xd > _x"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        potential = self.potential_zeta * np.exp((-1.0) * self.kappa_truncated * _x)
-        prop_na = self.ion_props[Species.Na.name]
-        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
-        _v = prop_na[IonProp.Valence.name]
-        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name]
-        _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
-        _cond = _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
     def __calc_cond_at_x_stern_inf(self, _x: float) -> float:
         """Calculate the conductivity of the inter layer.
             The following assumptions are made:
@@ -1340,32 +1331,6 @@ class Phyllosilicate:
             _mobility = prop[IonProp.MobilityStern.name]
             _conc *= np.exp((-1.0) * _v * _e * potential / (kb * _t))
             _cond += _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
-    def __calc_specific_cond_at_x_stern_inf(self, _x: float) -> float:
-        """Calculate specific conductivity in the stern layer at a point _x away
-        from the surface for the infinite diffuse layer case.
-        Specific conductity is defined as eq.(26) in Leroy and Revil (2004)
-
-        Args:
-            _x (float): Distance from the mineral surface
-
-        Returns:
-            float: Specific conductivity
-        """
-        assert self.kappa_stern is not None, "self.kappa_stern is None"
-        assert _x <= self.xd, "self.xd < _x"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
-        prop_na: Dict = self.ion_props[Species.Na.name]
-        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
-        _v = prop_na[IonProp.Valence.name]  # 1
-        _mobility = prop_na[IonProp.MobilityStern.name]
-        _conc = _conc * np.exp((-1.0) * _v * _e * potential / (kb * _t))
-        _cond = _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
     def __calc_cond_at_x_stern_truncated(self, _x: float) -> float:
@@ -1397,40 +1362,12 @@ class Phyllosilicate:
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
-    def __calc_specific_cond_at_x_stern_truncated(self, _x: float) -> float:
-        """Calculate specific conductivity in the stern layer at a point _x away
-        from the surface for the truncated diffuse layer case.
-        Specific conductity is defined as eq.(26) in Leroy and Revil (2004)
-
-        Args:
-            _x (float): Distance from the mineral surface
-
-        Returns:
-            float: Specific conductivity
-        """
-        assert self.kappa_stern is not None, "self.kappa_stern is None"
-        assert _x <= self.xd, "self.xd < _x"
-        _na = const.AVOGADRO_CONST
-        _e = const.ELEMENTARY_CHARGE
-        kb = const.BOLTZMANN_CONST
-        _t = self.temperature
-        potential = self.potential_stern * np.exp((-1.0) * self.kappa_stern * _x)
-        prop_na: Dict = self.ion_props[Species.Na.name]
-        _conc = 1000.0 * prop_na[IonProp.Concentration.name]
-        _v = prop_na[IonProp.Valence.name]
-        _mobility = prop_na[IonProp.MobilityTrunDiffuse.name]
-        _conc = _conc * (np.exp((-1.0) * _v * _e * potential / (kb * _t)) - 1.0)
-        _cond = _e * abs(_v) * _mobility * _na * _conc
-        return _cond
-
     def __calc_kappa_truncated(self) -> None:
         """Calculate the kappa of the potential (instead of Eq. 11
         of Gonçalvès et al., 2004) when the diffuse layer is truncated
         """
         _r = self.layer_width * 0.5
-        self.kappa_truncated = (
-            1.0 / _r * np.log(self.potential_zeta / self.potential_r)
-        )
+        self.kappa_truncated = 1.0 / _r * np.log(self.potential_zeta / self.potential_r)
 
     def __calc_kappa_stern(self) -> None:
         """Calculate the rate of decay (kappa) of the potential in
@@ -1553,6 +1490,22 @@ class Phyllosilicate:
         # In the dynamic stern layer assumtion, stern layer has surtain
         # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
         return cond_specific, _err1 + _err2
+
+    def __calc_n_trun_diffuse(self, x: float):
+        # calc numer density
+        potential: float = self.potential_zeta * np.exp((-1.0) * self.kappa * x)
+        na_props: Dict = self.ion_props[Species.Na.name]
+        v = na_props[IonProp.Valence.name]
+        n = np.exp(- v * const.ELEMENTARY_CHARGE * potential / (const.BOLTZMANN_CONST * self.temperature)) * 1000. * const.AVOGADRO_CONST * na_props[IonProp.Concentration.name] * na_props[IonProp.Valence.name]
+        return n
+
+    def calc_cond_tmp(self):
+        gamma_na, _ = quad(self.__calc_n_trun_diffuse,
+             self.xd,
+             self.layer_width
+             )
+        return const.ELEMENTARY_CHARGE * self.ion_props[Species.Na.name][IonProp.MobilityTrunDiffuse.name] * gamma_na / (self.layer_width * 0.5)
+        
 
     def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned
@@ -1788,5 +1741,19 @@ class Kaolinite(Phyllosilicate):
             logger=logger,
         )
 
+from matplotlib import pyplot as plt
 if __name__ == "__main__":
+    cnacl_ls: List = np.logspace(-3, 0.7, 10).tolist()
+    cond_ls: List = []
+    for cnacl in cnacl_ls:
+        print(f"cnacl: {cnacl}") #!
+        nacl = NaCl(cnacl=cnacl, ph=7.)
+        smectite = Smectite(nacl=nacl, layer_width=2e-09)
+        smectite.calc_potentials_and_charges_truncated()
+        smectite.calc_cond_interlayer()
+        smectite.calc_cond_tensor()
+        cond_ls.append(smectite.calc_cond_tmp())
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, cond_ls)
+    plt.show()
     pass

@@ -1510,7 +1510,9 @@ class Phyllosilicate:
         if self.logger is not None:
             self.logger.info("Finished the calculation of interlayer conductivity")
             self.logger.debug(f"cond_ohmic_diffuse: {cond_intra}")
-        return cond_intra
+
+        self.cond_intra = cond_intra
+        return self.cond_intra
 
     def calc_cond_infdiffuse(self) -> float:
         """Calculate the Stern + EDL conductivity for the inifinite diffuse
@@ -1552,7 +1554,7 @@ class Phyllosilicate:
         self.cond_infdiffuse = cond_diffuse
         self.double_layer_length = xdl
 
-        return cond_diffuse
+        return self.cond_infdiffuse
 
     def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned

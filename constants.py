@@ -20,15 +20,15 @@ def calc_dielectric_const_water(temperature: float) -> float:
 
 
 DIELECTRIC_VACUUM = 8.8541878128e-12
-ELEMENTARY_CHARGE = 1.60217663e-19  # 電気素量
-BOLTZMANN_CONST = 1.380649e-23  # ボルツマン定数
+ELEMENTARY_CHARGE = 1.60217663e-19
+BOLTZMANN_CONST = 1.380649e-23
 AVOGADRO_CONST = 6.0221408e23
 GAS_CONST = 8.31446262
 PRESSURE = 2.0 * 1.0e6
 DISSOSIATION_WATER = 1.0e-14
 
 
-# 平衡定数 (at 25℃)
+# Equilibrium constants (at 25℃) & Capacitance (F/m)
 # Smectite & inf
 k_aloh_smec_inf = 1.0e-10  # Leroy and Revil, 2004, table 1
 k_sioh_smec_inf = 1.3e-6  # Leroy and Revil, 2004, Fig. 8
@@ -53,7 +53,7 @@ k_xna_kaol = 5.04e-2  # Leroy and Revil, 2004, table 2
 c1_kaol = 1.49  # Leroy and Revil, 2004, table 2
 c2_kaol = 0.2  # Leroy and Revil, 2004, table 1
 
-# 標準ギブスエネルギー
+# Standard Gibbs Energy
 # Smectite & inf
 dg_aloh_smec_inf = calc_standard_gibbs_energy(k_aloh_smec_inf)
 dg_sioh_smec_inf = calc_standard_gibbs_energy(k_sioh_smec_inf)

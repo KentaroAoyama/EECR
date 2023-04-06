@@ -82,7 +82,7 @@ class Phyllosilicate:
         charge_diffuse: float = None,
         xd: float = None,
         cond_intra: float = None,
-        cond_outer: float = None,
+        cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
         # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する → 初期値追加
@@ -105,7 +105,7 @@ class Phyllosilicate:
             charge_zeta (float, optional): Charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
             cond_intra (float): Inter layer conductivity (unit: S/m).
-            cond_outer (float, optional): Infinite diffuse layer conductivity (unit: S/m).
+            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
         """
         # Check input values
@@ -153,7 +153,7 @@ class Phyllosilicate:
         self.charge_diffuse: float = charge_diffuse
         self.xd: float = xd
         self.cond_intra: float = cond_intra
-        self.cond_outer: float = cond_outer
+        self.cond_infdiffuse: float = cond_infdiffuse
         # Parameters subordinate to those required for phyllosilicate initialization,
         # but useful to be obtained in advance
         self.ionic_strength: float = None
@@ -163,7 +163,6 @@ class Phyllosilicate:
         self.qs_coeff1_inf: float = None
         self.qs_coeff2_inf: float = None
         self.cond_tensor: np.ndarray = None
-        self.cond_infdiffuse: float = None
         self.double_layer_length: float = None
 
         ####################################################
@@ -1012,6 +1011,8 @@ class Phyllosilicate:
             self.logger.debug(f"m_charge_0: {self.charge_0}")
             self.logger.debug(f"m_charge_stern: {self.charge_stern}")
             self.logger.debug(f"m_charge_diffuse: {self.charge_diffuse}")
+        # calc length to the zeta plane
+        self.calc_xd()
         return xn
 
     def calc_potentials_and_charges_truncated(
@@ -1145,7 +1146,9 @@ class Phyllosilicate:
         # zeta potential
         if self.potential_stern > 0:
             pass
-        elif self.potential_zeta > 0.0 and math.isclose(self.potential_zeta, 0.0, abs_tol=1.0e-8):
+        elif self.potential_zeta > 0.0 and math.isclose(
+            self.potential_zeta, 0.0, abs_tol=1.0e-8
+        ):
             self.potential_zeta -= 2.0 * self.potential_zeta
         elif self.potential_zeta > 0.0:
             raise RuntimeError(
@@ -1154,7 +1157,9 @@ class Phyllosilicate:
         # stern potential
         if self.potential_stern > 0:
             pass
-        elif self.potential_r > 0.0 and math.isclose(self.potential_r, 0.0, abs_tol=1.0e-8):
+        elif self.potential_r > 0.0 and math.isclose(
+            self.potential_r, 0.0, abs_tol=1.0e-8
+        ):
             self.potential_r -= 2.0 * self.potential_r
         elif self.potential_r > 0.0:
             raise RuntimeError(f"truncated plane potential grately exeeds 0")
@@ -1378,88 +1383,6 @@ class Phyllosilicate:
             1.0 / self.xd * np.log(self.potential_stern / self.potential_zeta)
         )
 
-    def calc_cond_interlayer(self) -> Tuple[float]:
-        """Calculate the Stern + EDL conductivity of the inter layer
-
-        Returns:
-            Tuple[float]: conductivity, integral error
-        """
-        # When the layer thickness is less than 1 nm,, water molecules
-        # cannot pass between the layers of smectite (Shirozu, 1998)
-        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
-        assert self._check_if_calculated_electrical_params_truncated(), (
-            "Before calculating the conductivity of interlayer, we should"
-            "obtain electrical parameters for truncated diffuse layer case"
-        )
-
-        # TODO: Currently, it is assumed that this function is called only in the case of
-        # smectite. If we want to calculate the electrochemical properties of another clay
-        # mineral, such as vermiculite, we should modify this function.
-        if not self.__check_constant_as_smectite_truncated():
-            self.__set_constant_for_smectite_truncated()
-
-        if self.xd is None:
-            self.calc_xd()
-        assert (
-            self.xd < self.layer_width
-        ), f"self.xd: {self.xd} > self.layer_width: {self.layer_width}"
-        if self.kappa_truncated is None:
-            self.__calc_kappa_truncated()
-        if self.kappa_stern is None:
-            self.__calc_kappa_stern()
-        _xdl = self.layer_width * 0.5
-        cond_ohmic_diffuse, _err1 = quad(
-            self.__calc_cond_at_x_diffuse_truncated, self.xd, _xdl
-        )
-        cond_ohmic_stern, _err2 = quad(
-            self.__calc_cond_at_x_stern_truncated, 0.0, self.xd
-        )
-        cond = (cond_ohmic_diffuse + cond_ohmic_stern) / _xdl
-        self.cond_intra = cond
-        if self.logger is not None:
-            self.logger.info("Finished the calculation of interlayer conductivity")
-            self.logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
-            self.logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
-        return self.cond_intra, _err1 + _err2
-
-    def calc_cond_infdiffuse(self) -> Tuple[float]:
-        """Calculate the Stern + EDL conductivity for the inifinite diffuse
-         layer case.
-
-        Returns:
-            Tuple[float]: conductivity, integral error
-        """
-        # TODO: May need to consider other cases (e.g., illite, etc.)
-        if self.qi < 0.0 and self.gamma_1 == 0.0:
-            self.__set_constant_for_smectite_inf()
-        else:
-            self.__set_constant_for_kaolinite()
-        if not self._check_if_calculated_electrical_params_inf():
-            self.calc_potentials_and_charges_inf()
-        if self.xd is None:
-            self.calc_xd()
-        if self.kappa_stern is None:
-            self.__calc_kappa_stern()
-        # End of the diffuse layer
-        xdl = self.xd + 1.0 / self.kappa
-        cond_ohmic_diffuse, _err1 = quad(
-            self.__calc_cond_at_x_inf_diffuse, self.xd, xdl
-        )
-        cond_ohmic_stern, _err2 = quad(self.__calc_cond_at_x_stern_inf, 0.0, self.xd)
-        # Based on eq.(26) of Leroy & Revil (2004), we assume that Na
-        # ions are densely charged on the surface
-        cond = (cond_ohmic_diffuse + cond_ohmic_stern) / xdl
-        self.cond_outer = cond
-        if self.logger is not None:
-            self.logger.info(
-                "Finished the calculation of infinite diffuse layer conductivity"
-            )
-            self.logger.debug(f"cond_ohmic_diffuse: {cond_ohmic_diffuse}")
-            self.logger.debug(f"cond_ohmic_stern: {cond_ohmic_diffuse}")
-        self.cond_infdiffuse = cond
-        self.double_layer_length = xdl
-        return cond, _err1 + _err2
-
     def calc_specific_surface_cond_inf(self, cond_fluid: float) -> Tuple[float]:
         """Calculate specific surface conductivity of infinite diffuse layer
             Specific surface conductivity is defined as eq.(26) in Leroy and Revil (2004)
@@ -1491,21 +1414,145 @@ class Phyllosilicate:
         # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
         return cond_specific, _err1 + _err2
 
-    def __calc_n_trun_diffuse(self, x: float):
-        # calc numer density
+    def __calc_n_diffuse(self, x: float) -> float:
+        """Calculate Na+ number density in diffuse layer
+
+        Args:
+            x (float): Distance from zeta plane (m)
+
+        Returns:
+            float: Number density of Na+ (-/m^3)
+        """
+        # calc number density
         potential: float = self.potential_zeta * np.exp((-1.0) * self.kappa * x)
         na_props: Dict = self.ion_props[Species.Na.name]
         v = na_props[IonProp.Valence.name]
-        n = np.exp(- v * const.ELEMENTARY_CHARGE * potential / (const.BOLTZMANN_CONST * self.temperature)) * 1000. * const.AVOGADRO_CONST * na_props[IonProp.Concentration.name] * na_props[IonProp.Valence.name]
+        n = (
+            np.exp(
+                -v
+                * const.ELEMENTARY_CHARGE
+                * potential
+                / (const.BOLTZMANN_CONST * self.temperature)
+            )
+            * 1000.0
+            * const.AVOGADRO_CONST
+            * na_props[IonProp.Concentration.name]
+            * na_props[IonProp.Valence.name]
+        )
         return n
 
-    def calc_cond_tmp(self):
-        gamma_na, _ = quad(self.__calc_n_trun_diffuse,
-             self.xd,
-             self.layer_width
-             )
-        return const.ELEMENTARY_CHARGE * self.ion_props[Species.Na.name][IonProp.MobilityTrunDiffuse.name] * gamma_na / (self.layer_width * 0.5)
-        
+    def __calc_n_stern(self, x: float) -> float:
+        """Calculate Na+ number density in stern layer
+
+        Args:
+            x (float): Distance from surface (m)
+
+        Returns:
+            float: Number density of Na+ (-/m^3)
+        """
+        # calc number density
+        potential: float = self.potential_stern * np.exp((-1.0) * self.kappa_stern * x)
+        na_props: Dict = self.ion_props[Species.Na.name]
+        v = na_props[IonProp.Valence.name]
+        n = (
+            np.exp(
+                -v
+                * const.ELEMENTARY_CHARGE
+                * potential
+                / (const.BOLTZMANN_CONST * self.temperature)
+            )
+            * 1000.0
+            * const.AVOGADRO_CONST
+            * na_props[IonProp.Concentration.name]
+            * na_props[IonProp.Valence.name]
+        )
+        return n
+
+    def calc_cond_interlayer(self) -> float:
+        """Calculate the Stern + EDL conductivity of the inter layer
+
+        Returns:
+            Tuple[float]: conductivity, integral error
+        """
+        # When the layer thickness is less than 1 nm,, water molecules
+        # cannot pass between the layers of smectite (Shirozu, 1998)
+        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+        assert self._check_if_calculated_electrical_params_truncated(), (
+            "Before calculating the conductivity of interlayer, we should"
+            "obtain electrical parameters for truncated diffuse layer case"
+        )
+        # TODO: Currently, it is assumed that this function is called only in the case of
+        # smectite. If we want to calculate the electrochemical properties of another clay
+        # mineral, such as vermiculite, we should modify this function.
+        if not self.__check_constant_as_smectite_truncated():
+            self.__set_constant_for_smectite_truncated()
+
+        if self.xd is None:
+            self.calc_xd()
+
+        # Na+ number (n/m^2) at stern layer
+        if self.kappa_stern is None:
+            self.__calc_kappa_stern()
+        gamma_stern, _ = quad(self.__calc_n_stern, 0.0, self.xd)
+        # Na+ number (n/m^2) at diffuse layer
+        if self.kappa_truncated is None:
+            self.__calc_kappa_truncated()
+        gamma_diffuse, _ = quad(self.__calc_n_diffuse, self.xd, self.layer_width)
+        # total number density
+        gamma_total = gamma_stern + gamma_diffuse
+        cond_intra: float = (
+            const.ELEMENTARY_CHARGE
+            * self.ion_props[Species.Na.name][IonProp.MobilityTrunDiffuse.name]
+            * gamma_total
+            / (self.layer_width * 0.5)
+        )
+        # log
+        if self.logger is not None:
+            self.logger.info("Finished the calculation of interlayer conductivity")
+            self.logger.debug(f"cond_ohmic_diffuse: {cond_intra}")
+        return cond_intra
+
+    def calc_cond_infdiffuse(self) -> float:
+        """Calculate the Stern + EDL conductivity for the inifinite diffuse
+         layer case.
+
+        Returns:
+            Tuple[float]: conductivity, integral error
+        """
+        # TODO: May need to consider other cases (e.g., illite, etc.)
+        if self.qi < 0.0 and self.gamma_1 == 0.0:
+            self.__set_constant_for_smectite_inf()
+        else:
+            self.__set_constant_for_kaolinite()
+        if not self._check_if_calculated_electrical_params_inf():
+            self.calc_potentials_and_charges_inf()
+        if self.xd is None:
+            self.calc_xd()
+
+        # Na+ number (n/m^2) at stern layer
+        if self.kappa_stern is None:
+            self.__calc_kappa_stern()
+        gamma_stern, _ = quad(self.__calc_n_stern, 0.0, self.xd)
+        # Na+ number (n/m^2) at diffuse layer
+        xdl = self.xd + 1.0 / self.kappa
+        gamma_diffuse, _ = quad(self.__calc_n_diffuse, self.xd, xdl)
+        gamma_total = gamma_stern + gamma_diffuse
+        cond_diffuse: float = (
+            const.ELEMENTARY_CHARGE
+            * self.ion_props[Species.Na.name][IonProp.MobilityTrunDiffuse.name]
+            * gamma_total
+            / xdl
+        )
+
+        # log
+        if self.logger is not None:
+            self.logger.info("Finished the calculation of interlayer conductivity")
+            self.logger.debug(f"cond_ohmic_diffuse: {cond_diffuse}")
+
+        self.cond_infdiffuse = cond_diffuse
+        self.double_layer_length = xdl
+
+        return cond_diffuse
 
     def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned
@@ -1631,7 +1678,7 @@ class Smectite(Phyllosilicate):
         charge_diffuse: float = None,
         xd: float = None,
         cond_intra: float = None,
-        cond_outer: float = None,
+        cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
         """Inherited class from Phyllosilicate. Number density of
@@ -1651,7 +1698,7 @@ class Smectite(Phyllosilicate):
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
             cond_intra (float, optional): Inter layer conductivity (unit: S/m).
-            cond_outer (float, optional): Infinite diffuse layer conductivity (unit: S/m).
+            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
             flag_truncated (bool): True if truncated parameters will be calculate.
         """
@@ -1671,7 +1718,7 @@ class Smectite(Phyllosilicate):
             charge_diffuse=charge_diffuse,
             xd=xd,
             cond_intra=cond_intra,
-            cond_outer=cond_outer,
+            cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )
 
@@ -1698,7 +1745,7 @@ class Kaolinite(Phyllosilicate):
         charge_diffuse: float = None,
         xd: float = None,
         cond_intra: float = None,
-        cond_outer: float = None,
+        cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
         """Inherited class from Phyllosilicate. Number density of
@@ -1718,7 +1765,7 @@ class Kaolinite(Phyllosilicate):
             charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
             cond_intra (float, optional): Inter layer conductivity (unit: S/m).
-            cond_outer (float, optional): Infinite diffuse layer conductivity (unit: S/m).
+            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
         """
         super().__init__(
@@ -1737,23 +1784,12 @@ class Kaolinite(Phyllosilicate):
             charge_diffuse=charge_diffuse,
             xd=xd,
             cond_intra=cond_intra,
-            cond_outer=cond_outer,
+            cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )
 
+
 from matplotlib import pyplot as plt
+
 if __name__ == "__main__":
-    cnacl_ls: List = np.logspace(-3, 0.7, 10).tolist()
-    cond_ls: List = []
-    for cnacl in cnacl_ls:
-        print(f"cnacl: {cnacl}") #!
-        nacl = NaCl(cnacl=cnacl, ph=7.)
-        smectite = Smectite(nacl=nacl, layer_width=2e-09)
-        smectite.calc_potentials_and_charges_truncated()
-        smectite.calc_cond_interlayer()
-        smectite.calc_cond_tensor()
-        cond_ls.append(smectite.calc_cond_tmp())
-    fig, ax = plt.subplots()
-    ax.plot(cnacl_ls, cond_ls)
-    plt.show()
     pass

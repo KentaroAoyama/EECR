@@ -946,7 +946,7 @@ def compare_WS_shaly_1():
         xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
         # print(f"xsmec: {xsmec}") #!
         # anisotoropic scaling factors
-        range_pore_ls: List = np.linspace(0.1, 10., 10).tolist()
+        range_pore_ls: List = np.logspace(-1, 1., 10, base=10).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 10).tolist()
 
@@ -960,7 +960,6 @@ def compare_WS_shaly_1():
                 print("=========")
                 print("adj_rate:")
                 print(adj_rate)  #!
-                result_ls: List = []
                 for _cnacl in cnacl_ls:
                     print(_cnacl)  #!
                     dir_name = path.join(
@@ -1092,6 +1091,58 @@ def analysis_WS_result():
             plt.clf()
             plt.close()
 
+from output import plt_any_val #!
+from cube import calc_ijk
+def tmp():
+    dirname = "0.7000000000000001_0.0_0.5768283904053048"
+    with open(f"./test/pickle/25/{dirname}/solver.pkl", "rb") as pkf:
+        solver = pickle.load(pkf)
+    plot_instance(solver, 1.0e-6, f"./test/{dirname}")
+    pass
+
+def test_poros_distribution():
+    nacl = NaCl()
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
+
+    quartz = Quartz(nacl)
+
+    solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0)
+    r = 1.
+    _gamma = solver_input.create_pixel_by_macro_variable(
+        shape=(10, 10, 10),
+        edge_length=1.0e-6,
+        volume_frac_dict=OrderedDict(
+            [
+                (nacl, 0.2),
+                (quartz, 0.8)
+            ],
+        ),
+        instance_range_dict=OrderedDict(
+            [
+                (nacl, (r, r)),
+            ]
+        ),
+        seed=42,
+    )
+    solver_input.set_ib()
+    solver_input.femat()
+
+    m_initial_0, m_initial_1, m_remain, prob = _gamma
+    prob = prob.tolist()
+    prob_ls = [None for _ in range(1000)]
+    for m in range(len(prob_ls)):
+        if m in m_initial_1:
+            prob_ls[m] = 1.
+        elif m in m_initial_0:
+            prob_ls[m] = 0.
+        elif m in m_remain:
+            prob_ls[m] = prob[m_remain.index(m)]
+    assert None not in prob_ls
+
+    plot_instance(solver_input, 1.0e-6, f"./instance/{r}")
+    plt_any_val(prob_ls, (10, 10, 10), f"./aniso/{r}")
+
 
 def test_levy_etal_2018():
     pass
@@ -1118,4 +1169,5 @@ if __name__ == "__main__":
     # test_quartz()
     # Grieser_and_Healy()
     compare_WS_shaly_1()
-    # analysis_WS_result()
+    analysis_WS_result()
+    # test_poros_distribution()

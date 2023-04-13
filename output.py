@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Tuple, Union
 from os import path, makedirs
 from copy import deepcopy
 
@@ -7,7 +7,11 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 
 from solver import FEM_Cube
+from cube import FEM_Input_Cube
 from cube import calc_ijk
+
+SolverLike = Union[FEM_Cube, FEM_Input_Cube]
+
 # TODO: docstring
 # TODO: plot electrical potential
 def plot_smec_frac_cond(
@@ -176,10 +180,15 @@ def __plot_current_grid(
     plt.close()
 
 
-def plot_instance(solver: FEM_Cube,
+def plot_instance(solver_like: SolverLike,
                   edge_length: float,
                   out_dir: str,):
-    fem_input = solver.get_fem_input()
+    fem_input = None
+    if isinstance(solver_like, FEM_Cube):
+        fem_input = solver_like.get_fem_input()
+    elif isinstance(solver_like, FEM_Input_Cube):
+        fem_input = solver_like
+    
     instance_ls = fem_input.instance_ls
     indicator_ls = np.zeros((np.array(instance_ls).shape)).tolist()
     title: str = ""
@@ -224,7 +233,6 @@ def plot_instance(solver: FEM_Cube,
     __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "z", title)
 
 
-
 def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dirpath: str, prefix: str, title: str = None):
     savedir = path.join(dirpath, prefix)
     if not path.exists(savedir):
@@ -239,7 +247,6 @@ def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.n
         fig.savefig(path.join(savedir, str(i)), dpi=200, bbox_inches="tight")
         plt.clf()
         plt.close()
-
 
 def plot_cond_all(
     condx_ls: List,
@@ -338,5 +345,47 @@ def __plot_cond_grid(
     ax.set_aspect("equal")
     ax.set_title(title)
     fig.savefig(save_pth, dpi=100, bbox_inches="tight")
+    plt.clf()
+    plt.close()
+
+def plt_any_val(val_ls: List[int], shape: Tuple[int], dirname: str, edge_length: float=1.0e-6):
+    nz, ny, nx = shape
+    val_3d: List = np.zeros(shape=shape).tolist()
+    for m, val in enumerate(val_ls):
+        i, j, k = calc_ijk(m, nx, ny)
+        val_3d[k][j][i] = val
+    val_arr = np.array(val_3d)
+
+    x_arr = np.array([i * edge_length for i in range(nx)])
+    y_arr = np.array([i * edge_length for i in range(ny)])
+    z_arr = np.array([i * edge_length for i in range(nz)])
+
+    makedirs(dirname, exist_ok=True)
+
+    # x
+    xyz = np.transpose(val_arr, (2, 0, 1))
+    yy, zz = np.meshgrid(y_arr, z_arr)
+    for i, yz in enumerate(xyz):
+        __plt_grid(yy, zz, yz, dirname, f"x_{i}")
+
+    # y
+    yxz = np.transpose(val_arr, (1, 0, 2))
+    xx, zz = np.meshgrid(x_arr, z_arr)
+    for i, xz in enumerate(yxz):
+        __plt_grid(xx, zz, xz, dirname, f"y_{i}")
+
+    # z
+    zxy = val_arr.copy()
+    xx, yy = np.meshgrid(x_arr, y_arr)
+    for i, xy in enumerate(zxy):
+        __plt_grid(xx, yy, xy, dirname, f"z_{i}")
+
+    
+
+def __plt_grid(xx, yy, val, dirname: str, fname: str):
+    fig, ax = plt.subplots()
+    mappable = ax.pcolormesh(xx, yy, val)
+    fig.colorbar(mappable, ax=ax, orientation="vertical")
+    fig.savefig(path.join(dirname, fname), dpi=200, bbox_inches="tight")
     plt.clf()
     plt.close()

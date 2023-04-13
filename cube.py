@@ -198,11 +198,13 @@ class FEM_Input_Cube:
             if _instance in instance_range_dict:
                 # anisotoropic scale
                 range_yz = instance_range_dict[_instance]
-                _m_selected = self.__calc_anisotropic_distribution(
+                _m_selected, _gamma = self.__calc_anisotropic_distribution(
                     m_remain, _num, shape, range_yz, seed
-                )
+                )  #! TODO: delete _gamma
                 if self.logger is not None:
-                    self.logger.info(f"Set by anisotoropic distoribution done for {_instance}")
+                    self.logger.info(
+                        f"Set by anisotoropic distoribution done for {_instance}"
+                    )
             elif _instance in instance_adj_rate_dict:
                 # adj rate
                 _instance_target, adj_rate = instance_adj_rate_dict[_instance]
@@ -308,6 +310,7 @@ class FEM_Input_Cube:
 
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
+        return _gamma  #!
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -858,86 +861,121 @@ class FEM_Input_Cube:
         # wn = S(X)^-1 S(X - xn)
         nx, ny, nz = nxyz
         ay, az = range_yz
-        range_scale: np.ndarray = np.array([1.0, 1.0 / ay, 1.0 / az])
+        range_scale: np.ndarray = np.array([1.0, ay, az])
         # initial point (observation points)
-        num_initial = int(min(nxyz))
+        num_initial = 2 * min(nxyz)
         if num_initial == 0:
             num_initial = 1
+        if num_initial > _num:
+            num_initial = _num
+
+        # if exists: 1, else: 2 (num1 > num0)
+        # set half of the values to 0
+        num1: int = round_half_up(num_initial / 2)
+        if num1 == 0:
+            num1 = 1
+        num0: int = num_initial - num1
+
         # set initial distribution by KMeans
         x_all: List = []
         for m in list(m_remain):
             i, j, k = calc_ijk(m, nx, ny)
             x_all.append([float(i), float(j), float(k)])
         x_all: np.ndarray = np.array(x_all)
-        n_clusters = int(_num / 10)
-        if n_clusters == 0:
-            n_clusters = 1
-        kmeans = KMeans(n_clusters=n_clusters, random_state=seed, n_init="auto").fit(
+
+        # calculate centroids
+        c_all = KMeans(n_clusters=num_initial, random_state=seed, n_init="auto").fit(
             x_all
         )
+        # set value to each centroids
+        values_in: List = [0.0 if i < num0 else 1.0 for i in range(num_initial)]
+        random.shuffle(values_in)
+        # calculate coordinates of initial points
         m_initial: List = []
-        for i, j, k in kmeans.cluster_centers_.tolist():
-            i: int = round_half_up(i)
-            j: int = round_half_up(j)
-            k: int = round_half_up(k)
-            m_initial.append(calc_m(i, j, k, nx, ny))
+        for xyz in c_all.cluster_centers_:
+            x, y, z = x_all[np.square(x_all - xyz).sum(axis=1).argmin()]
+            m_initial.append(calc_m(int(x), int(y), int(z), nx, ny))
 
-        m_initial: List = random.sample(list(m_remain), k=num_initial)
+        # get the coordinates where the pore exists
         m_remain = m_remain.difference(m_initial)
         m_remain: List = list(m_remain)
-        points_ls: List[np.ndarray] = []
-        for m in m_initial:
+        init_p_ls: List[np.ndarray] = []
+        values_all: List = []
+        for m, v in zip(m_initial, values_in):
             i, j, k = calc_ijk(m, nx, ny)
-            # Give a random number to prevent the distance matrix from falling in rank.
-            points_ls.append(
-                np.array([float(i), float(j), float(k)])
-                + np.random.rand(3) / 10.0
-                - 0.05
-            )
+            init_p_ls.append(self.__calc_position(i, j, k))
+            # considering periodic boundary conditions.
+            for i_tmp in (i - nx, i, i + nx):
+                for j_tmp in (j - ny, j, j + ny):
+                    for k_tmp in (k - nz, k, k + nz):
+                        values_all.append(v)
+                        if i == i_tmp and j == j_tmp and k == k_tmp:
+                            continue
+                        init_p_ls.append(self.__calc_position(i_tmp, j_tmp, k_tmp))
+        num_initial_added = 27 * num_initial
 
         # generate distance matrix
-        dist_initial: List = np.zeros((num_initial, num_initial)).tolist()
-        for idx1 in range(num_initial):
-            for idx2 in range(num_initial)[idx1:]:
-                point1 = points_ls[idx1]
-                point2 = points_ls[idx2]
+        dist_initial: List = np.zeros((num_initial_added, num_initial_added)).tolist()
+        for idx1 in range(num_initial_added):
+            for idx2 in range(num_initial_added)[idx1:]:
+                point1 = init_p_ls[idx1]
+                point2 = init_p_ls[idx2]
                 dist_initial[idx1][idx2] = np.sqrt(
-                    np.square(np.dot(point1 - point2, range_scale)).sum()
+                    np.square((point1 - point2) * range_scale).sum()
                 )
         dist_initial: np.ndarray = np.array(dist_initial, dtype=np.float64)
         # make dist_initial symmetrical (diagonal elements are zero)
         dist_initial += dist_initial.T
+
         # dist to initial points to interpolation points (Γ(X - xn)^T)
         dist_interp: List = []
-        points_arr = np.array(points_ls)
+        init_p_arr = np.array(init_p_ls)
         for m in m_remain:
             i, j, k = calc_ijk(m, nx, ny)
-            point_n = np.array(
-                [float(i) / float(nx), float(j) / float(ny), float(k) / float(nz)]
-            )
+            point_n = np.array([float(i), float(j), float(k)])
             # n_initial × 3
-            _dist_aniso = (points_arr - point_n) * range_scale
+            _dist_aniso = (init_p_arr - point_n) * range_scale
             # 1 × n_initial
             dist_interp.append(np.sqrt(np.square(_dist_aniso).sum(axis=1)).T)
         # n_initial × n_remain
         dist_interp: np.ndarray = np.array(dist_interp, dtype=np.float64).T
 
         # calculate wight (n_initial × n_remain)
-        _c = 1.0 / np.sqrt(np.square([float(nx), float(ny), float(nz)]).sum())
+        _c = 1.0 / np.sqrt(np.square([float(nx), float(ny), float(nz)]).sum()) * 0.5
         gamma_init = self.__calc_vario_exp(dist_initial, c=_c)
-        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_initial))
+        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_initial_added))
         gamma_interp = self.__calc_vario_exp(dist_interp, c=_c)
         wn: np.ndarray = np.matmul(gamma_init_inv, gamma_interp)
 
         # get m
         # The sum of weights is considered a probability
-        residual: np.ndarray = np.array([1.0 for _ in range(num_initial)])
-        prob = np.matmul(residual, wn)
+        values: np.ndarray = np.array(values_all)
+        _mean = values.mean()
+        residual: np.ndarray = values - _mean
+        prob = np.matmul(residual, wn) + _mean
         m_selected: List = np.array(m_remain)[
-            np.argsort(-1.0 * prob)[: _num - num_initial]
+            np.argsort(-1.0 * prob)[: _num - num0]
         ].tolist()
-        m_selected.extend(m_initial)
-        return set(m_selected)
+        m_initial_1: List = np.array(m_initial)[np.array(values_in) == 1.0].tolist()
+        m_initial_0: List = np.array(m_initial)[np.array(values_in) == 0.0].tolist() #!
+        m_selected.extend(m_initial_1)
+        return set(m_selected), (m_initial_0, m_initial_1, m_remain, prob)  #!
+
+    def __calc_position(self, i: int, j: int, k: int) -> np.ndarray:
+        """Calculate potition from 3d indecices.
+        Give a random number to prevent the distance matrix from falling in rank.
+
+        Args:
+            i (int): Index of X coordinates
+            j (int): Index of Y coordinates
+            k (int): Index of Z coordinates
+
+        Returns:
+            np.ndarray: 1d array contains x, y, z coordinates
+        """
+        return (
+            np.array([float(i), float(j), float(k)]) + np.random.rand(3) / 10.0 - 0.05
+        )
 
     def __set_by_adjacent_rate(
         self, m_remain: Set, num: int, m_target: Set, adj_rate: float, shape: Tuple
@@ -1046,7 +1084,7 @@ class FEM_Input_Cube:
         Returns:
             np.ndarray: Array containing semivariance
         """
-        return 1.0 - np.exp(-1.0 * c * _dist)
+        return 0.5 * (1.0 - np.exp(-1.0 * c * _dist))
 
     def get_pix_tensor(self) -> np.ndarray or None:
         """Getter for the pix in 5d shape.

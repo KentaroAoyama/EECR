@@ -948,7 +948,7 @@ def compare_WS_shaly_1():
         # anisotoropic scaling factors
         range_pore_ls: List = np.logspace(-1, 1., 10, base=10).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
-        adj_rate_ls: List = np.linspace(0, 1.0, 10).tolist()
+        adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
 
         pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
         cou = 0
@@ -1108,7 +1108,7 @@ def test_poros_distribution():
     quartz = Quartz(nacl)
 
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0)
-    r = 1.
+    r = 2.
     _gamma = solver_input.create_pixel_by_macro_variable(
         shape=(10, 10, 10),
         edge_length=1.0e-6,
@@ -1128,15 +1128,11 @@ def test_poros_distribution():
     solver_input.set_ib()
     solver_input.femat()
 
-    m_initial_0, m_initial_1, m_remain, prob = _gamma
+    m_remain, prob = _gamma
     prob = prob.tolist()
     prob_ls = [None for _ in range(1000)]
     for m in range(len(prob_ls)):
-        if m in m_initial_1:
-            prob_ls[m] = 1.
-        elif m in m_initial_0:
-            prob_ls[m] = 0.
-        elif m in m_remain:
+        if m in m_remain:
             prob_ls[m] = prob[m_remain.index(m)]
     assert None not in prob_ls
 

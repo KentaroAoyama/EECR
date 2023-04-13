@@ -215,7 +215,7 @@ def plot_instance(solver_like: SolverLike,
     __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "x", title)
 
     # y
-    _tmp = np.transpose(instance_arr, (1, 2, 0))
+    _tmp = np.transpose(instance_arr, (1, 0, 2))
     _, ax1, ax2 = _tmp.shape
     grid_x, grid_y = np.meshgrid(
         np.array([edge_length * i for i in range(ax2)]),

@@ -944,52 +944,53 @@ def compare_WS_shaly_1():
         # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
         qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
         xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
+        print(_id, xsmec) #!
         # print(f"xsmec: {xsmec}") #!
         # anisotoropic scaling factors
         range_pore_ls: List = np.logspace(-1, 1., 10, base=10).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
-
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
-        cou = 0
-        for ayz_pore in range_pore_ls:
-            print("=========")  #!
-            print("ayz_pore:")
-            print(ayz_pore)  #!
-            for adj_rate in reversed(adj_rate_ls):
-                print("=========")
-                print("adj_rate:")
-                print(adj_rate)  #!
-                for _cnacl in cnacl_ls:
-                    print(_cnacl)  #!
-                    dir_name = path.join(
-                        test_dir(),
-                        "pickle",
-                        str(_id),
-                        f"{ayz_pore}_{adj_rate}_{_cnacl}",
-                    )
-                    # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
-                    # if solver is not None:
-                    #     plot_instance(solver, 1.0e-6, "tmp/instance")
-                    future = pool.submit(
-                        test_tmp,
-                        _t=_t,
-                        _cnacl=_cnacl,
-                        _ph=_ph,
-                        _poros=_poros,
-                        xsmec=xsmec,
-                        ayz_pore=ayz_pore,
-                        adj_rate=adj_rate,
-                        save_dir=dir_name,
-                        log_id=cou
-                    )
-                    cou += 1
-                    # result_ls.append(solver.cond_x)
-                # fig, ax = plt.subplots()
-                # ax.plot(cnacl_ls, result_ls)
-                # plt.show() #!
-        pool.shutdown(wait=True)
-    return
+    #!
+    #     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+    #     cou = 0
+    #     for ayz_pore in range_pore_ls:
+    #         print("=========")  #!
+    #         print("ayz_pore:")
+    #         print(ayz_pore)  #!
+    #         for adj_rate in reversed(adj_rate_ls):
+    #             print("=========")
+    #             print("adj_rate:")
+    #             print(adj_rate)  #!
+    #             for _cnacl in cnacl_ls:
+    #                 print(_cnacl)  #!
+    #                 dir_name = path.join(
+    #                     test_dir(),
+    #                     "pickle",
+    #                     str(_id),
+    #                     f"{ayz_pore}_{adj_rate}_{_cnacl}",
+    #                 )
+    #                 # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
+    #                 # if solver is not None:
+    #                 #     plot_instance(solver, 1.0e-6, "tmp/instance")
+    #                 future = pool.submit(
+    #                     test_tmp,
+    #                     _t=_t,
+    #                     _cnacl=_cnacl,
+    #                     _ph=_ph,
+    #                     _poros=_poros,
+    #                     xsmec=xsmec,
+    #                     ayz_pore=ayz_pore,
+    #                     adj_rate=adj_rate,
+    #                     save_dir=dir_name,
+    #                     log_id=cou
+    #                 )
+    #                 cou += 1
+    #                 # result_ls.append(solver.cond_x)
+    #             # fig, ax = plt.subplots()
+    #             # ax.plot(cnacl_ls, result_ls)
+    #             # plt.show() #!
+    #     pool.shutdown(wait=True)
+    # return
 
 def analysis_WS_result():
     cnacl_ws = [
@@ -1100,6 +1101,8 @@ def tmp():
     plot_instance(solver, 1.0e-6, f"./test/{dirname}")
     pass
 
+import tortuosity
+
 def test_poros_distribution():
     nacl = NaCl()
     nacl.sen_and_goode_1992()
@@ -1108,7 +1111,7 @@ def test_poros_distribution():
     quartz = Quartz(nacl)
 
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0)
-    r = 2.
+    r = 1.
     _gamma = solver_input.create_pixel_by_macro_variable(
         shape=(10, 10, 10),
         edge_length=1.0e-6,
@@ -1127,14 +1130,30 @@ def test_poros_distribution():
     )
     solver_input.set_ib()
     solver_input.femat()
-
-    m_remain, prob = _gamma
+    # after
+    m_initial_0, m_initial_1, m_remain, prob = _gamma
     prob = prob.tolist()
     prob_ls = [None for _ in range(1000)]
     for m in range(len(prob_ls)):
-        if m in m_remain:
+        if m in m_initial_0:
+            prob_ls[m] = 0.
+        elif m in m_initial_1:
+            prob_ls[m] = 1.
+        else:
             prob_ls[m] = prob[m_remain.index(m)]
     assert None not in prob_ls
+
+    # before
+    # m_remain, prob = _gamma
+    # prob = prob.tolist()
+    # prob_ls = [None for _ in range(1000)]
+    # for m in range(len(prob_ls)):
+    #     if m in m_remain:
+    #         prob_ls[m] = prob[m_remain.index(m)]
+    # assert None not in prob_ls
+
+    # result = tortuosity.calc_objective(m_selected, m_remain, (10, 10, 10), (1., 1., 1.), (10., 10., 10.,))
+    # print(result) #!
 
     plot_instance(solver_input, 1.0e-6, f"./instance/{r}")
     plt_any_val(prob_ls, (10, 10, 10), f"./aniso/{r}")
@@ -1165,5 +1184,5 @@ if __name__ == "__main__":
     # test_quartz()
     # Grieser_and_Healy()
     compare_WS_shaly_1()
-    analysis_WS_result()
+    # analysis_WS_result()
     # test_poros_distribution()

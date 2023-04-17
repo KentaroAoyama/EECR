@@ -71,19 +71,12 @@ def Revil_etal_1998_fig3():
         print(f"cnacl: {cnacl}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         # Kaolinite
-        kaolinite = Kaolinite(
-            nacl=nacl,
-            xd=None,
-            logger=None,
-        )
+        kaolinite = Kaolinite(nacl=nacl, xd=None, logger=None,)
         kaolinite.calc_potentials_and_charges_inf()
         kaolinite.calc_cond_infdiffuse()
         kaolinite_cond_ls.append(kaolinite.cond_stern_plus_edl)
         # Smectite
-        smectite = Smectite(
-            nacl=nacl,
-            layer_width=1.14e-9,
-        )
+        smectite = Smectite(nacl=nacl, layer_width=1.14e-9,)
         smectite.calc_potentials_and_charges_truncated()
         smectite.calc_cond_interlayer()
         smectite_cond_ls.append(smectite.cond_stern_plus_edl)
@@ -111,9 +104,7 @@ def Leroy_Revil_2004_fig4():
     for cnacl in cnacl_ls:
         print(f"cnacl: {cnacl}")
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        kaolinite = Kaolinite(
-            nacl=nacl,
-        )
+        kaolinite = Kaolinite(nacl=nacl,)
         kaolinite.calc_potentials_and_charges_inf()
         # cpnvert V → mV
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
@@ -161,9 +152,7 @@ def Leroy_Revil_2004_fig8():
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        smectite = Smectite(
-            nacl=nacl,
-        )
+        smectite = Smectite(nacl=nacl,)
         smectite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(smectite.potential_zeta * 1000.0)
     # plot
@@ -187,9 +176,7 @@ def Leroy_Revil_2004_fig9():
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        kaolinite = Kaolinite(
-            nacl=nacl,
-        )
+        kaolinite = Kaolinite(nacl=nacl,)
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
         cond_fluid = nacl.sen_and_goode_1992()
@@ -246,12 +233,7 @@ def get_kaolinite_init_params():
         for i, cna in enumerate(conc_ls):
             print(f"cna: {cna}")  #!
             nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
-            kaolinite = Kaolinite(
-                nacl=nacl,
-                layer_width=0.0,
-                xd=None,
-                logger=None,
-            )
+            kaolinite = Kaolinite(nacl=nacl, layer_width=0.0, xd=None, logger=None,)
             if i == 0 and 1.0e-14 <= ch < 1.0e-13:
                 xn = [
                     -0.4834874107638951,
@@ -354,12 +336,7 @@ def get_smectite_init_params_inf():
         for i, cna in enumerate(conc_ls):
             print(f"cna: {cna}")  #!
             nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
-            smectite = Smectite(
-                nacl=nacl,
-                layer_width=1.14e-9,
-                xd=None,
-                logger=None,
-            )
+            smectite = Smectite(nacl=nacl, layer_width=1.14e-9, xd=None, logger=None,)
             if i == 0 and ch < 1.0e-13:
                 xn = [
                     -0.6005853427020252,
@@ -545,12 +522,9 @@ def get_smectite_init_params_truncated():
             cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
             for j, cna in enumerate(conc_ls):
                 print("========")
-                print(f"condition: \nr: {_r},\nch: {ch},\ncnacl: {cna}") #!
+                print(f"condition: \nr: {_r},\nch: {ch},\ncnacl: {cna}")  #!
                 nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
-                smectite = Smectite(
-                    nacl=nacl,
-                    layer_width=_r,
-                )
+                smectite = Smectite(nacl=nacl, layer_width=_r,)
                 _xinit_tmp, diff = smectite.calc_init_params_trun()
                 if diff < 0.1:
                     xn = _xinit_tmp
@@ -594,10 +568,7 @@ def test_single_condition():
         0.6685515350060947,
         7.887858103894404e-05,
     ]
-    smectite = Smectite(
-        nacl=nacl,
-        layer_width=_r,
-    )
+    smectite = Smectite(nacl=nacl, layer_width=_r,)
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
 
 
@@ -756,8 +727,8 @@ def tmp():
 
 def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id):
     fpth = path.join(save_dir, "solver.pkl")
-    # if path.exists(fpth):
-    #     return #!
+    if path.exists(fpth):
+        return #!
     if not path.exists(save_dir):
         makedirs(save_dir)
 
@@ -787,16 +758,8 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
                 (quartz, (1.0 - _poros) * (1.0 - xsmec)),
             ],
         ),
-        instance_range_dict=OrderedDict(
-            [
-                (nacl, (ayz_pore, ayz_pore)),
-            ]
-        ),
-        instance_adj_rate_dict=OrderedDict(
-            [
-                (smectite, (nacl, adj_rate)),
-            ]
-        ),
+        instance_range_dict=OrderedDict([(nacl, (ayz_pore, ayz_pore)),]),
+        instance_adj_rate_dict=OrderedDict([(smectite, (nacl, adj_rate)),]),
         seed=42,
     )
     solver_input.set_ib()
@@ -925,7 +888,7 @@ def compare_WS_shaly_1():
         4.4758071901410315,
         5.000000000000001,
     ]
-    
+
     for _id, _prop in core_props_ws.items():
         _poros = _prop["porosity"]
         _label_ls_tmp: List = _prop["bulk"]
@@ -944,53 +907,53 @@ def compare_WS_shaly_1():
         # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
         qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
         xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
-        print(_id, xsmec) #!
+        print(_id, xsmec)  #!
         # print(f"xsmec: {xsmec}") #!
         # anisotoropic scaling factors
-        range_pore_ls: List = np.logspace(-1, 1., 10, base=10).tolist()
+        range_pore_ls: List = np.linspace(0.5, 2., 5).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
-    #!
-    #     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
-    #     cou = 0
-    #     for ayz_pore in range_pore_ls:
-    #         print("=========")  #!
-    #         print("ayz_pore:")
-    #         print(ayz_pore)  #!
-    #         for adj_rate in reversed(adj_rate_ls):
-    #             print("=========")
-    #             print("adj_rate:")
-    #             print(adj_rate)  #!
-    #             for _cnacl in cnacl_ls:
-    #                 print(_cnacl)  #!
-    #                 dir_name = path.join(
-    #                     test_dir(),
-    #                     "pickle",
-    #                     str(_id),
-    #                     f"{ayz_pore}_{adj_rate}_{_cnacl}",
-    #                 )
-    #                 # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
-    #                 # if solver is not None:
-    #                 #     plot_instance(solver, 1.0e-6, "tmp/instance")
-    #                 future = pool.submit(
-    #                     test_tmp,
-    #                     _t=_t,
-    #                     _cnacl=_cnacl,
-    #                     _ph=_ph,
-    #                     _poros=_poros,
-    #                     xsmec=xsmec,
-    #                     ayz_pore=ayz_pore,
-    #                     adj_rate=adj_rate,
-    #                     save_dir=dir_name,
-    #                     log_id=cou
-    #                 )
-    #                 cou += 1
-    #                 # result_ls.append(solver.cond_x)
-    #             # fig, ax = plt.subplots()
-    #             # ax.plot(cnacl_ls, result_ls)
-    #             # plt.show() #!
-    #     pool.shutdown(wait=True)
-    # return
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+        cou = 0
+        for ayz_pore in range_pore_ls:
+            print("=========")  #!
+            print("ayz_pore:")
+            print(ayz_pore)  #!
+            for adj_rate in reversed(adj_rate_ls):
+                print("=========")
+                print("adj_rate:")
+                print(adj_rate)  #!
+                for _cnacl in cnacl_ls:
+                    print(_cnacl)  #!
+                    dir_name = path.join(
+                        test_dir(),
+                        "pickle",
+                        str(_id),
+                        f"{ayz_pore}_{adj_rate}_{_cnacl}",
+                    )
+                    # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
+                    # if solver is not None:
+                    #     plot_instance(solver, 1.0e-6, "tmp/instance")
+                    future = pool.submit(
+                        test_tmp,
+                        _t=_t,
+                        _cnacl=_cnacl,
+                        _ph=_ph,
+                        _poros=_poros,
+                        xsmec=xsmec,
+                        ayz_pore=ayz_pore,
+                        adj_rate=adj_rate,
+                        save_dir=dir_name,
+                        log_id=cou,
+                    )
+                    cou += 1
+                    # result_ls.append(solver.cond_x)
+                # fig, ax = plt.subplots()
+                # ax.plot(cnacl_ls, result_ls)
+                # plt.show() #!
+        pool.shutdown(wait=True)
+    return
+
 
 def analysis_WS_result():
     cnacl_ws = [
@@ -1015,7 +978,7 @@ def analysis_WS_result():
             if bk is None:
                 continue
             _ls[0].append(cnacl_ws[i])
-            _ls[1].append(bk / 10.)
+            _ls[1].append(bk / 10.0)
     id_cond_result: Dict[int, Dict] = {}
     pickle_dir = path.join(test_dir(), "pickle")
     for id_name in listdir(pickle_dir):
@@ -1052,11 +1015,13 @@ def analysis_WS_result():
                 cnacl_ls.append(cnacl)
                 mean_ls.append(np.mean(bk_ls))
                 err_ls.append(np.std(bk_ls))
-            ax.errorbar(cnacl_ls,
-                        mean_ls,
-                        err_ls,
-                        label=ayz,
-                        color=cm.jet(float(i) / len(ayz_cnacl_props)))
+            ax.errorbar(
+                cnacl_ls,
+                mean_ls,
+                err_ls,
+                label=ayz,
+                color=cm.jet(float(i) / len(ayz_cnacl_props)),
+            )
         # obs
         _ls = ws_result[int(_id)]
         ax.scatter(_ls[0], _ls[1])
@@ -1081,8 +1046,13 @@ def analysis_WS_result():
             adj_dct = ayz_cnacl_props[ayz]
             for i, adj_rate in enumerate(sorted(adj_dct.keys())):
                 _ls = adj_dct[adj_rate]
-                ax.plot(_ls[0], _ls[1], label=adj_rate, color=cm.jet(float(i) / len(adj_dct)))
-            
+                ax.plot(
+                    _ls[0],
+                    _ls[1],
+                    label=adj_rate,
+                    color=cm.jet(float(i) / len(adj_dct)),
+                )
+
             # obs
             _ls = ws_result[int(_id)]
             ax.scatter(_ls[0], _ls[1])
@@ -1092,8 +1062,11 @@ def analysis_WS_result():
             plt.clf()
             plt.close()
 
-from output import plt_any_val #!
+
+from output import plt_any_val  #!
 from cube import calc_ijk
+
+
 def tmp():
     dirname = "0.7000000000000001_0.0_0.5768283904053048"
     with open(f"./test/pickle/25/{dirname}/solver.pkl", "rb") as pkf:
@@ -1101,7 +1074,9 @@ def tmp():
     plot_instance(solver, 1.0e-6, f"./test/{dirname}")
     pass
 
+
 import tortuosity
+
 
 def test_poros_distribution():
     nacl = NaCl()
@@ -1111,21 +1086,12 @@ def test_poros_distribution():
     quartz = Quartz(nacl)
 
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0)
-    r = 1.
+    r = 1.0
     _gamma = solver_input.create_pixel_by_macro_variable(
         shape=(10, 10, 10),
         edge_length=1.0e-6,
-        volume_frac_dict=OrderedDict(
-            [
-                (nacl, 0.2),
-                (quartz, 0.8)
-            ],
-        ),
-        instance_range_dict=OrderedDict(
-            [
-                (nacl, (r, r)),
-            ]
-        ),
+        volume_frac_dict=OrderedDict([(nacl, 0.2), (quartz, 0.8)],),
+        instance_range_dict=OrderedDict([(nacl, (r, r)),]),
         seed=42,
     )
     solver_input.set_ib()
@@ -1136,9 +1102,9 @@ def test_poros_distribution():
     prob_ls = [None for _ in range(1000)]
     for m in range(len(prob_ls)):
         if m in m_initial_0:
-            prob_ls[m] = 0.
+            prob_ls[m] = 0.0
         elif m in m_initial_1:
-            prob_ls[m] = 1.
+            prob_ls[m] = 1.0
         else:
             prob_ls[m] = prob[m_remain.index(m)]
     assert None not in prob_ls
@@ -1184,5 +1150,5 @@ if __name__ == "__main__":
     # test_quartz()
     # Grieser_and_Healy()
     compare_WS_shaly_1()
-    # analysis_WS_result()
+    analysis_WS_result()
     # test_poros_distribution()

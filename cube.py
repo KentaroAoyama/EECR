@@ -92,7 +92,7 @@ class FEM_Input_Cube:
         self.logger = logger
         self.__init_default()
         self.instance_ls: List = None
-        self.rotation_angle: List = None
+        self.rotation_angle_ls = None
 
     def __init_default(self) -> None:
         """Assign default values to member variables"""
@@ -869,11 +869,10 @@ class FEM_Input_Cube:
 
         # if exists: 1, else: 2 (num1 > num0)
         # set half of the values to 0
-        num1: int = round_half_up(num_initial / 2)
+        num1: int = round_half_up(num_initial * _num / len(list(m_remain)))
         if num1 == 0:
             num1 = 1
         num0: int = num_initial - num1
-
         # set initial distribution by KMeans
         x_all: List = []
         for m in list(m_remain):
@@ -882,7 +881,7 @@ class FEM_Input_Cube:
         x_all: np.ndarray = np.array(x_all)
 
         # calculate centroids
-        c_all = KMeans(n_clusters=num_initial, random_state=seed, n_init="auto").fit(
+        c_all = KMeans(init="k-means++", n_clusters=num_initial, random_state=seed,).fit(
             x_all
         )
         # set value to each centroids
@@ -893,7 +892,6 @@ class FEM_Input_Cube:
         for xyz in c_all.cluster_centers_:
             x, y, z = x_all[np.square(x_all - xyz).sum(axis=1).argmin()]
             m_initial.append(calc_m(int(x), int(y), int(z), nx, ny))
-
         # get the coordinates where the pore exists
         m_remain = m_remain.difference(m_initial)
         m_remain: List = list(m_remain)
@@ -952,7 +950,7 @@ class FEM_Input_Cube:
         residual: np.ndarray = values - _mean
         prob = np.matmul(residual, wn) + _mean
         m_selected: List = np.array(m_remain)[
-            np.argsort(-1.0 * prob)[: _num - num0]
+            np.argsort(-1.0 * prob)[: _num - num1]
         ].tolist()
         m_initial_1: List = np.array(m_initial)[np.array(values_in) == 1.0].tolist()
         m_initial_0: List = np.array(m_initial)[np.array(values_in) == 0.0].tolist() #!

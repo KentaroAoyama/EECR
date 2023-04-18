@@ -260,9 +260,8 @@ class FEM_Cube:
 
     def __expand_2d(self, arr1d: np.ndarray, ls2d: List, m: int, ib: List) -> None:
         """Convert a 1d list with m elements to an m x 27 2d list
-        TODO: docstring
         Args:
-            ls1d (List): 1d list
+            arr1d (np.ndarray): 1d array
             ls2d (List): 2d array. 27 values adjacent to m are stored in the second dimension
             m (int): Global 1d lablling index.
             ib (List): Neighbor labeling list

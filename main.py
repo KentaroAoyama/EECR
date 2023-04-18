@@ -210,11 +210,12 @@ def experiment():
         seed_ls = [42]
 
     for seed in seed_ls:
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count())
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
         for smec_frac in smec_frac_ls:
             for temperature in temperature_ls:
                 for cnacl in cnacl_ls:
                     for porosity in porosity_ls:
+                        # exec_single_condition(smec_frac, temperature, cnacl, porosity, seed)
                         pool.submit(
                             exec_single_condition,
                             smec_frac=smec_frac,
@@ -233,6 +234,7 @@ def output_fig():
         _ls = condition_dirname.split("_")
         del _ls[0]  # smec
         _ls[0] = _ls[0].replace("frac", "smec_frac")
+        # smec_frac, temperature, cnacl, porosity
         val_ls: List = []
         for condition_val in _ls:
             _, val = condition_val.split("-")
@@ -285,7 +287,8 @@ def output_fig():
     for cnacl_poros, _xyel in cnacl_poros_xyel.items():
         cnacl, poros = cnacl_poros
         save_pth = path.join(tempe_dir, f"cnacl-{cnacl}_porosity-{poros}.png")
-        plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
+        # lateral: temperature, ledgend: smectite fraction
+        plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Temperature (K)")
 
     # plot Cnacl variation
     cnacl_dir = path.join(fig_dir, "cnacl")
@@ -310,7 +313,8 @@ def output_fig():
     for tempe_poros, _xyel in tempe_poros_xyel.items():
         tempe, poros = tempe_poros
         save_pth = path.join(cnacl_dir, f"temperature-{tempe}_porosity-{poros}.png")
-        plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
+        # lateral: cnacl, ledgend: smectite fraction
+        plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Salinity (Mol)")
 
     # plot porosity variation
     poros_dir = path.join(fig_dir, "poros")
@@ -335,7 +339,7 @@ def output_fig():
     for tempe_cnacl, _xyel in tempe_cnacl_xyel.items():
         tempe, cnacl = tempe_cnacl
         save_pth = path.join(poros_dir, f"temperature-{tempe}_cnacl-{cnacl}.png")
-        plot_smec_frac_cond(_xyel[0], _xyel[1], save_pth, _xyel[3], _xyel[2])
+        plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Porosity")
 
 
 def main():
@@ -345,5 +349,5 @@ def main():
 if __name__ == "__main__":
     # main()
     experiment()
-    # output_fig()
+    output_fig()
     # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

@@ -134,7 +134,7 @@ class FEM_Input_Cube:
                 conductivity tensor are rotated based on these angles (Defaults to "random").
         """
         assert len(volume_frac_dict) > 0
-
+        _gamma = None # for debug variable
         # Check to see if the volume fractions sum to 1
         _sum = 0.0
         for _, frac in volume_frac_dict.items():
@@ -869,7 +869,8 @@ class FEM_Input_Cube:
 
         # if exists: 1, else: 2 (num1 > num0)
         # set half of the values to 0
-        num1: int = round_half_up(num_initial * _num / len(list(m_remain)))
+        # num1: int = round_half_up(num_initial * _num / len(list(m_remain)))
+        num1: int = round_half_up(num_initial * 0.5)
         if num1 == 0:
             num1 = 1
         num0: int = num_initial - num1
@@ -881,7 +882,7 @@ class FEM_Input_Cube:
         x_all: np.ndarray = np.array(x_all)
 
         # calculate centroids
-        c_all = KMeans(init="k-means++", n_clusters=num_initial, random_state=seed,).fit(
+        c_all = KMeans(init="k-means++", n_clusters=num_initial, random_state=seed, n_init="auto").fit(
             x_all
         )
         # set value to each centroids

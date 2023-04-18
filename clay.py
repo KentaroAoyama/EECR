@@ -1155,15 +1155,23 @@ class Phyllosilicate:
                 f"zeta potential grately exeeds 0: {self.potential_zeta}"
             )
         # stern potential
-        if self.potential_stern > 0:
-            pass
+        # High concentration case
+        if self.potential_stern > 0.0:
+            if self.potential_zeta < 0.0 and math.isclose(
+                self.potential_zeta, 0.0, abs_tol=1.0e-8
+            ):
+                self.potential_zeta -= 2.0 * self.potential_zeta
+            if self.potential_r < 0.0 and math.isclose(
+                self.potential_r, 0.0, abs_tol=1.0e-8
+            ):
+                self.potential_r -= 2.0 * self.potential_r
+        # Low concentration case
         elif self.potential_r > 0.0 and math.isclose(
             self.potential_r, 0.0, abs_tol=1.0e-8
         ):
             self.potential_r -= 2.0 * self.potential_r
         elif self.potential_r > 0.0:
             raise RuntimeError(f"truncated plane potential grately exeeds 0")
-
         # DEBUG
         if self.logger is not None:
             self.logger.info(
@@ -1280,7 +1288,9 @@ class Phyllosilicate:
             float: Number density of Na+ (-/m^3)
         """
         # calc number density
-        potential: float = self.potential_zeta * np.exp((-1.0) * self.kappa_truncated * x)
+        potential: float = self.potential_zeta * np.exp(
+            (-1.0) * self.kappa_truncated * x
+        )
         na_props: Dict = self.ion_props[Species.Na.name]
         v = na_props[IonProp.Valence.name]
         n = (
@@ -1349,7 +1359,9 @@ class Phyllosilicate:
         # Na+ number (n/m^2) at diffuse layer
         if self.kappa_truncated is None:
             self.__calc_kappa_truncated()
-        gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, self.layer_width)
+        gamma_diffuse, _ = quad(
+            self.__calc_n_diffuse_truncated, self.xd, self.layer_width
+        )
         # total number density
         na_prop: Dict = self.ion_props[Species.Na.name]
         cond_intra: float = (
@@ -1433,7 +1445,11 @@ class Phyllosilicate:
             "of the smectite cell, we should calculate interlayer conductivity"
         )
         sigma_h = sigma_intra * self.layer_width / (6.6e-10 + self.layer_width)
-        sigma_v = 1.0e-12
+        sigma_v = (
+            1.0
+            / ((1.0 / (self.layer_width * 1.0e-12)) + (1.0 / (6.6e-10 + sigma_intra)))
+            / (self.layer_width + 6.6e-10)
+        )
         cond_tensor = np.array(
             [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
             dtype=np.float64,

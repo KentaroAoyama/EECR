@@ -727,8 +727,8 @@ def tmp():
 
 def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id):
     fpth = path.join(save_dir, "solver.pkl")
-    if path.exists(fpth):
-        return #!
+    # if path.exists(fpth):
+    #     return #!
     if not path.exists(save_dir):
         makedirs(save_dir)
 
@@ -739,7 +739,7 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
     # smectite
-    smectite = Smectite(nacl=nacl, layer_width=1.3e-9, logger=logger)
+    smectite = Smectite(nacl=nacl, layer_width=1.3e-9, logger=logger) #!
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
     smectite.calc_cond_interlayer()
@@ -750,7 +750,7 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
         shape=(10, 10, 10),
-        edge_length=1.0e-6,
+        edge_length=5.0e-8,
         volume_frac_dict=OrderedDict(
             [
                 (nacl, _poros),
@@ -910,48 +910,48 @@ def compare_WS_shaly_1():
         print(_id, xsmec)  #!
         # print(f"xsmec: {xsmec}") #!
         # anisotoropic scaling factors
-        range_pore_ls: List = np.linspace(0.5, 2., 5).tolist()
+        range_pore_ls: List = np.linspace(0.5, 2., 10).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
-        cou = 0
-        for ayz_pore in range_pore_ls:
-            print("=========")  #!
-            print("ayz_pore:")
-            print(ayz_pore)  #!
-            for adj_rate in reversed(adj_rate_ls):
-                print("=========")
-                print("adj_rate:")
-                print(adj_rate)  #!
-                for _cnacl in cnacl_ls:
-                    print(_cnacl)  #!
-                    dir_name = path.join(
-                        test_dir(),
-                        "pickle",
-                        str(_id),
-                        f"{ayz_pore}_{adj_rate}_{_cnacl}",
-                    )
-                    # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
-                    # if solver is not None:
-                    #     plot_instance(solver, 1.0e-6, "tmp/instance")
-                    future = pool.submit(
-                        test_tmp,
-                        _t=_t,
-                        _cnacl=_cnacl,
-                        _ph=_ph,
-                        _poros=_poros,
-                        xsmec=xsmec,
-                        ayz_pore=ayz_pore,
-                        adj_rate=adj_rate,
-                        save_dir=dir_name,
-                        log_id=cou,
-                    )
-                    cou += 1
-                    # result_ls.append(solver.cond_x)
-                # fig, ax = plt.subplots()
-                # ax.plot(cnacl_ls, result_ls)
-                # plt.show() #!
-        pool.shutdown(wait=True)
+        # pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+        # cou = 0
+        # for ayz_pore in range_pore_ls:
+        #     print("=========")  #!
+        #     print("ayz_pore:")
+        #     print(ayz_pore)  #!
+        #     for adj_rate in reversed(adj_rate_ls):
+        #         print("=========")
+        #         print("adj_rate:")
+        #         print(adj_rate)  #!
+        #         for _cnacl in reversed(cnacl_ls):
+        #             print(f"_cnacl: {_cnacl}")  #!
+        #             dir_name = path.join(
+        #                 test_dir(),
+        #                 "pickle",
+        #                 str(_id),
+        #                 f"{ayz_pore}_{adj_rate}_{_cnacl}",
+        #             )
+        #             solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
+        #             if solver is not None:
+        #                 plot_instance(solver, 1.0e-6, "tmp/instance")
+        # #             future = pool.submit(
+        # #                 test_tmp,
+        # #                 _t=_t,
+        # #                 _cnacl=_cnacl,
+        # #                 _ph=_ph,
+        # #                 _poros=_poros,
+        # #                 xsmec=xsmec,
+        # #                 ayz_pore=ayz_pore,
+        # #                 adj_rate=adj_rate,
+        # #                 save_dir=dir_name,
+        # #                 log_id=cou,
+        # #             )
+        # #             cou += 1
+        # #             # result_ls.append(solver.cond_x)
+        # #         # fig, ax = plt.subplots()
+        # #         # ax.plot(cnacl_ls, result_ls)
+        # #         # plt.show() #!
+        # # pool.shutdown(wait=True)
     return
 
 
@@ -1025,8 +1025,12 @@ def analysis_WS_result():
         # obs
         _ls = ws_result[int(_id)]
         ax.scatter(_ls[0], _ls[1])
-        ax.legend()
-        ax.set_xticks([0, 1, 2, 3, 4, 5])
+        # save
+        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.set_xlabel("Salinity (Mol)")
+        ax.set_ylabel("Conductivity (S/m)")
+        ax.grid()
+        # ax.set_xticks([0, 1, 2, 3, 4, 5])
         fig.savefig(f"./test/{_id}_ayz.png", bbox_inches="tight", dpi=200)
         plt.clf()
         plt.close()
@@ -1056,8 +1060,9 @@ def analysis_WS_result():
             # obs
             _ls = ws_result[int(_id)]
             ax.scatter(_ls[0], _ls[1])
-            ax.set_xticks([0, 1, 2, 3, 4, 5])
-            ax.legend()
+            # save
+            ax.grid()
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             fig.savefig(f"./test/{_id}_{ayz}.png", bbox_inches="tight", dpi=200)
             plt.clf()
             plt.close()
@@ -1150,5 +1155,5 @@ if __name__ == "__main__":
     # test_quartz()
     # Grieser_and_Healy()
     compare_WS_shaly_1()
-    analysis_WS_result()
+    # analysis_WS_result()
     # test_poros_distribution()

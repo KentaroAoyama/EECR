@@ -20,6 +20,7 @@ def plot_smec_frac_cond(
     save_pth: str,
     label_val_ls: List[float or int] = None,
     error_bar_ls: List = None,
+    xlabel: str = None
 ):
     assert len(smectite_frac_ls) == len(cond_ls)
     if label_val_ls is not None:
@@ -58,7 +59,8 @@ def plot_smec_frac_cond(
             _x, _y, _e, label=str(_label), color=cm.jet(float(i) / len(keys_sorted))
         )
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
-    ax.set_xlabel("Smectite Fraction")
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
     ax.set_ylabel("Conductivity (S/m)")
     fig.savefig(save_pth, dpi=200, bbox_inches="tight")
 

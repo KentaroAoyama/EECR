@@ -7,13 +7,14 @@ from logging import Logger
 
 import pickle
 import numpy as np
+import iapws
 
 from constants import (
     ion_props_default,
     Species,
     IonProp,
     DISSOSIATION_WATER,
-    calc_dielectric_const_water,
+    DIELECTRIC_VACUUM,
 )
 from msa import calc_mobility
 
@@ -27,6 +28,7 @@ class Fluid:
 
 class NaCl(Fluid):
     """Class of fluid dissolved only in NaCl"""
+
     # pylint: disable=dangerous-default-value
     def __init__(
         self,
@@ -81,24 +83,35 @@ class NaCl(Fluid):
             _prop[IonProp.Concentration.name] = cnacl
             _prop[IonProp.Activity.name] = cnacl
 
-        # Calculate sodium ion mobility by MSA model
-        msa_props = calc_mobility(ion_props, self.temperature, self.pressure)
+        # Calculate sodium ion mobility by MSA model and empirical findings of 
+        # Revil et al. (1998)
+        tempe_ref: float = 298.15
+        msa_props = calc_mobility(ion_props, tempe_ref, self.pressure)
         for _s, _prop in ion_props.items():
             if _s not in msa_props:
                 continue
             _m = msa_props[_s]["mobility"]
-            _prop[IonProp.MobilityInfDiffuse.name] = _m * 0.1
+            # Under a wide range of NaCl concentrations, the mobility of ions in the electric
+            # double layer is 1/10, and linear temperature depandence regardless of the species.
+            _m *= 0.1 * (1. + 0.037 * (temperature - tempe_ref))
+
+            _prop[IonProp.MobilityInfDiffuse.name] = _m
             # based on https://doi.org/10.1029/2008JB006114
-            _prop[IonProp.MobilityTrunDiffuse.name] = _m * 0.1
+            _prop[IonProp.MobilityTrunDiffuse.name] = _m
             if _s == Species.H.name:
                 _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
                     IonProp.MobilityTrunDiffuse.name
                 ]
             # based on https://doi.org/10.1016/j.jcis.2015.03.047
-            _prop[IonProp.MobilityStern.name] = _m * 0.1
+            _prop[IonProp.MobilityStern.name] = _m
 
         self.ion_props: Dict = ion_props
-        self.dielec_water = calc_dielectric_const_water(self.temperature)
+
+        # get dielectric constant
+        water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
+        self.dielec_water: float = (
+            iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
+        )
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -191,3 +204,6 @@ class NaCl(Fluid):
         """
         with open(_pth, "wb") as pkf:
             pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)
+
+if __name__ == "__main__":
+    pass

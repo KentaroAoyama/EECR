@@ -954,6 +954,20 @@ def compare_WS_shaly_1():
         # # pool.shutdown(wait=True)
     return
 
+def test_mobility_2():
+    cnacl_ls = np.logspace(-3, 0.3, 5, base=10).tolist()
+    tempe_ls = np.linspace(298.15, 500., 10).tolist()
+    dct = {}
+    for t in tempe_ls:
+        for cnacl in cnacl_ls:
+            nacl = NaCl(temperature=t, cnacl=cnacl)
+            dct.setdefault(t, []).append(nacl.ion_props["Na"]["MobilityInfDiffuse"])
+    
+    fig, ax = plt.subplots()
+    for t, ls in dct.items():
+        ax.plot(cnacl_ls, ls, label = t)
+    ax.legend()
+    fig.savefig("./test/mobility.png", dpi=200)
 
 def analysis_WS_result():
     cnacl_ws = [

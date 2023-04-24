@@ -533,7 +533,7 @@ def calc_mobility(
     sigma_ij: Dict[Tuple, float] = {}
     # set basic ionic propeties
     t_std = 298.15
-    water = iapws.IAPWS97(P=const.PRESSURE * 1.0e-6, T=temperature)
+    water = iapws.IAPWS97(P=pressure * 1.0e-6, T=temperature)
     assert water.phase == "Liquid", f"water.phase: {water.phase}"
     _eta_t: float = iapws._iapws._Viscosity(water.rho, T=temperature) / water.rho
     water_298 = iapws.IAPWS97(P=pressure * 1.0e-6, T=t_std)

@@ -97,7 +97,7 @@ def __calc_delta(
     return 1.0 - 6.0 / pi * _sum
 
 
-def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float) -> float:
+def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float, _dielec: float) -> float:
     """Left hand side - Right hand side of eq.(18) in Roger et al. (2009).
 
     Args:
@@ -105,15 +105,15 @@ def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float) -> float:
         _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
         _t (float): Absolute temperature (K)
+        _dielec (float): Dielectric constant (F/m)
 
     Returns:
         float: Left hand side - Right hand side of eq.(18) in Roger et al. (2009).
     """
     _e: float = const.ELEMENTARY_CHARGE
-    _dielec_water: float = const.calc_dielectric_const_water(_t)
     _kb: float = const.BOLTZMANN_CONST
     left = 4.0 * __gamma**2
-    r_coeff: float = _e**2 / (_dielec_water * _kb * _t)
+    r_coeff: float = _e**2 / (_dielec * _kb * _t)
     _pn: float = __calc_pn(__gamma, _msa_props)
     _delta: float = __calc_delta(_msa_props)
     _sum: float = 0.0
@@ -133,13 +133,14 @@ def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float) -> float:
     return left - right
 
 
-def __calc_gamma(_msa_props: Dict, _t: float) -> float:
+def __calc_gamma(_msa_props: Dict, _t: float, _dielec: float) -> float:
     """Calculate Γ in Roger et al. (2009). Solving eq.(18) by bisection method.
 
     Args:
         _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
         _t (float): Absolute temperature (K)
+        _dielec (float): Dielectric constant of water (F/m)
 
     Returns:
         float: Γ
@@ -151,7 +152,7 @@ def __calc_gamma(_msa_props: Dict, _t: float) -> float:
             continue
         _cou += 1
     assert _cou <= 4
-    __callback = partial(__calc_eq18, _msa_props=_msa_props, _t=_t)
+    __callback = partial(__calc_eq18, _msa_props=_msa_props, _t=_t, _dielec=_dielec)
     return bisect(__callback, 0.0, 1.0e14)
 
 
@@ -175,7 +176,9 @@ def __calc_di(
     return _r1 + _r2
 
 
-def __calc_dvhydi(_msa_props: Dict, _t: float, _p: float, _s: str) -> float:
+def __calc_dvhydi(
+    _msa_props: Dict, _t: float, _p: float, _dielec: float, _s: str
+) -> float:
     """Calculate δdhydi in Roger et al. (2009)
 
     Args:
@@ -183,13 +186,14 @@ def __calc_dvhydi(_msa_props: Dict, _t: float, _p: float, _s: str) -> float:
                 values are properties of dict.
         _t (float): Absolute temperature (K)
         _p (float): Absolute pressure (Pa)
+        _dielec (float): Dielectric constant of water (F/m)
         _s (str): Chemical species (names of const.Species)
 
     Returns:
         float: δdhydi
     """
     _e: float = const.ELEMENTARY_CHARGE
-    _gamma: float = __calc_gamma(_msa_props, _t)
+    _gamma: float = __calc_gamma(_msa_props, _t, _dielec)
     _pn: float = __calc_pn(_gamma, _msa_props)
     _delta: float = __calc_delta(_msa_props)
     _z = _msa_props[_s]["z"]
@@ -374,25 +378,25 @@ def __calc_qp(_alphap: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -
     return _omega_bar * _sum
 
 
-def __calc_kappa(_msa_props: Dict[str, Dict], _t: float) -> float:
+def __calc_kappa(_msa_props: Dict[str, Dict], _t: float, _dielec: float) -> float:
     """Calculate κ in Roger et al. (2009)
 
     Args:
         _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
         _t (float): Absolute temperature (K)
+        _dielec (float): Dielectric constant (F/m)
 
     Returns:
         float: κ
     """
-    _dielec_water = const.calc_dielectric_const_water(_t)
     _kb = const.BOLTZMANN_CONST
     _sum = 0.0
     for _, _prop in _msa_props.items():
         _nl = _prop["n"]
         _el = _prop["e"]
         _sum += _nl * _el**2
-    return sqrt(_sum / (_dielec_water * _kb * _t))
+    return sqrt(_sum / (_dielec * _kb * _t))
 
 
 def __calc_dkkkk(
@@ -401,6 +405,7 @@ def __calc_dkkkk(
     ki_pk: Dict[Tuple, float],
     sigma_ij: Dict[Tuple, float],
     _t: float,
+    _dielec: float,
     _kappa: float,
     _gamma: float,
     _y: float,
@@ -414,6 +419,7 @@ def __calc_dkkkk(
         ki_pk (Dict[Tuple, float]): χpk in eq.(4)
         sigma_ij (Dict[Tuple, float]): σij in eq.(4)
         _t (float): Absolute temperature (K) in eq.(4)
+        _dielec (float): Dielectric constant of water (F/m)
         _kappa (float): κ in in eq.(4)
         _gamma (float): Γ in eq.(4)
         _y (float): Y in eq.(4)
@@ -421,7 +427,6 @@ def __calc_dkkkk(
     Returns:
         float: δkk/kk
     """
-    _dielec_water: float = const.calc_dielectric_const_water(_t)
     _coeff = -1.0 * _kappa**2 * _msa_props[_k]["e"] / 3.0
     _s_ls: List[str] = list(_msa_props.keys())
     _sum = 0.0
@@ -454,7 +459,7 @@ def __calc_dkkkk(
                         _qp,
                         _kappa,
                         _sigmaij,
-                        _dielec_water,
+                        _dielec,
                         _gamma,
                         _y,
                     )
@@ -493,7 +498,9 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
 
 
 def calc_mobility(
-    ion_props: Dict, temperature: float, pressure: float = 2.0e6
+    ion_props: Dict,
+    temperature: float,
+    pressure: float = 2.0e6,
 ) -> OrderedDict[str, Dict]:
     """Calculate the mobility of each ion based on Roger et al. (2009)
 
@@ -536,6 +543,7 @@ def calc_mobility(
     water = iapws.IAPWS97(P=pressure * 1.0e-6, T=temperature)
     assert water.phase == "Liquid", f"water.phase: {water.phase}"
     _eta_t: float = iapws._iapws._Viscosity(water.rho, T=temperature) / water.rho
+    _dielec: float = iapws._iapws._Dielectric(water.rho, T=temperature)
     water_298 = iapws.IAPWS97(P=pressure * 1.0e-6, T=t_std)
     _eta_298: float = iapws._iapws._Viscosity(water_298.rho, T=t_std) / water_298.rho
     d_coeff = _eta_298 * temperature / (_eta_t * t_std)
@@ -637,10 +645,10 @@ def calc_mobility(
         _prop["qp"] = __calc_qp(_alphap, _omega_mean, _omega_ls, _t_ls)
 
     # kappa (κ)
-    _kappa: float = __calc_kappa(_msa_props, temperature)
+    _kappa: float = __calc_kappa(_msa_props, temperature, _dielec)
 
     # gamma (Γ)
-    _gamma: float = __calc_gamma(_msa_props, temperature)
+    _gamma: float = __calc_gamma(_msa_props, temperature, _dielec)
 
     # Y
     _y = __calc_y(_msa_props, _kappa, _gamma)
@@ -648,9 +656,9 @@ def calc_mobility(
     # dkkkk (δkk/kk), dvhydi (δvhydi)
     for _s, _prop in _msa_props.items():
         _prop["dkkkk"] = __calc_dkkkk(
-            _s, _msa_props, ki_pk, sigma_ij, temperature, _kappa, _gamma, _y
+            _s, _msa_props, ki_pk, sigma_ij, temperature, _dielec, _kappa, _gamma, _y
         )
-        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, pressure, _s)
+        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, pressure, _dielec, _s)
 
     # mobility
     for _s, _prop in _msa_props.items():

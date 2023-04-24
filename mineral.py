@@ -68,7 +68,7 @@ class Quartz:
         # set η
         self.eta = sqrt(
             8000.0
-            * const.calc_dielectric_const_water(self.temperature)
+            * nacl.get_dielec_water()
             * const.BOLTZMANN_CONST
             * self.temperature
             * const.AVOGADRO_CONST

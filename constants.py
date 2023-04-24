@@ -9,14 +9,13 @@ def calc_standard_gibbs_energy(k_25: float) -> float:
 def calc_equibilium_const(dg_25, temperature) -> float:
     return exp(-dg_25 / (GAS_CONST * temperature))
 
-# TODO: 圧力依存性を考慮
-# e.g., https://www.jstage.jst.go.jp/article/jshpreview/11/2/11_2_99/_pdf
-def calc_dielectric_const_water(temperature: float) -> float:
-    # 十分低い周波数における値であることに注意!
-    # http://www.isc.meiji.ac.jp/~nkato/Useful_Info.files/water.html
-    t = temperature - 273.15
-    coeff = 88.15 - 0.414 * t + 0.131 * 1.0e-2 * t**2 - 0.046 * 1.0e-4 * t**3
-    return coeff * DIELECTRIC_VACUUM
+
+# def calc_dielectric_const_water(temperature: float) -> float:
+#     # 十分低い周波数における値であることに注意!
+#     # http://www.isc.meiji.ac.jp/~nkato/Useful_Info.files/water.html
+#     t = temperature - 273.15
+#     coeff = 88.15 - 0.414 * t + 0.131 * 1.0e-2 * t**2 - 0.046 * 1.0e-4 * t**3
+#     return coeff * DIELECTRIC_VACUUM
 
 
 DIELECTRIC_VACUUM = 8.8541878128e-12

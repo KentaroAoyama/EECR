@@ -46,8 +46,8 @@ class Phyllosilicate:
     It has a function to calculate the conductivity of phyllosilicate particles and
     the member variables necessary for the calculation.
 
-    To calculate the surface potential, we use the equation proposed by
-    Gonçalvès et al. (2007). The equation has been modified in the following points:
+    To calculate the surface potential, we use the equations proposed by
+    Gonçalvès et al. (2007). The equations have been modified in the following points:
         1. In eq.(11), add Avogadro's number and a factor of 1000 to match units of concentration
         2. The units of Qi in eq.(16) were modified from charges nm-2 to C/m2
         3. The phib in eq.(23) was modified to phi0.

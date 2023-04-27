@@ -749,7 +749,7 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     # set solver_input
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
-        shape=(10, 10, 10),
+        shape=(20, 20, 20),
         edge_length=5.0e-8,
         volume_frac_dict=OrderedDict(
             [
@@ -913,45 +913,46 @@ def compare_WS_shaly_1():
         range_pore_ls: List = np.linspace(0.5, 2., 10).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
-        # pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
-        # cou = 0
-        # for ayz_pore in range_pore_ls:
-        #     print("=========")  #!
-        #     print("ayz_pore:")
-        #     print(ayz_pore)  #!
-        #     for adj_rate in reversed(adj_rate_ls):
-        #         print("=========")
-        #         print("adj_rate:")
-        #         print(adj_rate)  #!
-        #         for _cnacl in reversed(cnacl_ls):
-        #             print(f"_cnacl: {_cnacl}")  #!
-        #             dir_name = path.join(
-        #                 test_dir(),
-        #                 "pickle",
-        #                 str(_id),
-        #                 f"{ayz_pore}_{adj_rate}_{_cnacl}",
-        #             )
-        #             solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
-        #             if solver is not None:
-        #                 plot_instance(solver, 1.0e-6, "tmp/instance")
-        # #             future = pool.submit(
-        # #                 test_tmp,
-        # #                 _t=_t,
-        # #                 _cnacl=_cnacl,
-        # #                 _ph=_ph,
-        # #                 _poros=_poros,
-        # #                 xsmec=xsmec,
-        # #                 ayz_pore=ayz_pore,
-        # #                 adj_rate=adj_rate,
-        # #                 save_dir=dir_name,
-        # #                 log_id=cou,
-        # #             )
-        # #             cou += 1
-        # #             # result_ls.append(solver.cond_x)
-        # #         # fig, ax = plt.subplots()
-        # #         # ax.plot(cnacl_ls, result_ls)
-        # #         # plt.show() #!
-        # # pool.shutdown(wait=True)
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+        cou = 0
+        for ayz_pore in range_pore_ls:
+            print("=========")  #!
+            print("ayz_pore:")
+            print(ayz_pore)  #!
+            for adj_rate in reversed(adj_rate_ls):
+                print("=========")
+                print("adj_rate:")
+                print(adj_rate)  #!
+                for _cnacl in reversed(cnacl_ls):
+                    print(f"_cnacl: {_cnacl}")  #!
+                    dir_name = path.join(
+                        test_dir(),
+                        "pickle",
+                        str(_id),
+                        f"{ayz_pore}_{adj_rate}_{_cnacl}",
+                    )
+                    solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
+                    print(solver.cond_x) #!
+                    # if solver is not None:
+                    #     plot_instance(solver, 1.0e-6, "tmp/instance")
+                    # future = pool.submit(
+                    #     test_tmp,
+                    #     _t=_t,
+                    #     _cnacl=_cnacl,
+                    #     _ph=_ph,
+                    #     _poros=_poros,
+                    #     xsmec=xsmec,
+                    #     ayz_pore=ayz_pore,
+                    #     adj_rate=adj_rate,
+                    #     save_dir=dir_name,
+                    #     log_id=cou,
+                    # )
+                    # cou += 1
+                    # result_ls.append(solver.cond_x)
+                # fig, ax = plt.subplots()
+                # ax.plot(cnacl_ls, result_ls)
+                # plt.show() #!
+        pool.shutdown(wait=True)
     return
 
 def test_mobility_2():
@@ -1165,9 +1166,9 @@ if __name__ == "__main__":
     # Leroy_Revil_2004_fig9()
     # goncalves_fig6()
     # test_sen_and_goode_1992()
-    test_mobility()
+    # test_mobility()
     # test_quartz()
     # Grieser_and_Healy()
-    # compare_WS_shaly_1()
-    # analysis_WS_result()
+    compare_WS_shaly_1()
+    analysis_WS_result()
     # test_poros_distribution()

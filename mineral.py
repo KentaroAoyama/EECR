@@ -51,6 +51,7 @@ class Quartz:
         self.potential_stern: float = None
         self.ion_props: Dict = nacl.get_ion_props()
         self.temperature: float = nacl.get_temperature()
+        self.dielec: float = nacl.get_dielec_water()
         self.logger: Logger = logger
         # set pH
         self.ph = -1.0 * log10(
@@ -102,7 +103,7 @@ class Quartz:
         _if *= 0.5
         _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
         _bottom = (
-            const.calc_dielectric_const_water(self.temperature)
+            self.dielec
             * const.BOLTZMANN_CONST
             * self.temperature
         )

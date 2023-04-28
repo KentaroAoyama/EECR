@@ -788,7 +788,7 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     # set solver_input
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
-        shape=(20, 20, 20),
+        shape=(10, 10, 10),
         edge_length=5.0e-8,
         volume_frac_dict=OrderedDict(
             [
@@ -970,23 +970,23 @@ def compare_WS_shaly_1():
                         str(_id),
                         f"{ayz_pore}_{adj_rate}_{_cnacl}",
                     )
-                    solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
-                    print(solver.cond_x) #!
+                    # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
+                    # print(solver.cond_x) #!
                     # if solver is not None:
                     #     plot_instance(solver, 1.0e-6, "tmp/instance")
-                    # future = pool.submit(
-                    #     test_tmp,
-                    #     _t=_t,
-                    #     _cnacl=_cnacl,
-                    #     _ph=_ph,
-                    #     _poros=_poros,
-                    #     xsmec=xsmec,
-                    #     ayz_pore=ayz_pore,
-                    #     adj_rate=adj_rate,
-                    #     save_dir=dir_name,
-                    #     log_id=cou,
-                    # )
-                    # cou += 1
+                    future = pool.submit(
+                        test_tmp,
+                        _t=_t,
+                        _cnacl=_cnacl,
+                        _ph=_ph,
+                        _poros=_poros,
+                        xsmec=xsmec,
+                        ayz_pore=ayz_pore,
+                        adj_rate=adj_rate,
+                        save_dir=dir_name,
+                        log_id=cou,
+                    )
+                    cou += 1
                     # result_ls.append(solver.cond_x)
                 # fig, ax = plt.subplots()
                 # ax.plot(cnacl_ls, result_ls)
@@ -1184,6 +1184,31 @@ def test_poros_distribution():
 def test_levy_etal_2018():
     pass
 
+def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
+    nacl = NaCl()
+    quartz = Quartz(nacl)
+    solver_input = FEM_Input_Cube()
+    solver_input.set_ib()
+    solver_input.femat()
+    solver_input.create_pixel_by_macro_variable((n,n,n),
+                                                5.0e-8,
+                                                {nacl: 0.2,
+                                                 quartz: 0.8,},
+                                                range_dct,
+                                                seed,
+                                                )
+    solver = FEM_Cube(solver_input)
+    solver.run(100, 30, 1.0e-9)
+
+    solver.save(savepth)
+
+def test_elementary_number():
+    num_ls = np.linspace(10, 30, 5).tolist()
+    pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+    for n in num_ls:
+        
+    pass
+
 
 def main():
     return
@@ -1207,16 +1232,16 @@ if __name__ == "__main__":
     # Revil_etal_fig2()
 
     # Grieser_and_Healy()
-    # compare_WS_shaly_1()
-    # analysis_WS_result()
+    compare_WS_shaly_1()
+    analysis_WS_result()
     # test_poros_distribution()
 
-    nacl = NaCl()
-    smectite = Smectite(nacl)
-    smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse()
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
-    print(smectite.cond_intra)
-    print(smectite.get_cond_infdiffuse()) #!
-    print(smectite.get_cond_tensor()) #!
+    # cnacl_ls = np.logspace(-3, 0.7, 10, base=10.).tolist()
+    # for cnacl in cnacl_ls:
+    #     nacl = NaCl(cnacl=cnacl)
+    #     smectite = Smectite(nacl)
+    #     smectite.calc_cond_infdiffuse()
+    #     smectite.calc_potentials_and_charges_truncated()
+    #     print("==============")
+    #     print(smectite.calc_cond_infdiffuse())
+    #     print(smectite.get_double_layer_length())

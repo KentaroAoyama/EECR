@@ -85,7 +85,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     dirname += f"_temperature-{temperature}"
     dirname += f"_cnacl-{cnacl}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join(getcwd(), "output", "pickle", dirname, str(seed))
+    outdir_seed = path.join(getcwd(), "output2", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
@@ -228,7 +228,7 @@ def experiment():
 
 from tqdm import tqdm
 def output_fig():
-    pickle_dir = path.join(getcwd(), "output", "pickle")
+    pickle_dir = path.join(getcwd(), "output2", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -262,7 +262,7 @@ def output_fig():
         _ye = [np.mean(cond_ave_ls), np.std(cond_ave_ls)]
         conditions_ye.setdefault(tuple(val_ls), _ye)
 
-    fig_dir = path.join(getcwd(), "output", "fig")
+    fig_dir = path.join(getcwd(), "output2", "fig")
     makedirs(fig_dir, exist_ok=True)
     # plot temperature variation
     tempe_dir = path.join(fig_dir, "temperature")
@@ -348,6 +348,6 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    experiment()
+    # experiment()
     output_fig()
     # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

@@ -83,7 +83,7 @@ class NaCl(Fluid):
             _prop[IonProp.Concentration.name] = cnacl
             _prop[IonProp.Activity.name] = cnacl
 
-        # Calculate sodium ion mobility by MSA model and empirical findings of 
+        # Calculate sodium ion mobility by MSA model and empirical findings of
         # Revil et al. (1998)
         tempe_ref: float = 298.15
         msa_props = calc_mobility(ion_props, tempe_ref, self.pressure)
@@ -93,7 +93,7 @@ class NaCl(Fluid):
             _m = msa_props[_s]["mobility"]
             # Under a wide range of NaCl concentrations, the mobility of ions in the electric
             # double layer is 1/10, and linear temperature depandence regardless of the species.
-            _m *= 0.1 * (1. + 0.037 * (temperature - tempe_ref))
+            _m *= 0.1 * (1.0 + 0.037 * (temperature - tempe_ref))
 
             _prop[IonProp.MobilityInfDiffuse.name] = _m
             # based on https://doi.org/10.1029/2008JB006114
@@ -186,6 +186,14 @@ class NaCl(Fluid):
         """
         return self.dielec_water
 
+    def get_cond(self) -> float:
+        """Getter for the electrical conductivity of fluid
+
+        Returns:
+            float: electrical conductivity (S/m)
+        """
+        return self.conductivity
+
     def get_cond_tensor(self) -> np.ndarray or None:
         """Getter for the conductivity tensor
 
@@ -204,6 +212,7 @@ class NaCl(Fluid):
         """
         with open(_pth, "wb") as pkf:
             pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)
+
 
 if __name__ == "__main__":
     pass

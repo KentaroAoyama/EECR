@@ -63,34 +63,33 @@ def Revil_etal_1998_fig3():
     # すると, この結果で説明がつく. コード側に不備は確認できなかった (23/01/11)
     temperature = 298.15
     ph = 7.0
-    cnacl_interval = (2.4 - 0.01) / 100
-    cnacl_ls = [cnacl_interval * (i + 1) for i in range(100)]
+    cnacl_ls = np.logspace(-3, 0.6, 10, base=10.).tolist()
     kaolinite_cond_ls: List = []
     smectite_cond_ls: List = []
+    cond_fluid_ls: List = []
     for cnacl in cnacl_ls:
         print(f"cnacl: {cnacl}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
+        cond_fluid_ls.append(nacl.sen_and_goode_1992())
         # Kaolinite
         kaolinite = Kaolinite(nacl=nacl, xd=None, logger=None,)
         kaolinite.calc_potentials_and_charges_inf()
         kaolinite.calc_cond_infdiffuse()
-        kaolinite_cond_ls.append(kaolinite.cond_stern_plus_edl)
+        kaolinite_cond_ls.append(kaolinite.cond_infdiffuse)
         # Smectite
         smectite = Smectite(nacl=nacl, layer_width=1.14e-9,)
         smectite.calc_potentials_and_charges_truncated()
         smectite.calc_cond_interlayer()
-        smectite_cond_ls.append(smectite.cond_stern_plus_edl)
+        smectite_cond_ls.append(smectite.cond_intra)
     # plot
     fig, ax = plt.subplots()
-    # TODO: cnaclを導電率に変換する
-    ax.plot(cnacl_ls, smectite_cond_ls, label="Smectite (Inter Layer)")
+    ax.plot(cond_fluid_ls, smectite_cond_ls, label="Smectite (Inter Layer)")
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.plot(cnacl_ls, kaolinite_cond_ls, label="Kaolinite (Diffuse Layer)")
+    ax.plot(cond_fluid_ls, kaolinite_cond_ls, label="Kaolinite (Diffuse Layer)")
     ax.legend()
     _pth = path.join(test_dir(), "Revil_etal_1998_fig3.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
-
 
 def Leroy_Revil_2004_fig4():
     # Cnacl vs zeta potential
@@ -131,9 +130,13 @@ def Leroy_Revil_2004_fig5_a():
         kaolinite = Kaolinite(nacl=nacl)
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
+    ex_x = [3.5, 3.770353303, 3.880952381, 4.077572965, 4.089861751, 4.089861751, 4.212749616, 4.470814132, 4.37250384, 4.470814132, 5.773425499, 5.748847926, 6.768817204, 6.486175115, 6.289554531, 6.19124424, 6.240399386, 6.473886329, 7.506144393, 7.887096774, 7.899385561, 10.78725038, 10.72580645, 10.79953917, 11.13133641,]
+    ex_y = [9.099236641, 6.427480916, 6.748091603, 5.572519084, 4.183206107, 1.297709924, 0.870229008, 0.549618321, -6.824427481, -7.893129771, -16.65648855, -18.15267176, -23.81679389, -23.92366412, -24.88549618, -27.98473282, -28.83969466, -30.33587786, -33.00763359, -30.1221374, -28.09160305, -36.21374046, -37.49618321, -39.41984733, -45.40458015]
+
     # plot
     fig, ax = plt.subplots()
     ax.plot(pH_ls, potential_zeta_ls)
+    ax.scatter(ex_x, ex_y)
     ax.invert_yaxis()
     # ax.legend()
     _pth = path.join(test_dir(), "Leroy_Revil_2004_fig5_a.png")
@@ -145,6 +148,7 @@ def Leroy_Revil_2004_fig8():
     # pH vs zeta potential for smectite
     # Qi以外Fig.8の定数に変更したところ、よく整合した.
     # -10mVずれてしまった. このcommitでおかしくなった：https://github.com/KentaroAoyama/EECR/commit/d455854b3b21b2de4411e700bc78805c3c1da992
+    print("Test: Leroy_Revil_2004_fig8")
     pH_ls = [2, 3, 4, 5, 6, 7, 8, 9, 10]
     cnacl = 1.0e-2
     temperature = 298.15
@@ -168,7 +172,7 @@ def Leroy_Revil_2004_fig8():
 def Leroy_Revil_2004_fig9():
     # pH vs zeta potential for smectite
     # Qi以外Fig.8の定数に変更したところ、よく整合した.
-    pH_ls = [3, 4, 5, 6, 7, 8, 9, 10, 11]
+    pH_ls = [3, 4, 5, 6, 7, 8, 9, 10, 11,]
     cnacl = 2.0e-3
     temperature = 298.15
     potential_zeta_ls = []
@@ -179,15 +183,50 @@ def Leroy_Revil_2004_fig9():
         kaolinite = Kaolinite(nacl=nacl,)
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
-        cond_fluid = nacl.sen_and_goode_1992()
-        specific_cond_ls.append(kaolinite.calc_specific_surface_cond_inf(cond_fluid)[0])
+        kaolinite.calc_cond_infdiffuse()
+        specific_cond_ls.append(kaolinite.cond_infdiffuse * kaolinite.get_double_layer_length())
+    ex_x = [8.941176471, 6.558823529, 4.882352941, 6.029411765, 4, 1.176470588, 0.382352941, -7.117647059, -8.088235294, -17.08823529, -18.05882353, -27.94117647, -25.11764706, -23.88235294, -24.32352941, -29, -28.02941176, -32.88235294, -30.14705882, -30.32352941, -36.5, -37.55882353, -39.32352941, -45.32352941]
+    ex_y = [0.27359882, 0.211651917, 0.221976401, 0.258112094, 0.35619469, 0.268436578, 0.314896755, 0.309734513, 1.063421829, 0.996312684, 1.31120944, 1.321533923, 1.651917404, 1.719026549, 1.806784661, 1.651917404, 1.817109145, 1.806784661, 1.997787611, 2.075221239, 2.085545723, 2.689528024, 2.803097345, 2.999262537]
+    ex_y = [i*1.0e-9 for i in ex_y]
     # plot
     fig, ax = plt.subplots()
     ax.plot(potential_zeta_ls, specific_cond_ls)
+    ax.scatter(ex_x, ex_y)
     ax.invert_xaxis()
     _pth = path.join(test_dir(), "Leroy_Revil_2004_fig9.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+def Revil_etal_fig2():
+    cnacl_ls: List = np.logspace(-2, 0.7, 20, base=10.0).tolist()
+    nacl_ref = NaCl(cnacl=0.577, temperature=273.15+25., ph=7.0)
+    nacl_ref.sen_and_goode_1992()
+    r_ls = np.linspace(1.0e-9, 13.0e-9, 10).tolist() #!
+    r_result: Dict = {}
+    for _r in r_ls:
+        smectite = Smectite(nacl=nacl_ref, layer_width=_r)
+        smectite.calc_potentials_and_charges_truncated()
+        base = smectite.calc_cond_interlayer()
+        _ls = r_result.setdefault(_r, [[],[]])
+        for i, cnacl in enumerate(cnacl_ls):
+            print(f"cnacl: {cnacl}")  #!
+            nacl = NaCl(cnacl=cnacl, ph=7.0)
+            nacl.sen_and_goode_1992()
+            smectite = Smectite(nacl=nacl, layer_width=_r)
+            # truncated
+            smectite.calc_potentials_and_charges_truncated()
+            _ls[0].append(nacl.conductivity)
+            _ls[1].append(smectite.calc_cond_interlayer() / base)
+    ex_x = [0.184519667, 0.320670798, 0.553585104, 0.955673135, 1.617182583, 2.736583684, 4.449465081, 6.125092764, 8.101527856, 9.505377372, ]
+    ex_y = [1.063802817, 1.001549296, 1.021690141, 0.979577465, 0.992394366, 0.996056338, 0.977746479, 0.99971831, 1.050985915, 1.096760563, ]
+    fig, ax = plt.subplots()
+    for i, (_r, _ls) in enumerate(r_result.items()):
+        ax.plot(_ls[0], _ls[1], label=_r, color=cm.jet(float(i) / len(r_result)))
+    ax.scatter(ex_x, ex_y)
+    ax.legend()
+    ax.set_xscale("log")
+    ax.set_ylim(0, 1.3)
+    plt.show()
+    fig.savefig("./test/Revil_etal_fig2.png", dpi=200)
 
 def goncalves_fig6():
     # layer width vs zeta potential
@@ -1095,9 +1134,6 @@ def tmp():
     pass
 
 
-import tortuosity
-
-
 def test_poros_distribution():
     nacl = NaCl()
     nacl.sen_and_goode_1992()
@@ -1168,7 +1204,19 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992()
     # test_mobility()
     # test_quartz()
+    # Revil_etal_fig2()
+
     # Grieser_and_Healy()
-    compare_WS_shaly_1()
-    analysis_WS_result()
+    # compare_WS_shaly_1()
+    # analysis_WS_result()
     # test_poros_distribution()
+
+    nacl = NaCl()
+    smectite = Smectite(nacl)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_infdiffuse()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    print(smectite.cond_intra)
+    print(smectite.get_cond_infdiffuse()) #!
+    print(smectite.get_cond_tensor()) #!

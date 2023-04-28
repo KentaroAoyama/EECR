@@ -8,8 +8,9 @@ from sys import float_info
 from os import path, PathLike
 import math
 from copy import deepcopy
-import pickle
+from functools import partial
 
+import pickle
 import numpy as np
 from scipy.integrate import quad
 
@@ -171,7 +172,7 @@ class Phyllosilicate:
         self.logger = logger
 
         # Calculate frequently used constants and parameters.
-        self.init_default()
+        self.__init_default()
 
         # START DEBUGGING
         if self.logger is not None:
@@ -180,7 +181,7 @@ class Phyllosilicate:
                 _msg = f"name: {name}, value: {value}"
                 self.logger.debug(_msg)
 
-    def init_default(self) -> None:
+    def __init_default(self) -> None:
         """Calculate constants and parameters commonly used when computing
         electrical parameters
         """
@@ -193,7 +194,6 @@ class Phyllosilicate:
 
         # Ionic strength (based on Leroy & Revil, 2004)
         # Note that the definition of ionic strength differs between Gonçalvès et al (2007)
-        # and Leroy & Revil (2004).
         strength = 0.0
         for elem, props in self.ion_props.items():
             if elem in (Species.Na.name, Species.Cl.name):
@@ -229,6 +229,7 @@ class Phyllosilicate:
 
     def __set_constant_for_smectite_inf(self) -> None:
         """Set the constants for the case of smectite and infinite diffuse layer"""
+        self.qi = -1.8 * 1.0e18 * const.ELEMENTARY_CHARGE
         self.k1: float = const.calc_equibilium_const(
             const.dg_aloh_smec_inf, self.temperature
         )
@@ -246,6 +247,7 @@ class Phyllosilicate:
 
     def __set_constant_for_smectite_truncated(self) -> None:
         """Set the constants for the case of smectite and midway truncation of the diffuse layer"""
+        self.qi = -1.0 * 1.0e18 * const.ELEMENTARY_CHARGE
         self.k1: float = const.calc_equibilium_const(
             const.dg_aloh_smec_trun, self.temperature
         )
@@ -1251,19 +1253,20 @@ class Phyllosilicate:
             1.0 / self.xd * np.log(self.potential_stern / self.potential_zeta)
         )
 
-    def __calc_n_diffuse_inf(self, x: float) -> float:
+    def __calc_n_diffuse_inf(self, x: float, s: str) -> float:
         """Calculate Na+ number density in diffuse layer
 
         Args:
             x (float): Distance from zeta plane (m)
+            s (str): Ion species existed in self.ion_props
 
         Returns:
             float: Number density of Na+ (-/m^3)
         """
         # calc number density
         potential: float = self.potential_zeta * np.exp((-1.0) * self.kappa * x)
-        na_props: Dict = self.ion_props[Species.Na.name]
-        v = na_props[IonProp.Valence.name]
+        _props: Dict = self.ion_props[s]
+        v = _props[IonProp.Valence.name]
         n = (
             np.exp(
                 -v
@@ -1273,7 +1276,7 @@ class Phyllosilicate:
             )
             * 1000.0
             * const.AVOGADRO_CONST
-            * na_props[IonProp.Concentration.name]
+            * _props[IonProp.Concentration.name]
             * abs(v)
         )
         return n
@@ -1315,12 +1318,14 @@ class Phyllosilicate:
             x (float): Distance from surface (m)
 
         Returns:
-            float: Number density of Na+ (-/m^3)
+            float: Number density of Na+ (-/m^2)
         """
         n: float = (
             self.gamma_3
+            * 1.0e18
             / self.__calc_C(self.potential_stern)
-            * (self.ion_props[Species.Na.name][IonProp.Concentration.name] / self.k4)
+            * (self.ion_props[Species.Na.name][IonProp.Concentration.name])
+            / self.k4
             * np.exp(
                 -const.ELEMENTARY_CHARGE
                 * self.potential_stern
@@ -1359,9 +1364,8 @@ class Phyllosilicate:
         # Na+ number (n/m^2) at diffuse layer
         if self.kappa_truncated is None:
             self.__calc_kappa_truncated()
-        gamma_diffuse, _ = quad(
-            self.__calc_n_diffuse_truncated, self.xd, self.layer_width
-        )
+        _xdl = self.layer_width * 0.5
+        gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
         # total number density
         na_prop: Dict = self.ion_props[Species.Na.name]
         cond_intra: float = (
@@ -1370,8 +1374,8 @@ class Phyllosilicate:
                 gamma_stern * na_prop[IonProp.MobilityStern.name]
                 + gamma_diffuse * na_prop[IonProp.MobilityTrunDiffuse.name]
             )
-            / (self.layer_width * 0.5)
-        )
+        ) / _xdl
+
         # log
         if self.logger is not None:
             self.logger.info("Finished the calculation of interlayer conductivity")
@@ -1403,7 +1407,8 @@ class Phyllosilicate:
         gamma_stern = self.__calc_n_stern()
         # Na+ number (n/m^2) at diffuse layer
         xdl = self.xd + 1.0 / self.kappa
-        gamma_diffuse, _ = quad(self.__calc_n_diffuse_inf, self.xd, xdl)
+        __callback = partial(self.__calc_n_diffuse_inf, s=Species.Na.name)
+        gamma_na_diffuse, _ = quad(__callback, self.xd, xdl)
 
         # calc conductivity
         na_prop: Dict = self.ion_props[Species.Na.name]
@@ -1411,10 +1416,9 @@ class Phyllosilicate:
             const.ELEMENTARY_CHARGE
             * (
                 gamma_stern * na_prop[IonProp.MobilityStern.name]
-                + gamma_diffuse * na_prop[IonProp.MobilityInfDiffuse.name]
+                + gamma_na_diffuse * na_prop[IonProp.MobilityInfDiffuse.name]
             )
-            / xdl
-        )
+        ) / xdl
 
         # log
         if self.logger is not None:
@@ -1668,45 +1672,4 @@ class Kaolinite(Phyllosilicate):
 from matplotlib import pyplot as plt  #!
 
 if __name__ == "__main__":
-    # cnacl_ls: List = np.logspace(-3, 0., 10, base=10.0).tolist()
-    # cond_nacl_ls: List = []
-    # cond_smec_ls: List = []
-    # potential_ls: List = []
-    # # base
-    # nacl = NaCl(cnacl=0.577, ph=7.0)
-    # nacl.sen_and_goode_1992()
-    # print(f"base cond: {nacl.conductivity}")  #!
-    # smectite = Smectite(nacl=nacl, layer_width=1e-9)
-    # smectite.calc_potentials_and_charges_truncated()
-    # base = smectite.calc_cond_interlayer()
-    # zeta_model = [
-    #     -300.0,
-    #     -250.0,
-    #     -200.0,
-    #     -140.0,
-    #     -80.0,
-    #     -25.0,
-    # ]
-    # for i, cnacl in enumerate(cnacl_ls):
-    #     print(f"cnacl: {cnacl}")  #!
-    #     nacl = NaCl(cnacl=cnacl, ph=7.0)
-    #     nacl.sen_and_goode_1992()
-    #     smectite = Smectite(nacl=nacl, layer_width=2e-09)
-    #     # inf
-    #     # smectite.calc_potentials_and_charges_inf()
-    #     # smectite.calc_cond_infdiffuse()
-    #     # cond_nacl_ls.append(nacl.conductivity)
-    #     # cond_smec_ls.append(smectite.calc_cond_infdiffuse())
-    #     # potential_ls.append(smectite.potential_zeta)
-    #     # truncated
-    #     smectite.calc_potentials_and_charges_truncated()
-    #     cond_nacl_ls.append(nacl.conductivity)
-    #     potential_ls.append(smectite.potential_zeta * 1000.0)
-    #     cond_smec_ls.append(smectite.calc_cond_interlayer())
-    #     print(f"xd: {smectite.xd}")  #!
-    # print(potential_ls)  #!
-    # fig, ax = plt.subplots()
-    # ax.plot(cnacl_ls, cond_nacl_ls) #!
-    # # ax.set_xscale("log")
-    # plt.show()
     pass

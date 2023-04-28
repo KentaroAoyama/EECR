@@ -543,7 +543,9 @@ def calc_mobility(
     water = iapws.IAPWS97(P=pressure * 1.0e-6, T=temperature)
     assert water.phase == "Liquid", f"water.phase: {water.phase}"
     _eta_t: float = iapws._iapws._Viscosity(water.rho, T=temperature) / water.rho
-    _dielec: float = iapws._iapws._Dielectric(water.rho, T=temperature)
+    _dielec: float = (
+        iapws._iapws._Dielectric(water.rho, T=temperature) * const.DIELECTRIC_VACUUM
+    )
     water_298 = iapws.IAPWS97(P=pressure * 1.0e-6, T=t_std)
     _eta_298: float = iapws._iapws._Viscosity(water_298.rho, T=t_std) / water_298.rho
     d_coeff = _eta_298 * temperature / (_eta_t * t_std)

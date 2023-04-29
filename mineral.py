@@ -16,6 +16,7 @@ from copy import deepcopy
 
 import numpy as np
 from scipy.optimize import newton
+from scipy.integrate import quad
 import iapws
 
 import constants as const
@@ -122,9 +123,11 @@ class Quartz:
 
         # water properties
         water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
-        self.dynamic_viscosity: float = iapws._iapws._Viscosity(
+        self.viscosity: float = iapws._iapws._Viscosity(
             water.rho, self.temperature
-        ) / water.rho
+        )
+        
+        self.length_edl = None
 
         # calculate conductivity tensor
         self.__calc_cond_diffuse()
@@ -167,10 +170,12 @@ class Quartz:
         _kb = const.BOLTZMANN_CONST
         _na = const.AVOGADRO_CONST
         _cond = 0.0
-        for _, _prop in self.ion_props.items():
+        for _s, _prop in self.ion_props.items():
+            if _s in (Species.H.name, Species.OH.name):
+                continue
             _conc = 1000.0 * _prop[IonProp.Concentration.name]
             _v = _prop[IonProp.Valence.name]
-            _mobility = _prop[IonProp.MobilityInfDiffuse.name]  # $!
+            _mobility = _prop[IonProp.MobilityInfDiffuse.name]
             _conc *= exp((-1.0) * _v * _e * phi_x / (_kb * self.temperature))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
@@ -180,13 +185,12 @@ class Quartz:
         # consider temperature dependence (reference temperature is 20~25℃)
         s_edl = self.__calc_edl()
         s_stern = self.__calc_stern()
-        s_prot = 2.4e-9
         print(s_edl, s_stern)
-        xdl = 1.0 / self.kappa
-        self.cond_diffuse = (s_edl + s_stern + s_prot) / xdl
+        s_prot = 2.4e-9
+        self.cond_diffuse = (s_edl + s_stern + s_prot) / self.length_edl
 
     def __calc_edl(self) -> float:
-        """Calculate specific conductance of EDL by eq.55 in Revil & Glover (1997)
+        """Calculate specific conductance of EDL by eq.55 in Revil
 
         Returns:
             float: Spesicic conductivity of EDL
@@ -204,7 +208,8 @@ class Quartz:
                 )
             )
         )
-        coeff = 2.0 * xd * const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST
+
+        coeff = 2000.0 * xd * const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST
         n: float = 0.0
         for _s, _prop in self.ion_props.items():
             # Currently mobility of H+ and OH- are not calculated well
@@ -214,7 +219,7 @@ class Quartz:
             b = _prop[
                 IonProp.MobilityInfDiffuse.name
             ] + 2.0 * self.dielec * const.BOLTZMANN_CONST * self.temperature / (
-                self.dynamic_viscosity * const.ELEMENTARY_CHARGE * v
+                self.viscosity * const.ELEMENTARY_CHARGE * v
             )
             n += (
                 b
@@ -226,8 +231,8 @@ class Quartz:
                     / (2.0 * const.BOLTZMANN_CONST * self.temperature)
                 )
             )
-        cond_ohmic_diffuse = coeff * n
-        return cond_ohmic_diffuse
+        self.length_edl = xd
+        return coeff * n
 
     def __calc_stern(self) -> float:
         """Calculate stern layer conductivity by eq.(9) in Revil & Glover, 1998
@@ -242,18 +247,20 @@ class Quartz:
         gamma_0: float = 10.0e18
         return e * bs * self.__calc_ohm(km) * gamma_0
 
-    def __calc_ohm(self, km) -> float:
+    def __calc_ohm(self, km: float) -> float:
         """Calculate eq.(10) in Revil & Glover (1998)
+        (also refered eq.(84) in Revil & Glover (1997))
 
         Returns:
             float: Ωm
         """
         # Assuming Cf equals Na+ concentration
         cf = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+        ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
         top = km * cf
         bottom = (
-            self.ion_props[Species.H.name][IonProp.Concentration.name]
-            + self.k_minus
+            ch
+            + self.k_minus * exp(- const.ELEMENTARY_CHARGE * self.potential_stern / (const.BOLTZMANN_CONST * self.temperature))
             + top
         )
         return top / bottom
@@ -299,7 +306,7 @@ class Quartz:
         Returns:
             float or None: Length of the electrical double layer
         """
-        return 1.0 / self.kappa
+        return self.length_edl
 
 
 from matplotlib import pyplot as plt

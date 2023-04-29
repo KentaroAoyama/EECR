@@ -2,8 +2,11 @@
 
     Reference:
         A.Revil and P.W.J.Glover, Theory of ionic-surface electrical conduction
-        in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
-        DOI:https://doi.org/10.1103/PhysRevB.55.1757
+            in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
+            DOI:https://doi.org/10.1103/PhysRevB.55.1757
+        A.Revil and P.W.J.Glover, Nature of surface electrical conductivity 
+            in natural sands, sandstones, and clays, 1998, https://doi.org/10.1029/98GL00296
+
 """
 from typing import Dict
 from math import sqrt, exp, log, log10
@@ -13,13 +16,17 @@ from copy import deepcopy
 
 import numpy as np
 from scipy.optimize import newton
-from scipy.integrate import quad
+import iapws
 
 import constants as const
-from constants import Species, IonProp
+from constants import (
+    Species,
+    IonProp,
+    calc_standard_gibbs_energy,
+    calc_equibilium_const,
+)
 from fluid import NaCl
 
-# TODO: 平衡定数の温度依存性
 class Quartz:
     """Containing electrical properties of quartz"""
 
@@ -33,13 +40,13 @@ class Quartz:
         potential_stern: float = None,
         logger: Logger = None,
     ):
-        """Initialize Quartz class
+        """Initialize Quartz class. pH is assumed to be near the neutral.
 
         Args:
             nacl (NaCl): Instance of NaCl
             gamma_o (float): Surface site density (Unit: sites/nm^2).
-            k_plus (float): Equilibrium constants of SiOH+ + H+ ⇔ SiOH2
-            k_minus (float): Equilibrium constants of SiOH ⇔ SiO- + H+
+            k_plus (float): Equilibrium constants of SiOH+ + H+ ⇔ SiOH2 at 20℃
+            k_minus (float): Equilibrium constants of SiOH ⇔ SiO- + H+ at 20℃
             pzc (float): pH at point of zero charge
             potential_stern (float): Stern plane potential
             logger (Logger): Logger
@@ -52,6 +59,7 @@ class Quartz:
         self.ion_props: Dict = nacl.get_ion_props()
         self.temperature: float = nacl.get_temperature()
         self.dielec: float = nacl.get_dielec_water()
+        self.pressure: float = nacl.pressure
         self.logger: Logger = logger
 
         # set pH
@@ -63,6 +71,12 @@ class Quartz:
         if self.k_plus is None:
             _ch_pzc = 10.0 ** (-1.0 * pzc)
             self.k_plus = self.k_minus / (_ch_pzc ** 2)
+
+        # consider temperature dependence of equilibrium constant
+        dg_plus = calc_standard_gibbs_energy(self.k_plus, 293.15)
+        dg_minus = calc_standard_gibbs_energy(self.k_plus, 293.15)
+        self.k_plus = calc_equibilium_const(dg_plus, self.temperature)
+        self.k_minus = calc_equibilium_const(dg_minus, self.temperature)
 
         # set δ
         self.delta = self.k_plus / self.k_minus
@@ -106,6 +120,12 @@ class Quartz:
         _bottom = self.dielec * const.BOLTZMANN_CONST * self.temperature
         self.kappa = sqrt(_top / _bottom)
 
+        # water properties
+        water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
+        self.dynamic_viscosity: float = iapws._iapws._Viscosity(
+            water.rho, self.temperature
+        ) / water.rho
+
         # calculate conductivity tensor
         self.__calc_cond_diffuse()
         self.__calc_cond_tensor()
@@ -147,21 +167,96 @@ class Quartz:
         _kb = const.BOLTZMANN_CONST
         _na = const.AVOGADRO_CONST
         _cond = 0.0
-        for _s, _prop in self.ion_props.items():
-            if _s in (Species.H.name, Species.OH.name):
-                continue
+        for _, _prop in self.ion_props.items():
             _conc = 1000.0 * _prop[IonProp.Concentration.name]
             _v = _prop[IonProp.Valence.name]
-            _mobility = _prop[IonProp.MobilityInfDiffuse.name]
+            _mobility = _prop[IonProp.MobilityInfDiffuse.name]  # $!
             _conc *= exp((-1.0) * _v * _e * phi_x / (_kb * self.temperature))
             _cond += _e * abs(_v) * _mobility * _na * _conc
         return _cond
 
     def __calc_cond_diffuse(self) -> None:
-        """Calculate the specific conductivity of diffuse layer"""
-        _xdl = 1.0 / self.kappa
-        cond_ohmic_diffuse, _ = quad(self.__calc_cond_at_x_inf_diffuse, 0.0, _xdl)
-        self.cond_diffuse = cond_ohmic_diffuse / _xdl
+        """Calculate the specific conductivity of diffuse layer by Revil & Glover 1998"""
+        # consider temperature dependence (reference temperature is 20~25℃)
+        s_edl = self.__calc_edl()
+        s_stern = self.__calc_stern()
+        s_prot = 2.4e-9
+        print(s_edl, s_stern)
+        xdl = 1.0 / self.kappa
+        self.cond_diffuse = (s_edl + s_stern + s_prot) / xdl
+
+    def __calc_edl(self) -> float:
+        """Calculate specific conductance of EDL by eq.55 in Revil & Glover (1997)
+
+        Returns:
+            float: Spesicic conductivity of EDL
+        """
+        xd = sqrt(
+            0.5
+            * (self.dielec * const.BOLTZMANN_CONST * self.temperature)
+            / (
+                1000.0
+                * const.AVOGADRO_CONST
+                * const.ELEMENTARY_CHARGE ** 2
+                * (
+                    self.ion_props[Species.Na.name][IonProp.Concentration.name]
+                    + self.ion_props[Species.H.name][IonProp.Concentration.name]
+                )
+            )
+        )
+        coeff = 2.0 * xd * const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST
+        n: float = 0.0
+        for _s, _prop in self.ion_props.items():
+            # Currently mobility of H+ and OH- are not calculated well
+            if _s in (Species.H.name, Species.OH.name):
+                continue
+            v = _prop[IonProp.Valence.name]
+            b = _prop[
+                IonProp.MobilityInfDiffuse.name
+            ] + 2.0 * self.dielec * const.BOLTZMANN_CONST * self.temperature / (
+                self.dynamic_viscosity * const.ELEMENTARY_CHARGE * v
+            )
+            n += (
+                b
+                * _prop[IonProp.Concentration.name]
+                * exp(
+                    -v
+                    * const.ELEMENTARY_CHARGE
+                    * self.potential_stern
+                    / (2.0 * const.BOLTZMANN_CONST * self.temperature)
+                )
+            )
+        cond_ohmic_diffuse = coeff * n
+        return cond_ohmic_diffuse
+
+    def __calc_stern(self) -> float:
+        """Calculate stern layer conductivity by eq.(9) in Revil & Glover, 1998
+
+        Returns:
+            float: Specific conductivity of stern layer
+        """
+        e = const.ELEMENTARY_CHARGE
+        bs = 0.4e-8 * (1.0 + 0.037 * (self.temperature - 293.15))
+        _dg = calc_standard_gibbs_energy(10.0 ** (-2.77), 293.15)
+        km = calc_equibilium_const(_dg, self.temperature)
+        gamma_0: float = 10.0e18
+        return e * bs * self.__calc_ohm(km) * gamma_0
+
+    def __calc_ohm(self, km) -> float:
+        """Calculate eq.(10) in Revil & Glover (1998)
+
+        Returns:
+            float: Ωm
+        """
+        # Assuming Cf equals Na+ concentration
+        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+        top = km * cf
+        bottom = (
+            self.ion_props[Species.H.name][IonProp.Concentration.name]
+            + self.k_minus
+            + top
+        )
+        return top / bottom
 
     def __calc_cond_tensor(self):
         """Calculate the conductivity tensor"""
@@ -207,23 +302,21 @@ class Quartz:
         return 1.0 / self.kappa
 
 
-# from matplotlib import pyplot as plt
+from matplotlib import pyplot as plt
 
 if __name__ == "__main__":
-    # cnacl_ls = np.logspace(-4, 0.7, 5, base=10)
-    # condnacl_ls = []
-    # conds_ls = []
-    # for cnacl in cnacl_ls:
-    #     nacl = NaCl(temperature=273.15 + 25.0, cnacl=cnacl)
-    #     nacl.sen_and_goode_1992()
-    #     condnacl_ls.append(nacl.conductivity)
-    #     q = Quartz(nacl)
-    #     conds_ls.append(q.cond_diffuse)
-    #     print(q.cond_diffuse)
-    #     print(q.get_double_layer_length())
-    # fig, ax = plt.subplots()
-    # ax.plot(condnacl_ls, conds_ls)
-    # ax.set_xscale("log")
-    # ax.set_yscale("log")
-    # plt.show()
+    cnacl_ls = np.logspace(-4, 0.7, 5, base=10)
+    condnacl_ls = []
+    conds_ls = []
+    for cnacl in cnacl_ls:
+        nacl = NaCl(temperature=273.15 + 25.0, cnacl=cnacl)
+        nacl.sen_and_goode_1992()
+        condnacl_ls.append(nacl.conductivity)
+        q = Quartz(nacl)
+        conds_ls.append(q.cond_diffuse * q.get_double_layer_length())
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, conds_ls)
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    plt.show()
     pass

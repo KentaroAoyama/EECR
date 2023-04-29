@@ -2,8 +2,8 @@ from enum import IntEnum, auto
 from math import log, exp
 
 
-def calc_standard_gibbs_energy(k_25: float) -> float:
-    return -log(k_25) * GAS_CONST * 298.15
+def calc_standard_gibbs_energy(k_25: float, t: float = 298.15) -> float:
+    return -log(k_25) * GAS_CONST * t
 
 
 def calc_equibilium_const(dg_25, temperature) -> float:

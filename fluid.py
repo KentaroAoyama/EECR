@@ -86,16 +86,16 @@ class NaCl(Fluid):
         # Calculate sodium ion mobility by MSA model and empirical findings of
         # Revil et al. (1998)
         tempe_ref: float = 298.15
-        msa_props = calc_mobility(ion_props, tempe_ref, self.pressure)
+        msa_props_tref = calc_mobility(ion_props, tempe_ref, self.pressure)
+        msa_props_tgiven = calc_mobility(ion_props, self.temperature, self.pressure)
         for _s, _prop in ion_props.items():
-            if _s not in msa_props:
+            if _s not in msa_props_tref:
                 continue
-            _m = msa_props[_s]["mobility"]
+            _m = msa_props_tref[_s]["mobility"]
             # Under a wide range of NaCl concentrations, the mobility of ions in the electric
             # double layer is 1/10, and linear temperature depandence regardless of the species.
             _m *= 0.1 * (1.0 + 0.037 * (temperature - tempe_ref))
-
-            _prop[IonProp.MobilityInfDiffuse.name] = _m
+            _prop[IonProp.MobilityInfDiffuse.name] = msa_props_tgiven[_s]["mobility"]
             # based on https://doi.org/10.1029/2008JB006114
             _prop[IonProp.MobilityTrunDiffuse.name] = _m
             if _s == Species.H.name:

@@ -24,9 +24,9 @@ PRESSURE_ATM = 101300.
 k_aloh_smec_inf = 1.0e-10  # Leroy and Revil, 2004, table 1
 k_sioh_smec_inf = 1.3e-6  # Leroy and Revil, 2004, Fig. 8
 k_xh_smec_inf = 1.0e-2  # Leroy and Revil, 2004, table 1
-k_xna_smec_inf = 0.033  # Gonçalvès et al., 2007, Fig. 8
+k_xna_smec_inf = 1.122  # Leroy and Revil, 2004, Fig. 8 #!
 c1_smec_inf = 2.09  # Leroy and Revil, 2004, Fig. 8
-c2_smec_inf = 0.2  # Leroy and Revil, 2004, table 1
+c2_smec_inf = 5.5  # Leroy and Revil, 2004, table 1 #!
 
 # Smectite & truncated
 k_aloh_smec_trun = 1.0e-10  # Leroy and Revil, 2004, table 1

@@ -19,7 +19,7 @@ import constants as const
 from constants import Species, IonProp
 from fluid import NaCl
 
-
+# TODO: 平衡定数の温度依存性
 class Quartz:
     """Containing electrical properties of quartz"""
 
@@ -53,6 +53,7 @@ class Quartz:
         self.temperature: float = nacl.get_temperature()
         self.dielec: float = nacl.get_dielec_water()
         self.logger: Logger = logger
+
         # set pH
         self.ph = -1.0 * log10(
             self.ion_props[Species.H.name][IonProp.Concentration.name]
@@ -61,7 +62,7 @@ class Quartz:
         # re-set k_plus (eq.91)
         if self.k_plus is None:
             _ch_pzc = 10.0 ** (-1.0 * pzc)
-            self.k_plus = self.k_minus / (_ch_pzc**2)
+            self.k_plus = self.k_minus / (_ch_pzc ** 2)
 
         # set δ
         self.delta = self.k_plus / self.k_minus
@@ -101,12 +102,8 @@ class Quartz:
                     _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Concentration.name]
                 )
         _if *= 0.5
-        _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
-        _bottom = (
-            self.dielec
-            * const.BOLTZMANN_CONST
-            * self.temperature
-        )
+        _top = 2000.0 * const.ELEMENTARY_CHARGE ** 2 * _if * const.AVOGADRO_CONST
+        _bottom = self.dielec * const.BOLTZMANN_CONST * self.temperature
         self.kappa = sqrt(_top / _bottom)
 
         # calculate conductivity tensor
@@ -130,10 +127,10 @@ class Quartz:
         _t3 = _x - 1.0 / _x
         _t4 = (
             1.0
-            + self.delta * 10.0 ** (-2.0 * self.ph) * _x**4
-            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x**2
+            + self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4
+            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x ** 2
         )
-        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x**4 - 1.0
+        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4 - 1.0
         return _t1 * _t2 * _t3 * _t4 + _t5
 
     def __calc_cond_at_x_inf_diffuse(self, _x: float) -> float:
@@ -149,8 +146,10 @@ class Quartz:
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
         _na = const.AVOGADRO_CONST
-        _cond = 0.
-        for _, _prop in self.ion_props.items():
+        _cond = 0.0
+        for _s, _prop in self.ion_props.items():
+            if _s in (Species.H.name, Species.OH.name):
+                continue
             _conc = 1000.0 * _prop[IonProp.Concentration.name]
             _v = _prop[IonProp.Valence.name]
             _mobility = _prop[IonProp.MobilityInfDiffuse.name]
@@ -161,9 +160,7 @@ class Quartz:
     def __calc_cond_diffuse(self) -> None:
         """Calculate the specific conductivity of diffuse layer"""
         _xdl = 1.0 / self.kappa
-        cond_ohmic_diffuse, _ = quad(
-            self.__calc_cond_at_x_inf_diffuse, 0.0, 1.0 / self.kappa
-        )
+        cond_ohmic_diffuse, _ = quad(self.__calc_cond_at_x_inf_diffuse, 0.0, _xdl)
         self.cond_diffuse = cond_ohmic_diffuse / _xdl
 
     def __calc_cond_tensor(self):
@@ -210,5 +207,23 @@ class Quartz:
         return 1.0 / self.kappa
 
 
+# from matplotlib import pyplot as plt
+
 if __name__ == "__main__":
+    # cnacl_ls = np.logspace(-4, 0.7, 5, base=10)
+    # condnacl_ls = []
+    # conds_ls = []
+    # for cnacl in cnacl_ls:
+    #     nacl = NaCl(temperature=273.15 + 25.0, cnacl=cnacl)
+    #     nacl.sen_and_goode_1992()
+    #     condnacl_ls.append(nacl.conductivity)
+    #     q = Quartz(nacl)
+    #     conds_ls.append(q.cond_diffuse)
+    #     print(q.cond_diffuse)
+    #     print(q.get_double_layer_length())
+    # fig, ax = plt.subplots()
+    # ax.plot(condnacl_ls, conds_ls)
+    # ax.set_xscale("log")
+    # ax.set_yscale("log")
+    # plt.show()
     pass

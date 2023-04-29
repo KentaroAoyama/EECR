@@ -168,6 +168,29 @@ def Leroy_Revil_2004_fig8():
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
     return
 
+def Leroy_etal_2015():
+    # pH vs zeta potential for smectite
+    # Qi以外Fig.8の定数に変更したところ、よく整合した.
+    # -10mVずれてしまった. このcommitでおかしくなった：https://github.com/KentaroAoyama/EECR/commit/d455854b3b21b2de4411e700bc78805c3c1da992
+    print("Test: Leroy_etal_2015")
+    pH = 6.5
+    cnacl_ls = np.logspace(-5, 0, 6, base=10.)
+    temperature = 298.15
+    potential_zeta_ls = []
+    for cnacl in cnacl_ls:
+        print(f"cnacl: {cnacl}")  #!
+        nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=pH)
+        smectite = Smectite(nacl=nacl,)
+        smectite.calc_potentials_and_charges_inf()
+        potential_zeta_ls.append(smectite.potential_zeta * 1000.0)
+    # plot
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, potential_zeta_ls)
+    ax.set_xscale("log")
+    # ax.legend()
+    _pth = path.join(test_dir(), "Leroy_etal_2015.png")
+    fig.savefig(_pth, dpi=200, bbox_inches="tight")
+    return
 
 def Leroy_Revil_2004_fig9():
     # pH vs zeta potential for smectite
@@ -705,24 +728,24 @@ def test_mobility():
     mu_cl_ls: List = []
     cond_ls: List = []
     _cna = 1.0
-    # for i in tempe_ls:
-    #     print("=======")
-    #     print(f"Tempe: {i}")  #!
-    #     ion_props["Na"]["Concentration"] = _cna
-    #     ion_props["Cl"]["Concentration"] = _cna
-    #     _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
-    #     m_na = _msa_props["Na"]["mobility"]
-    #     m_cl = _msa_props["Cl"]["mobility"]
-    #     print(m_na)  #!
-    #     mu_na_ls.append(m_na)
-    #     mu_cl_ls.append(m_cl)
-    #     _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.0
+    for i in tempe_ls:
+        print("=======")
+        print(f"Tempe: {i}")  #!
+        ion_props["Na"]["Concentration"] = _cna
+        ion_props["Cl"]["Concentration"] = _cna
+        _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
+        m_na = _msa_props["Na"]["mobility"]
+        m_cl = _msa_props["Cl"]["mobility"]
+        print(m_na)  #!
+        mu_na_ls.append(m_na)
+        mu_cl_ls.append(m_cl)
+        _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.0
 
-    #     cond_ls.append(_coeff * (m_na + m_cl))
-    # _, ax = plt.subplots()
-    # ax.plot(tempe_ls, mu_na_ls)
-    # ax.set_yscale("log")
-    # plt.show()
+        cond_ls.append(_coeff * (m_na + m_cl))
+    _, ax = plt.subplots()
+    ax.plot(tempe_ls, mu_na_ls)
+    ax.set_yscale("log")
+    plt.show()
 
     _min, _max = 1, 1000
     nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
@@ -1206,7 +1229,7 @@ def test_elementary_number():
     num_ls = np.linspace(10, 30, 5).tolist()
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
     for n in num_ls:
-        
+        pass
     pass
 
 
@@ -1224,6 +1247,7 @@ if __name__ == "__main__":
     # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
     # Leroy_Revil_2004_fig8()
+    Leroy_etal_2015()
     # Leroy_Revil_2004_fig9()
     # goncalves_fig6()
     # test_sen_and_goode_1992()
@@ -1232,8 +1256,8 @@ if __name__ == "__main__":
     # Revil_etal_fig2()
 
     # Grieser_and_Healy()
-    compare_WS_shaly_1()
-    analysis_WS_result()
+    # compare_WS_shaly_1()
+    # analysis_WS_result()
     # test_poros_distribution()
 
     # cnacl_ls = np.logspace(-3, 0.7, 10, base=10.).tolist()

@@ -74,8 +74,8 @@ class Quartz:
             self.k_plus = self.k_minus / (_ch_pzc ** 2)
 
         # consider temperature dependence of equilibrium constant
-        dg_plus = calc_standard_gibbs_energy(self.k_plus, 293.15)
-        dg_minus = calc_standard_gibbs_energy(self.k_plus, 293.15)
+        dg_plus = calc_standard_gibbs_energy(self.k_plus, 298.15)
+        dg_minus = calc_standard_gibbs_energy(self.k_minus, 298.15)
         self.k_plus = calc_equibilium_const(dg_plus, self.temperature)
         self.k_minus = calc_equibilium_const(dg_minus, self.temperature)
 
@@ -97,7 +97,7 @@ class Quartz:
         # stern potential
         self.potential_stern = potential_stern
         if self.potential_stern is None:
-            _x = newton(self.__calc_eq106, 1.0)
+            _x = newton(self.__calc_eq106, 1.0e1)
             self.potential_stern = (
                 -1.0
                 * (
@@ -185,7 +185,6 @@ class Quartz:
         # consider temperature dependence (reference temperature is 20~25℃)
         s_edl = self.__calc_edl()
         s_stern = self.__calc_stern()
-        print(s_edl, s_stern)
         s_prot = 2.4e-9
         self.cond_diffuse = (s_edl + s_stern + s_prot) / self.length_edl
 
@@ -208,8 +207,7 @@ class Quartz:
                 )
             )
         )
-
-        coeff = 2000.0 * xd * const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST
+        coeff = 2000.0 * const.AVOGADRO_CONST * xd * const.ELEMENTARY_CHARGE
         n: float = 0.0
         for _s, _prop in self.ion_props.items():
             # Currently mobility of H+ and OH- are not calculated well
@@ -224,12 +222,12 @@ class Quartz:
             n += (
                 b
                 * _prop[IonProp.Concentration.name]
-                * exp(
+                * (exp(
                     -v
                     * const.ELEMENTARY_CHARGE
                     * self.potential_stern
                     / (2.0 * const.BOLTZMANN_CONST * self.temperature)
-                )
+                ))
             )
         self.length_edl = xd
         return coeff * n
@@ -260,7 +258,7 @@ class Quartz:
         top = km * cf
         bottom = (
             ch
-            + self.k_minus * exp(- const.ELEMENTARY_CHARGE * self.potential_stern / (const.BOLTZMANN_CONST * self.temperature))
+            + self.k_minus
             + top
         )
         return top / bottom
@@ -312,18 +310,4 @@ class Quartz:
 from matplotlib import pyplot as plt
 
 if __name__ == "__main__":
-    cnacl_ls = np.logspace(-4, 0.7, 5, base=10)
-    condnacl_ls = []
-    conds_ls = []
-    for cnacl in cnacl_ls:
-        nacl = NaCl(temperature=273.15 + 25.0, cnacl=cnacl)
-        nacl.sen_and_goode_1992()
-        condnacl_ls.append(nacl.conductivity)
-        q = Quartz(nacl)
-        conds_ls.append(q.cond_diffuse * q.get_double_layer_length())
-    fig, ax = plt.subplots()
-    ax.plot(cnacl_ls, conds_ls)
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    plt.show()
     pass

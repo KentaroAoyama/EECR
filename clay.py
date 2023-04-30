@@ -1391,7 +1391,6 @@ class Phyllosilicate:
         Returns:
             Tuple[float]: conductivity, integral error
         """
-        # TODO: 拡散層の移動度の距離依存性をLeroy et al (2015)を参考に修正する
         # TODO: May need to consider other cases (e.g., illite, etc.)
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()

@@ -28,6 +28,7 @@ from constants import (
 )
 from fluid import NaCl
 
+
 class Quartz:
     """Containing electrical properties of quartz"""
 
@@ -71,7 +72,7 @@ class Quartz:
         # re-set k_plus (eq.91)
         if self.k_plus is None:
             _ch_pzc = 10.0 ** (-1.0 * pzc)
-            self.k_plus = self.k_minus / (_ch_pzc ** 2)
+            self.k_plus = self.k_minus / (_ch_pzc**2)
 
         # consider temperature dependence of equilibrium constant
         dg_plus = calc_standard_gibbs_energy(self.k_plus, 298.15)
@@ -117,16 +118,14 @@ class Quartz:
                     _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Concentration.name]
                 )
         _if *= 0.5
-        _top = 2000.0 * const.ELEMENTARY_CHARGE ** 2 * _if * const.AVOGADRO_CONST
+        _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
         _bottom = self.dielec * const.BOLTZMANN_CONST * self.temperature
         self.kappa = sqrt(_top / _bottom)
 
         # water properties
         water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
-        self.viscosity: float = iapws._iapws._Viscosity(
-            water.rho, self.temperature
-        )
-        
+        self.viscosity: float = iapws._iapws._Viscosity(water.rho, self.temperature)
+
         self.length_edl = None
 
         # calculate conductivity tensor
@@ -150,10 +149,10 @@ class Quartz:
         _t3 = _x - 1.0 / _x
         _t4 = (
             1.0
-            + self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4
-            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x ** 2
+            + self.delta * 10.0 ** (-2.0 * self.ph) * _x**4
+            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x**2
         )
-        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4 - 1.0
+        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x**4 - 1.0
         return _t1 * _t2 * _t3 * _t4 + _t5
 
     def __calc_cond_at_x_inf_diffuse(self, _x: float) -> float:
@@ -200,7 +199,7 @@ class Quartz:
             / (
                 1000.0
                 * const.AVOGADRO_CONST
-                * const.ELEMENTARY_CHARGE ** 2
+                * const.ELEMENTARY_CHARGE**2
                 * (
                     self.ion_props[Species.Na.name][IonProp.Concentration.name]
                     + self.ion_props[Species.H.name][IonProp.Concentration.name]
@@ -222,12 +221,14 @@ class Quartz:
             n += (
                 b
                 * _prop[IonProp.Concentration.name]
-                * (exp(
-                    -v
-                    * const.ELEMENTARY_CHARGE
-                    * self.potential_stern
-                    / (2.0 * const.BOLTZMANN_CONST * self.temperature)
-                ))
+                * (
+                    exp(
+                        -v
+                        * const.ELEMENTARY_CHARGE
+                        * self.potential_stern
+                        / (2.0 * const.BOLTZMANN_CONST * self.temperature)
+                    )
+                )
             )
         self.length_edl = xd
         return coeff * n
@@ -256,11 +257,7 @@ class Quartz:
         cf = self.ion_props[Species.Na.name][IonProp.Concentration.name]
         ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
         top = km * cf
-        bottom = (
-            ch
-            + self.k_minus
-            + top
-        )
+        bottom = ch + self.k_minus + top
         return top / bottom
 
     def __calc_cond_tensor(self):
@@ -306,8 +303,6 @@ class Quartz:
         """
         return self.length_edl
 
-
-from matplotlib import pyplot as plt
 
 if __name__ == "__main__":
     pass

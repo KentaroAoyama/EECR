@@ -30,7 +30,7 @@ c2_smec_inf = 5.5  # Leroy and Revil, 2004, table 1 #!
 
 # Smectite & truncated
 k_aloh_smec_trun = 1.0e-10  # Leroy and Revil, 2004, table 1
-k_sioh_smec_trun = 1.0e-6  # Gonçalvès et al., 2007, table 1
+k_sioh_smec_trun = 1.3e-6  # Gonçalvès et al., 2007, table 1
 k_xh_smec_trun = 1.0e-2  # Gonçalvès et al., 2007, table 1
 k_xna_smec_trun = 0.95  # Gonçalvès et al., 2007, table 1
 c1_smec_trun = 2.1  # Gonçalvès et al., 2007, table 1

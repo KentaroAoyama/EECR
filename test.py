@@ -63,7 +63,7 @@ def Revil_etal_1998_fig3():
     # すると, この結果で説明がつく. コード側に不備は確認できなかった (23/01/11)
     temperature = 298.15
     ph = 7.0
-    cnacl_ls = np.logspace(-3, 0.6, 10, base=10.).tolist()
+    cnacl_ls = np.logspace(-3, 0.6, 10, base=10.0).tolist()
     kaolinite_cond_ls: List = []
     smectite_cond_ls: List = []
     cond_fluid_ls: List = []
@@ -72,12 +72,19 @@ def Revil_etal_1998_fig3():
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         cond_fluid_ls.append(nacl.sen_and_goode_1992())
         # Kaolinite
-        kaolinite = Kaolinite(nacl=nacl, xd=None, logger=None,)
+        kaolinite = Kaolinite(
+            nacl=nacl,
+            xd=None,
+            logger=None,
+        )
         kaolinite.calc_potentials_and_charges_inf()
         kaolinite.calc_cond_infdiffuse()
         kaolinite_cond_ls.append(kaolinite.cond_infdiffuse)
         # Smectite
-        smectite = Smectite(nacl=nacl, layer_width=1.14e-9,)
+        smectite = Smectite(
+            nacl=nacl,
+            layer_width=1.14e-9,
+        )
         smectite.calc_potentials_and_charges_truncated()
         smectite.calc_cond_interlayer()
         smectite_cond_ls.append(smectite.cond_intra)
@@ -91,6 +98,7 @@ def Revil_etal_1998_fig3():
     _pth = path.join(test_dir(), "Revil_etal_1998_fig3.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+
 def Leroy_Revil_2004_fig4():
     # Cnacl vs zeta potential
     # c1, k2, k4をfixすれば合う (論文中のoptimized, KClでの実験値なので, 比較対象として不適かも)
@@ -103,7 +111,9 @@ def Leroy_Revil_2004_fig4():
     for cnacl in cnacl_ls:
         print(f"cnacl: {cnacl}")
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        kaolinite = Kaolinite(nacl=nacl,)
+        kaolinite = Kaolinite(
+            nacl=nacl,
+        )
         kaolinite.calc_potentials_and_charges_inf()
         # cpnvert V → mV
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
@@ -130,8 +140,60 @@ def Leroy_Revil_2004_fig5_a():
         kaolinite = Kaolinite(nacl=nacl)
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
-    ex_x = [3.5, 3.770353303, 3.880952381, 4.077572965, 4.089861751, 4.089861751, 4.212749616, 4.470814132, 4.37250384, 4.470814132, 5.773425499, 5.748847926, 6.768817204, 6.486175115, 6.289554531, 6.19124424, 6.240399386, 6.473886329, 7.506144393, 7.887096774, 7.899385561, 10.78725038, 10.72580645, 10.79953917, 11.13133641,]
-    ex_y = [9.099236641, 6.427480916, 6.748091603, 5.572519084, 4.183206107, 1.297709924, 0.870229008, 0.549618321, -6.824427481, -7.893129771, -16.65648855, -18.15267176, -23.81679389, -23.92366412, -24.88549618, -27.98473282, -28.83969466, -30.33587786, -33.00763359, -30.1221374, -28.09160305, -36.21374046, -37.49618321, -39.41984733, -45.40458015]
+    ex_x = [
+        3.5,
+        3.770353303,
+        3.880952381,
+        4.077572965,
+        4.089861751,
+        4.089861751,
+        4.212749616,
+        4.470814132,
+        4.37250384,
+        4.470814132,
+        5.773425499,
+        5.748847926,
+        6.768817204,
+        6.486175115,
+        6.289554531,
+        6.19124424,
+        6.240399386,
+        6.473886329,
+        7.506144393,
+        7.887096774,
+        7.899385561,
+        10.78725038,
+        10.72580645,
+        10.79953917,
+        11.13133641,
+    ]
+    ex_y = [
+        9.099236641,
+        6.427480916,
+        6.748091603,
+        5.572519084,
+        4.183206107,
+        1.297709924,
+        0.870229008,
+        0.549618321,
+        -6.824427481,
+        -7.893129771,
+        -16.65648855,
+        -18.15267176,
+        -23.81679389,
+        -23.92366412,
+        -24.88549618,
+        -27.98473282,
+        -28.83969466,
+        -30.33587786,
+        -33.00763359,
+        -30.1221374,
+        -28.09160305,
+        -36.21374046,
+        -37.49618321,
+        -39.41984733,
+        -45.40458015,
+    ]
 
     # plot
     fig, ax = plt.subplots()
@@ -156,7 +218,9 @@ def Leroy_Revil_2004_fig8():
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        smectite = Smectite(nacl=nacl,)
+        smectite = Smectite(
+            nacl=nacl,
+        )
         smectite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(smectite.potential_zeta * 1000.0)
     # plot
@@ -172,7 +236,17 @@ def Leroy_Revil_2004_fig8():
 def Leroy_Revil_2004_fig9():
     # pH vs zeta potential for smectite
     # Qi以外Fig.8の定数に変更したところ、よく整合した.
-    pH_ls = [3, 4, 5, 6, 7, 8, 9, 10, 11,]
+    pH_ls = [
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+    ]
     cnacl = 2.0e-3
     temperature = 298.15
     potential_zeta_ls = []
@@ -180,14 +254,68 @@ def Leroy_Revil_2004_fig9():
     for ph in pH_ls:
         print(f"pH: {ph}")  #!
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
-        kaolinite = Kaolinite(nacl=nacl,)
+        kaolinite = Kaolinite(
+            nacl=nacl,
+        )
         kaolinite.calc_potentials_and_charges_inf()
         potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
         kaolinite.calc_cond_infdiffuse()
-        specific_cond_ls.append(kaolinite.cond_infdiffuse * kaolinite.get_double_layer_length())
-    ex_x = [8.941176471, 6.558823529, 4.882352941, 6.029411765, 4, 1.176470588, 0.382352941, -7.117647059, -8.088235294, -17.08823529, -18.05882353, -27.94117647, -25.11764706, -23.88235294, -24.32352941, -29, -28.02941176, -32.88235294, -30.14705882, -30.32352941, -36.5, -37.55882353, -39.32352941, -45.32352941]
-    ex_y = [0.27359882, 0.211651917, 0.221976401, 0.258112094, 0.35619469, 0.268436578, 0.314896755, 0.309734513, 1.063421829, 0.996312684, 1.31120944, 1.321533923, 1.651917404, 1.719026549, 1.806784661, 1.651917404, 1.817109145, 1.806784661, 1.997787611, 2.075221239, 2.085545723, 2.689528024, 2.803097345, 2.999262537]
-    ex_y = [i*1.0e-9 for i in ex_y]
+        specific_cond_ls.append(
+            kaolinite.cond_infdiffuse * kaolinite.get_double_layer_length()
+        )
+    ex_x = [
+        8.941176471,
+        6.558823529,
+        4.882352941,
+        6.029411765,
+        4,
+        1.176470588,
+        0.382352941,
+        -7.117647059,
+        -8.088235294,
+        -17.08823529,
+        -18.05882353,
+        -27.94117647,
+        -25.11764706,
+        -23.88235294,
+        -24.32352941,
+        -29,
+        -28.02941176,
+        -32.88235294,
+        -30.14705882,
+        -30.32352941,
+        -36.5,
+        -37.55882353,
+        -39.32352941,
+        -45.32352941,
+    ]
+    ex_y = [
+        0.27359882,
+        0.211651917,
+        0.221976401,
+        0.258112094,
+        0.35619469,
+        0.268436578,
+        0.314896755,
+        0.309734513,
+        1.063421829,
+        0.996312684,
+        1.31120944,
+        1.321533923,
+        1.651917404,
+        1.719026549,
+        1.806784661,
+        1.651917404,
+        1.817109145,
+        1.806784661,
+        1.997787611,
+        2.075221239,
+        2.085545723,
+        2.689528024,
+        2.803097345,
+        2.999262537,
+    ]
+    ex_y = [i * 1.0e-9 for i in ex_y]
     # plot
     fig, ax = plt.subplots()
     ax.plot(potential_zeta_ls, specific_cond_ls)
@@ -196,17 +324,18 @@ def Leroy_Revil_2004_fig9():
     _pth = path.join(test_dir(), "Leroy_Revil_2004_fig9.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+
 def Revil_etal_fig2():
     cnacl_ls: List = np.logspace(-2, 0.7, 20, base=10.0).tolist()
-    nacl_ref = NaCl(cnacl=0.577, temperature=273.15+25., ph=7.0)
+    nacl_ref = NaCl(cnacl=0.577, temperature=273.15 + 25.0, ph=7.0)
     nacl_ref.sen_and_goode_1992()
-    r_ls = np.linspace(1.0e-9, 13.0e-9, 10).tolist() #!
+    r_ls = np.linspace(1.0e-9, 13.0e-9, 10).tolist()  #!
     r_result: Dict = {}
     for _r in r_ls:
         smectite = Smectite(nacl=nacl_ref, layer_width=_r)
         smectite.calc_potentials_and_charges_truncated()
         base = smectite.calc_cond_interlayer()
-        _ls = r_result.setdefault(_r, [[],[]])
+        _ls = r_result.setdefault(_r, [[], []])
         for i, cnacl in enumerate(cnacl_ls):
             print(f"cnacl: {cnacl}")  #!
             nacl = NaCl(cnacl=cnacl, ph=7.0)
@@ -216,8 +345,30 @@ def Revil_etal_fig2():
             smectite.calc_potentials_and_charges_truncated()
             _ls[0].append(nacl.conductivity)
             _ls[1].append(smectite.calc_cond_interlayer() / base)
-    ex_x = [0.184519667, 0.320670798, 0.553585104, 0.955673135, 1.617182583, 2.736583684, 4.449465081, 6.125092764, 8.101527856, 9.505377372, ]
-    ex_y = [1.063802817, 1.001549296, 1.021690141, 0.979577465, 0.992394366, 0.996056338, 0.977746479, 0.99971831, 1.050985915, 1.096760563, ]
+    ex_x = [
+        0.184519667,
+        0.320670798,
+        0.553585104,
+        0.955673135,
+        1.617182583,
+        2.736583684,
+        4.449465081,
+        6.125092764,
+        8.101527856,
+        9.505377372,
+    ]
+    ex_y = [
+        1.063802817,
+        1.001549296,
+        1.021690141,
+        0.979577465,
+        0.992394366,
+        0.996056338,
+        0.977746479,
+        0.99971831,
+        1.050985915,
+        1.096760563,
+    ]
     fig, ax = plt.subplots()
     for i, (_r, _ls) in enumerate(r_result.items()):
         ax.plot(_ls[0], _ls[1], label=_r, color=cm.jet(float(i) / len(r_result)))
@@ -227,6 +378,7 @@ def Revil_etal_fig2():
     ax.set_ylim(0, 1.3)
     plt.show()
     fig.savefig("./test/Revil_etal_fig2.png", dpi=200)
+
 
 def goncalves_fig6():
     # layer width vs zeta potential
@@ -260,25 +412,181 @@ def goncalves_fig6():
     _pth = path.join(test_dir(), "Goncalves_fig6_zeta.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+
 def qurtz_cond():
-    cnacl_ls = np.logspace(-6, 0.7, 5, base=10)
-    condnacl_ls = []
-    conds_ls = []
-    for cnacl in cnacl_ls:
-        nacl = NaCl(temperature=273.15 + 25.0, cnacl=cnacl)
-        nacl.sen_and_goode_1992()
-        condnacl_ls.append(nacl.conductivity)
-        q = Quartz(nacl)
-        conds_ls.append(q.cond_diffuse * q.get_double_layer_length())
-    ex_x = [4.95E-07, 1.83759E-06, 5.12678E-06, 1.73118E-05, 6.27953E-05, 0.000167031, 0.000455021]
-    ex_y = [2.405797101, 2.550724638, 2.927536232, 3.536231884, 4.579710145, 6, 7.47826087]
-    ex_y = [i * 1.0e-9 for i in ex_y]
+    print("qurtz_cond")
+    cnacl_ls = np.logspace(-7, 0.7, 100, base=10)
     fig, ax = plt.subplots()
-    ax.plot(cnacl_ls, conds_ls)
+    n = 10
+    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+        print("========")  #!
+        print(f"tempe: {_t}")  #!
+        condnacl_ls = []
+        conds_ls = []
+        for cnacl in cnacl_ls:
+            print(cnacl)  #!
+            nacl = NaCl(temperature=_t, cnacl=cnacl, pressure=5.0e6)
+            nacl.sen_and_goode_1992()
+            condnacl_ls.append(nacl.conductivity)
+            q = Quartz(nacl)
+            conds_ls.append(q.cond_diffuse * q.get_double_layer_length())
+        ax.plot(cnacl_ls, conds_ls, color=cm.jet(float(i) / n), label=_t)
+    ex_x = [
+        4.95e-07,
+        1.83759e-06,
+        5.12678e-06,
+        1.73118e-05,
+        6.27953e-05,
+        0.000167031,
+        0.000455021,
+    ]
+    ex_y = [
+        2.405797101,
+        2.550724638,
+        2.927536232,
+        3.536231884,
+        4.579710145,
+        6,
+        7.47826087,
+    ]
+    ex_y = [i * 1.0e-9 for i in ex_y]
     ax.scatter(ex_x, ex_y)
+    ax.legend()
     ax.set_xscale("log")
     ax.set_yscale("log")
     fig.savefig(path.join(test_dir(), "RevilGlover1998.png"), dpi=200)
+
+
+def smectite_cond_intra():
+    print("smectite_cond_intra")
+    cnacl_ls = np.logspace(-3, 0.7, 10, base=10)
+    condnacl_ls = []
+    conds_ls = []
+    fig, ax = plt.subplots()
+    n = 10
+    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+        print("========")  #!
+        print(f"tempe: {_t}")  #!
+        condnacl_ls = []
+        conds_ls = []
+        for cnacl in cnacl_ls:
+            print(cnacl)  #!
+            nacl = NaCl(temperature=_t, cnacl=cnacl, pressure=5.0e6)
+            nacl.sen_and_goode_1992()
+            condnacl_ls.append(nacl.conductivity)
+            smectite = Smectite(nacl)
+            smectite.calc_potentials_and_charges_truncated()
+            smectite.calc_cond_interlayer()
+            conds_ls.append(smectite.cond_intra)
+        ax.plot(cnacl_ls, conds_ls, color=cm.jet(float(i) / n), label=_t)
+    ax.legend()
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    fig.savefig(path.join(test_dir(), "Smectite_cond_intra.png"), dpi=200)
+
+
+def smectite_cond_inf():
+    print("smectite_cond_inf")
+    cnacl_ls = np.logspace(-7, 0.7, 10, base=10)
+    condnacl_ls = []
+    conds_ls = []
+    fig, ax = plt.subplots()
+    n = 10
+    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+        print("========")  #!
+        print(f"tempe: {_t}")  #!
+        condnacl_ls = []
+        conds_ls = []
+        for cnacl in cnacl_ls:
+            print(cnacl)  #!
+            nacl = NaCl(temperature=_t, cnacl=cnacl, pressure=5.0e6)
+            nacl.sen_and_goode_1992()
+            condnacl_ls.append(nacl.conductivity)
+            smectite = Smectite(nacl)
+            smectite.calc_potentials_and_charges_inf()
+            smectite.calc_cond_infdiffuse()
+            conds_ls.append(smectite.cond_infdiffuse)
+        ax.plot(cnacl_ls, conds_ls, color=cm.jet(float(i) / n), label=_t)
+    ax.legend()
+    ax.set_xscale("log")
+    ax.set_yscale("log")
+    fig.savefig(path.join(test_dir(), "Smectite_cond_infdiffuse.png"), dpi=200)
+
+
+def potential_smectite_intra():
+    # スメクタイト内部のゼータ電位とスターン層の電位
+    cnacl_ls = np.logspace(-4, 0.7, 10, base=10).tolist()
+    condnacl_ls = []
+    fig, ax = plt.subplots()
+    n = 10
+    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+        print("========")  #!
+        print(f"tempe: {_t}")  #!
+        condnacl_ls = []
+        pstern_ls = []
+        pzeta_ls = []
+        for cnacl in cnacl_ls:
+            # print(cnacl) #!
+            nacl = NaCl(temperature=_t, cnacl=cnacl, pressure=5.0e6)
+            nacl.sen_and_goode_1992()
+            condnacl_ls.append(nacl.conductivity)
+            smectite = Smectite(nacl)
+            smectite.calc_potentials_and_charges_truncated()
+            smectite.calc_cond_interlayer()
+            pstern_ls.append(smectite.potential_stern)
+            pzeta_ls.append(smectite.potential_zeta)
+        print(cnacl_ls)
+        print(pstern_ls)
+        ax.plot(
+            cnacl_ls, pstern_ls, color=cm.jet(float(i) / n), label=_t, linestyle="solid"
+        )
+        ax.plot(
+            cnacl_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dotted"
+        )
+
+    ax.legend()
+    ax.set_xscale("log")
+    fig.savefig(path.join(test_dir(), "Smectite_potential_intra.png"), dpi=200)
+
+
+def potential_smectite_inf():
+    # 空隙中のゼータ電位とスターン層の電位
+    print("potential_smectite_inf")
+    cnacl_ls = np.logspace(-7, 0.7, 10, base=10)
+    condnacl_ls = []
+    fig, ax = plt.subplots()
+    n = 10
+    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+        print("========")  #!
+        print(f"tempe: {_t}")  #!
+        condnacl_ls = []
+        pstern_ls = []
+        pzeta_ls = []
+        for cnacl in cnacl_ls:
+            # print(cnacl) #!
+            nacl = NaCl(temperature=_t, cnacl=cnacl, pressure=5.0e6)
+            nacl.sen_and_goode_1992()
+            condnacl_ls.append(nacl.conductivity)
+            smectite = Smectite(nacl)
+            smectite.calc_potentials_and_charges_inf()
+            pstern_ls.append(smectite.potential_stern)
+            pzeta_ls.append(smectite.potential_zeta)
+        ax.plot(
+            cnacl_ls, pstern_ls, color=cm.jet(float(i) / n), label=_t, linestyle="solid"
+        )
+        ax.plot(
+            cnacl_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dashdot"
+        )
+    # Leroy et al., 2015
+    ex_x = [0.002483266, 0.005355863, 0.007630982, 0.017786185]
+    ex_y = [-0.1496710526, -0.1475585303, -0.1312719129, -0.1075822876]
+    ax.scatter(ex_x, ex_y) #!
+
+    ax.legend()
+    ax.set_xscale("log")
+    fig.savefig(path.join(test_dir(), "Smectite_potential_inf.png"), dpi=200)
+    pass
+
 
 def get_kaolinite_init_params():
     temperature = 298.15
@@ -291,7 +599,12 @@ def get_kaolinite_init_params():
         for i, cna in enumerate(conc_ls):
             print(f"cna: {cna}")  #!
             nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
-            kaolinite = Kaolinite(nacl=nacl, layer_width=0.0, xd=None, logger=None,)
+            kaolinite = Kaolinite(
+                nacl=nacl,
+                layer_width=0.0,
+                xd=None,
+                logger=None,
+            )
             if i == 0 and 1.0e-14 <= ch < 1.0e-13:
                 xn = [
                     -0.4834874107638951,
@@ -394,7 +707,12 @@ def get_smectite_init_params_inf():
         for i, cna in enumerate(conc_ls):
             print(f"cna: {cna}")  #!
             nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
-            smectite = Smectite(nacl=nacl, layer_width=1.14e-9, xd=None, logger=None,)
+            smectite = Smectite(
+                nacl=nacl,
+                layer_width=1.14e-9,
+                xd=None,
+                logger=None,
+            )
             if i == 0 and ch < 1.0e-13:
                 xn = [
                     -0.6005853427020252,
@@ -569,41 +887,48 @@ def get_smectite_init_params_inf():
 
 def get_smectite_init_params_truncated():
     # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
-    ch_ls = np.logspace(-14, -1, 100, base=10.0).tolist()
+    ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()  #! 100にする
     r_ls = [i * 2.0e-9 for i in range(1, 7)]
-    conc_ls = np.logspace(-5.0, 0.7, 200, base=10.0).tolist()  # 5Mまで
-    temperature = 298.15
-    r_ch_cna_init_dict: Dict = {}
-    for _r in r_ls:
-        ch_cna_dct: Dict = r_ch_cna_init_dict.setdefault(_r, {})
-        for ch in ch_ls:
-            cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
-            for j, cna in enumerate(conc_ls):
-                print("========")
-                print(f"condition: \nr: {_r},\nch: {ch},\ncnacl: {cna}")  #!
-                nacl = NaCl(temperature=temperature, cnacl=cna, ph=-np.log10(ch))
-                smectite = Smectite(nacl=nacl, layer_width=_r,)
-                _xinit_tmp, diff = smectite.calc_init_params_trun()
-                if diff < 0.1:
-                    xn = _xinit_tmp
-                    # elseの場合前のループのxn
-                smectite.calc_potentials_and_charges_inf()
-                xn = smectite.calc_potentials_and_charges_truncated(xn)
-                print(f"xn after: {xn}")  #!
-                print(f"xd: {smectite.xd}")  #!
-                cna_dct.setdefault(cna, xn)
-            # value check
-            if (
-                float("inf") in xn
-                or float("nan") in xn
-                or sum([abs(i) for i in xn]) > 3.0
-                or np.nan in xn
-            ):
-                print("breaked")  #!
-                break
+    conc_ls = np.logspace(-7.0, 0.7, 150, base=10.0).tolist()  #! 200にする -7から
+    t_ls = np.linspace(273.15, 498.15, 100).tolist()
+    t_r_ch_cna_init_dict: Dict = {}
+    for _t in t_ls:
+        r_ch_cna_init_dict = t_r_ch_cna_init_dict.setdefault(_t, {})
+        for _r in r_ls:
+            ch_cna_dct: Dict = r_ch_cna_init_dict.setdefault(_r, {})
+            for ch in ch_ls:
+                cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
+                for j, cna in enumerate(conc_ls):
+                    print("========")
+                    print(
+                        f"condition: \nt: {_t},\nr: {_r},\nch: {ch},\ncnacl: {cna}"
+                    )  #!
+                    nacl = NaCl(temperature=_t, cnacl=cna, ph=-np.log10(ch))
+                    smectite = Smectite(
+                        nacl=nacl,
+                        layer_width=_r,
+                    )
+                    _xinit_tmp = smectite.calc_potentials_and_charges_truncated()
+                    if j == 0:
+                        xn = _xinit_tmp
+                        # elseの場合前のループのxn
+                    smectite.calc_potentials_and_charges_inf()
+                    xn = smectite.calc_potentials_and_charges_truncated(xn)
+                    print(f"xn after: {xn}")  #!
+                    print(f"xd: {smectite.xd}")  #!
+                    cna_dct.setdefault(cna, xn)
+                # value check
+                if (
+                    float("inf") in xn
+                    or float("nan") in xn
+                    or sum([abs(i) for i in xn]) > 3.0
+                    or np.nan in xn
+                ):
+                    print("breaked")  #!
+                    break
 
     with open(f"./smectite_trun_init.pkl", "wb") as pklf:
-        pickle.dump(r_ch_cna_init_dict, pklf)
+        pickle.dump(t_r_ch_cna_init_dict, pklf)
 
     start = time.time()
     with open(f"./smectite_trun_init.pkl", "rb") as pklf:
@@ -626,7 +951,10 @@ def test_single_condition():
         0.6685515350060947,
         7.887858103894404e-05,
     ]
-    smectite = Smectite(nacl=nacl, layer_width=_r,)
+    smectite = Smectite(
+        nacl=nacl,
+        layer_width=_r,
+    )
     xn = smectite.calc_potentials_and_charges_truncated(x_init)
 
 
@@ -797,7 +1125,7 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
     # smectite
-    smectite = Smectite(nacl=nacl, layer_width=1.3e-9, logger=logger) #!
+    smectite = Smectite(nacl=nacl, layer_width=1.3e-9, logger=logger)  #!
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
     smectite.calc_cond_interlayer()
@@ -816,8 +1144,16 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
                 (quartz, (1.0 - _poros) * (1.0 - xsmec)),
             ],
         ),
-        instance_range_dict=OrderedDict([(nacl, (ayz_pore, ayz_pore)),]),
-        instance_adj_rate_dict=OrderedDict([(smectite, (nacl, adj_rate)),]),
+        instance_range_dict=OrderedDict(
+            [
+                (nacl, (ayz_pore, ayz_pore)),
+            ]
+        ),
+        instance_adj_rate_dict=OrderedDict(
+            [
+                (smectite, (nacl, adj_rate)),
+            ]
+        ),
         seed=42,
     )
     solver_input.set_ib()
@@ -968,7 +1304,7 @@ def compare_WS_shaly_1():
         print(_id, xsmec)  #!
         # print(f"xsmec: {xsmec}") #!
         # anisotoropic scaling factors
-        range_pore_ls: List = np.linspace(0.5, 2., 10).tolist()
+        range_pore_ls: List = np.linspace(0.5, 2.0, 10).tolist()
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
         pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
@@ -1013,20 +1349,22 @@ def compare_WS_shaly_1():
         pool.shutdown(wait=True)
     return
 
+
 def test_mobility_2():
     cnacl_ls = np.logspace(-3, 0.3, 5, base=10).tolist()
-    tempe_ls = np.linspace(298.15, 500., 10).tolist()
+    tempe_ls = np.linspace(298.15, 500.0, 10).tolist()
     dct = {}
     for t in tempe_ls:
         for cnacl in cnacl_ls:
             nacl = NaCl(temperature=t, cnacl=cnacl)
             dct.setdefault(t, []).append(nacl.ion_props["Na"]["MobilityInfDiffuse"])
-    
+
     fig, ax = plt.subplots()
     for t, ls in dct.items():
-        ax.plot(cnacl_ls, ls, label = t)
+        ax.plot(cnacl_ls, ls, label=t)
     ax.legend()
     fig.savefig("./test/mobility.png", dpi=200)
+
 
 def analysis_WS_result():
     cnacl_ws = [
@@ -1099,7 +1437,7 @@ def analysis_WS_result():
         _ls = ws_result[int(_id)]
         ax.scatter(_ls[0], _ls[1])
         # save
-        ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+        ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
         ax.set_xlabel("Salinity (Mol)")
         ax.set_ylabel("Conductivity (S/m)")
         ax.grid()
@@ -1135,7 +1473,7 @@ def analysis_WS_result():
             ax.scatter(_ls[0], _ls[1])
             # save
             ax.grid()
-            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
             fig.savefig(f"./test/{_id}_{ayz}.png", bbox_inches="tight", dpi=200)
             plt.clf()
             plt.close()
@@ -1165,8 +1503,14 @@ def test_poros_distribution():
     _gamma = solver_input.create_pixel_by_macro_variable(
         shape=(10, 10, 10),
         edge_length=1.0e-6,
-        volume_frac_dict=OrderedDict([(nacl, 0.2), (quartz, 0.8)],),
-        instance_range_dict=OrderedDict([(nacl, (r, r)),]),
+        volume_frac_dict=OrderedDict(
+            [(nacl, 0.2), (quartz, 0.8)],
+        ),
+        instance_range_dict=OrderedDict(
+            [
+                (nacl, (r, r)),
+            ]
+        ),
         seed=42,
     )
     solver_input.set_ib()
@@ -1203,19 +1547,23 @@ def test_poros_distribution():
 def test_levy_etal_2018():
     pass
 
+
 def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
     nacl = NaCl()
     quartz = Quartz(nacl)
     solver_input = FEM_Input_Cube()
     solver_input.set_ib()
     solver_input.femat()
-    solver_input.create_pixel_by_macro_variable((n,n,n),
-                                                5.0e-8,
-                                                {nacl: 0.2,
-                                                 quartz: 0.8,},
-                                                range_dct,
-                                                seed,
-                                                )
+    solver_input.create_pixel_by_macro_variable(
+        (n, n, n),
+        5.0e-8,
+        {
+            nacl: 0.2,
+            quartz: 0.8,
+        },
+        range_dct,
+        seed,
+    )
     solver = FEM_Cube(solver_input)
     solver.run(100, 30, 1.0e-9)
 
@@ -1233,7 +1581,7 @@ def test_elementary_number():
 def main():
     return
 
-
+from math import log10
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
@@ -1249,7 +1597,11 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992()
     # test_mobility()
     # test_quartz()
-    qurtz_cond()
+    # qurtz_cond()
+    smectite_cond_intra()
+    potential_smectite_intra()
+    # smectite_cond_inf()
+    # potential_smectite_inf()
     # Revil_etal_fig2()
 
     # Grieser_and_Healy()
@@ -1266,3 +1618,4 @@ if __name__ == "__main__":
     #     print("==============")
     #     print(smectite.calc_cond_infdiffuse())
     #     print(smectite.get_double_layer_length())
+    pass

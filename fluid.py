@@ -112,6 +112,7 @@ class NaCl(Fluid):
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
+        self.viscosity: float = iapws._iapws._Viscosity(water.rho, self.temperature)
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -185,6 +186,14 @@ class NaCl(Fluid):
             float: permittivity of water
         """
         return self.dielec_water
+
+    def get_viscosity(self) -> float:
+        """Getter for the viscosity(Ps・s) of water
+
+        Returns:
+            float: viscosity of water
+        """
+        return self.viscosity
 
     def get_cond(self) -> float:
         """Getter for the electrical conductivity of fluid

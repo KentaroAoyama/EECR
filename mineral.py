@@ -62,6 +62,7 @@ class Quartz:
         self.temperature: float = nacl.get_temperature()
         self.dielec: float = nacl.get_dielec_water()
         self.pressure: float = nacl.pressure
+        self.viscosity: float = nacl.get_viscosity()
         self.logger: Logger = logger
 
         # set pH
@@ -98,7 +99,7 @@ class Quartz:
         # stern potential
         self.potential_stern = potential_stern
         if self.potential_stern is None:
-            _x = newton(self.__calc_eq106, 1.0e1)
+            _x = newton(self.__calc_eq106, 1.0e2)
             self.potential_stern = (
                 -1.0
                 * (
@@ -181,7 +182,6 @@ class Quartz:
 
     def __calc_cond_diffuse(self) -> None:
         """Calculate the specific conductivity of diffuse layer by Revil & Glover 1998"""
-        # consider temperature dependence (reference temperature is 20~25℃)
         s_edl = self.__calc_edl()
         s_stern = self.__calc_stern()
         s_prot = 2.4e-9

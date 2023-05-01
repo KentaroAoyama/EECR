@@ -61,7 +61,9 @@ class Phyllosilicate:
     References:
         Gonçalvès J., P. Rousseau-Gueutin, A. Revil, 2007, doi:10.1016/j.jcis.2007.07.023
         Leroy P., A. Revil, 2004, doi:10.1016/j.jcis.2003.08.007
-        Leroy p., and Revil A., 2009, doi:10.1029/2008JB006114
+        Leroy P., and A. Revil, 2009, doi:10.1029/2008JB006114
+        Leroy P., T. Christophe, B. Olivier, D. Nicolas, A. Mohamed, 2015,
+            doi: 10.1016/j.jcis.2015.03.047
         Shirozu, 1998, Introduction to Clay Mineralogy
     """
 
@@ -125,6 +127,7 @@ class Phyllosilicate:
         self.pressure: float = nacl.get_pressure()
         self.ion_props: Dict = nacl.get_ion_props()
         self.dielec_water: float = nacl.get_dielec_water()
+        self.viscosity: float = nacl.get_viscosity()
         ####################################################
         # Specific parameters of phyllosilicate
         ####################################################
@@ -160,7 +163,6 @@ class Phyllosilicate:
         self.ionic_strength: float = None
         self.kappa: float = None
         self.kappa_truncated: float = None
-        self.kappa_stern: float = None
         self.qs_coeff1_inf: float = None
         self.qs_coeff2_inf: float = None
         self.cond_tensor: np.ndarray = None
@@ -1122,7 +1124,7 @@ class Phyllosilicate:
                 norm_step = np.sum(np.sqrt(np.square(step)), axis=0)[0]
                 if step_tol < norm_step:
                     break
-                if norm_step > oscillation_tol:
+                if norm_step < oscillation_tol:
                     break
                 else:
                     _msg: str = (
@@ -1146,34 +1148,15 @@ class Phyllosilicate:
 
         # fix minor error
         # zeta potential
-        if self.potential_stern > 0:
-            pass
-        elif self.potential_zeta > 0.0 and math.isclose(
-            self.potential_zeta, 0.0, abs_tol=1.0e-8
-        ):
-            self.potential_zeta -= 2.0 * self.potential_zeta
-        elif self.potential_zeta > 0.0:
-            raise RuntimeError(
-                f"zeta potential grately exeeds 0: {self.potential_zeta}"
-            )
+        if self.potential_zeta <= 0.0:
+            if self.potential_r > 0.0:
+                self.potential_r -= 2.0 * self.potential_r
         # stern potential
         # High concentration case
-        if self.potential_stern > 0.0:
-            if self.potential_zeta < 0.0 and math.isclose(
-                self.potential_zeta, 0.0, abs_tol=1.0e-8
-            ):
-                self.potential_zeta -= 2.0 * self.potential_zeta
-            if self.potential_r < 0.0 and math.isclose(
-                self.potential_r, 0.0, abs_tol=1.0e-8
-            ):
+        if self.potential_zeta > 0.0:
+            if self.potential_r < 0.0:
                 self.potential_r -= 2.0 * self.potential_r
-        # Low concentration case
-        elif self.potential_r > 0.0 and math.isclose(
-            self.potential_r, 0.0, abs_tol=1.0e-8
-        ):
-            self.potential_r -= 2.0 * self.potential_r
-        elif self.potential_r > 0.0:
-            raise RuntimeError(f"truncated plane potential grately exeeds 0")
+
         # DEBUG
         if self.logger is not None:
             self.logger.info(
@@ -1244,21 +1227,15 @@ class Phyllosilicate:
         _r = self.layer_width * 0.5
         self.kappa_truncated = 1.0 / _r * np.log(self.potential_zeta / self.potential_r)
 
-    def __calc_kappa_stern(self) -> None:
-        """Calculate the rate of decay (kappa) of the potential in
-        the stern layer. Assume the thickness of the stern layer is
-        equal to xd (O layer thickness is assumed negligibly small)
-        """
-        self.kappa_stern = (
-            1.0 / self.xd * np.log(self.potential_stern / self.potential_zeta)
-        )
 
-    def __calc_n_diffuse_inf(self, x: float, s: str) -> float:
+    def __calc_cond_diffuse_inf(self, x: float, s: str, coeff: float) -> float:
         """Calculate Na+ number density in diffuse layer
 
         Args:
             x (float): Distance from zeta plane (m)
             s (str): Ion species existed in self.ion_props
+            coeff (float): Ratio of dielectric constant to viscosity
+                (eq.26 in Leroy et al., 2015)
 
         Returns:
             float: Number density of Na+ (-/m^3)
@@ -1267,6 +1244,10 @@ class Phyllosilicate:
         potential: float = self.potential_zeta * np.exp((-1.0) * self.kappa * x)
         _props: Dict = self.ion_props[s]
         v = _props[IonProp.Valence.name]
+        # mobility at position x
+        bx = _props[IonProp.MobilityInfDiffuse.name] + (v / abs(v)) * coeff * (
+            potential - self.potential_zeta
+        )
         n = (
             np.exp(
                 -v
@@ -1279,7 +1260,7 @@ class Phyllosilicate:
             * _props[IonProp.Concentration.name]
             * abs(v)
         )
-        return n
+        return bx * n
 
     def __calc_n_diffuse_truncated(self, x: float) -> float:
         """Calculate Na+ number density in diffuse layer
@@ -1332,7 +1313,6 @@ class Phyllosilicate:
                 / (const.BOLTZMANN_CONST * self.temperature)
             )
         )
-
         return n
 
     def calc_cond_interlayer(self) -> float:
@@ -1353,19 +1333,18 @@ class Phyllosilicate:
         # mineral, such as vermiculite, we should modify this function.
         if not self.__check_constant_as_smectite_truncated():
             self.__set_constant_for_smectite_truncated()
-
         if self.xd is None:
             self.calc_xd()
-
-        # Na+ number (n/m^2) at stern layer
-        if self.kappa_stern is None:
-            self.__calc_kappa_stern()
-        gamma_stern = self.__calc_n_stern()
-        # Na+ number (n/m^2) at diffuse layer
         if self.kappa_truncated is None:
             self.__calc_kappa_truncated()
+
+        # Na+ number (n/m^2) in stern layer
+        gamma_stern = self.__calc_n_stern()
         _xdl = self.layer_width * 0.5
-        gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
+        # Na+ number (n/m^2) in diffuse layer
+        gamma_diffuse = 0.0
+        if not math.isclose(self.xd, _xdl):
+            gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
         # total number density
         na_prop: Dict = self.ion_props[Species.Na.name]
         cond_intra: float = (
@@ -1392,6 +1371,7 @@ class Phyllosilicate:
             Tuple[float]: conductivity, integral error
         """
         # TODO: May need to consider other cases (e.g., illite, etc.)
+        # osmotic flowを考慮
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()
         else:
@@ -1402,22 +1382,21 @@ class Phyllosilicate:
             self.calc_xd()
 
         # Na+ number (n/m^2) at stern layer
-        if self.kappa_stern is None:
-            self.__calc_kappa_stern()
         gamma_stern = self.__calc_n_stern()
         # Na+ number (n/m^2) at diffuse layer
         xdl = self.xd + 1.0 / self.kappa
-        __callback = partial(self.__calc_n_diffuse_inf, s=Species.Na.name)
-        gamma_na_diffuse, _ = quad(__callback, self.xd, xdl)
+        __callback = partial(
+            self.__calc_cond_diffuse_inf,
+            s=Species.Na.name,
+            coeff=self.dielec_water / self.viscosity,
+        )
+        cond_na_diffuse, _ = quad(__callback, self.xd, xdl)
 
         # calc conductivity
         na_prop: Dict = self.ion_props[Species.Na.name]
         cond_diffuse: float = (
             const.ELEMENTARY_CHARGE
-            * (
-                gamma_stern * na_prop[IonProp.MobilityStern.name]
-                + gamma_na_diffuse * na_prop[IonProp.MobilityInfDiffuse.name]
-            )
+            * (gamma_stern * na_prop[IonProp.MobilityStern.name] + cond_na_diffuse)
         ) / xdl
 
         # log
@@ -1668,8 +1647,6 @@ class Kaolinite(Phyllosilicate):
             logger=logger,
         )
 
-
-from matplotlib import pyplot as plt  #!
 
 if __name__ == "__main__":
     pass

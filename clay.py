@@ -1227,7 +1227,6 @@ class Phyllosilicate:
         _r = self.layer_width * 0.5
         self.kappa_truncated = 1.0 / _r * np.log(self.potential_zeta / self.potential_r)
 
-
     def __calc_cond_diffuse_inf(self, x: float, s: str, coeff: float) -> float:
         """Calculate Na+ number density in diffuse layer
 
@@ -1347,12 +1346,10 @@ class Phyllosilicate:
             gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
         # total number density
         na_prop: Dict = self.ion_props[Species.Na.name]
+        cond_stern = gamma_stern * na_prop[IonProp.MobilityStern.name]
+        cond_diffuse = gamma_diffuse * na_prop[IonProp.MobilityTrunDiffuse.name]
         cond_intra: float = (
-            const.ELEMENTARY_CHARGE
-            * (
-                gamma_stern * na_prop[IonProp.MobilityStern.name]
-                + gamma_diffuse * na_prop[IonProp.MobilityTrunDiffuse.name]
-            )
+            const.ELEMENTARY_CHARGE * (cond_stern + cond_diffuse)
         ) / _xdl
 
         # log
@@ -1361,7 +1358,7 @@ class Phyllosilicate:
             self.logger.debug(f"cond_ohmic_diffuse: {cond_intra}")
 
         self.cond_intra = cond_intra
-        return self.cond_intra
+        return self.cond_intra, (cond_stern, cond_diffuse)
 
     def calc_cond_infdiffuse(self) -> float:
         """Calculate the Stern + EDL conductivity for the inifinite diffuse

@@ -334,7 +334,7 @@ def Revil_etal_fig2():
     for _r in r_ls:
         smectite = Smectite(nacl=nacl_ref, layer_width=_r)
         smectite.calc_potentials_and_charges_truncated()
-        base = smectite.calc_cond_interlayer()
+        base, _ = smectite.calc_cond_interlayer()
         _ls = r_result.setdefault(_r, [[], []])
         for i, cnacl in enumerate(cnacl_ls):
             print(f"cnacl: {cnacl}")  #!
@@ -485,6 +485,38 @@ def smectite_cond_intra():
     fig.savefig(path.join(test_dir(), "Smectite_cond_intra.png"), dpi=200)
 
 
+def smec_cond_intra_r_dependence():
+    print("smectite_cond_intra_r_dependence")
+    cnacl_ls = np.logspace(-3, 0.7, 10, base=10)
+    r_ls = np.linspace(1.0e-9, 1.3e-8, 10).tolist()
+    condnacl_ls = []
+    fig, ax = plt.subplots()
+    n = 10
+    for i, _r in enumerate(r_ls):
+        print("========")  #!
+        print(f"layer width: {_r}")  #!
+        condnacl_ls = []
+        stern_ls = []
+        zeta_ls = []
+        for cnacl in cnacl_ls:
+            print(cnacl)  #!
+            nacl = NaCl(temperature=298.15, cnacl=cnacl, pressure=5.0e6)
+            nacl.sen_and_goode_1992()
+            condnacl_ls.append(nacl.conductivity)
+            smectite = Smectite(nacl, layer_width=_r)
+            smectite.calc_potentials_and_charges_truncated()
+            _, (stern, diffuse) = smectite.calc_cond_interlayer()
+            stern_ls.append(stern)
+            zeta_ls.append(diffuse)
+        ax.plot(
+            cnacl_ls, stern_ls, color=cm.jet(float(i) / n), label=_r, linestyle="solid"
+        )
+        ax.plot(cnacl_ls, zeta_ls, color=cm.jet(float(i) / n), linestyle="dotted")
+    ax.legend()
+    ax.set_xscale("log")
+    fig.savefig(path.join(test_dir(), "Smectite_cond_intra_r_dependence.png"), dpi=200)
+
+
 def smectite_cond_inf():
     print("smectite_cond_inf")
     cnacl_ls = np.logspace(-7, 0.7, 10, base=10)
@@ -540,9 +572,7 @@ def potential_smectite_intra():
         ax.plot(
             cnacl_ls, pstern_ls, color=cm.jet(float(i) / n), label=_t, linestyle="solid"
         )
-        ax.plot(
-            cnacl_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dotted"
-        )
+        ax.plot(cnacl_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dotted")
 
     ax.legend()
     ax.set_xscale("log")
@@ -574,13 +604,11 @@ def potential_smectite_inf():
         ax.plot(
             cnacl_ls, pstern_ls, color=cm.jet(float(i) / n), label=_t, linestyle="solid"
         )
-        ax.plot(
-            cnacl_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dashdot"
-        )
+        ax.plot(cnacl_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dashdot")
     # Leroy et al., 2015
     ex_x = [0.002483266, 0.005355863, 0.007630982, 0.017786185]
     ex_y = [-0.1496710526, -0.1475585303, -0.1312719129, -0.1075822876]
-    ax.scatter(ex_x, ex_y) #!
+    ax.scatter(ex_x, ex_y)  #!
 
     ax.legend()
     ax.set_xscale("log")
@@ -885,50 +913,92 @@ def get_smectite_init_params_inf():
     print(f"elasped time to load pickle: {end-start}")  #!
 
 
+def calc_norm(_ls) -> np.array:
+    _arr = np.array(_ls)
+    return (_arr - _arr.min()) / (_arr.max() - _arr.min())
+
+
+def __get_nearest_init(_dct, _t, ch, cna) -> np.array:
+    # temperaure
+    _t_ls = list(_dct.keys())
+    tn = _t_ls[np.argmin(np.square(np.array(_t_ls) - _t))]
+    # ch (logspace)
+    _dct = _dct[tn]
+    _ch_ls = list(_dct.keys())
+    chn = _ch_ls[np.argmin(np.square(np.log10(np.array(_ch_ls)) - np.log10(ch)))]
+    # CNa (logspace)
+    _dct = _dct[chn]
+    _cna_ls = list(_dct.keys())
+    cnan = _cna_ls[np.argmin(np.square(np.log10(np.array(_cna_ls)) - np.log10(cna)))]
+    return _dct[cnan]
+
+
+def calc_t_ch_cna_init_smec_trun(r_t_ch_cna_init_dict, _r, t_ls, ch_ls, conc_ls):
+    t_ch_cna_init_dict = r_t_ch_cna_init_dict.setdefault(_r, {})
+    xn = None
+    for _t in t_ls:
+        for ch in ch_ls:
+            for cna in conc_ls:
+                print("========")
+                print(f"condition: \nt: {_t},\nr: {_r},\nch: {ch},\ncnacl: {cna}")  #!
+                nacl = NaCl(temperature=_t, cnacl=cna, ph=-np.log10(ch), pressure=5.0e6)
+                smectite = Smectite(
+                    nacl=nacl,
+                    layer_width=_r,
+                )
+                if xn is None:
+                    xn = smectite.calc_potentials_and_charges_truncated()
+                else:
+                    # calc dist
+                    xn = __get_nearest_init(t_ch_cna_init_dict, _t, ch, cna)
+                smectite.calc_potentials_and_charges_inf()
+                xn = smectite.calc_potentials_and_charges_truncated(xn)
+                ch_cna_dct: Dict = t_ch_cna_init_dict.setdefault(_t, {})
+                cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
+                cna_dct.setdefault(cna, xn)
+
+    makedirs("./tmp/params", exist_ok=True) #!
+    with open(f"./tmp/params/{_r}.pickle", "wb") as pkf:
+        pickle.dump(t_ch_cna_init_dict, pkf, pickle.HIGHEST_PROTOCOL)
+
+
+def sort_by_center(_ls: List, center: float, logspace=True) -> List:
+    _arr = np.array(_ls)
+    if logspace:
+        _arr = np.log10(_arr)
+        center = np.log10(center)
+    args = np.argsort(np.square(_arr - center))
+    return [_ls[i] for i in args]
+
+
 def get_smectite_init_params_truncated():
     # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
-    ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()  #! 100にする
-    r_ls = [i * 2.0e-9 for i in range(1, 7)]
-    conc_ls = np.logspace(-7.0, 0.7, 150, base=10.0).tolist()  #! 200にする -7から
-    t_ls = np.linspace(273.15, 498.15, 100).tolist()
-    t_r_ch_cna_init_dict: Dict = {}
-    for _t in t_ls:
-        r_ch_cna_init_dict = t_r_ch_cna_init_dict.setdefault(_t, {})
-        for _r in r_ls:
-            ch_cna_dct: Dict = r_ch_cna_init_dict.setdefault(_r, {})
-            for ch in ch_ls:
-                cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
-                for j, cna in enumerate(conc_ls):
-                    print("========")
-                    print(
-                        f"condition: \nt: {_t},\nr: {_r},\nch: {ch},\ncnacl: {cna}"
-                    )  #!
-                    nacl = NaCl(temperature=_t, cnacl=cna, ph=-np.log10(ch))
-                    smectite = Smectite(
-                        nacl=nacl,
-                        layer_width=_r,
-                    )
-                    _xinit_tmp = smectite.calc_potentials_and_charges_truncated()
-                    if j == 0:
-                        xn = _xinit_tmp
-                        # elseの場合前のループのxn
-                    smectite.calc_potentials_and_charges_inf()
-                    xn = smectite.calc_potentials_and_charges_truncated(xn)
-                    print(f"xn after: {xn}")  #!
-                    print(f"xd: {smectite.xd}")  #!
-                    cna_dct.setdefault(cna, xn)
-                # value check
-                if (
-                    float("inf") in xn
-                    or float("nan") in xn
-                    or sum([abs(i) for i in xn]) > 3.0
-                    or np.nan in xn
-                ):
-                    print("breaked")  #!
-                    break
+    ch_ls = np.logspace(-14, -1, 42, base=10.0).tolist()  #! 100にする
+    r_ls = np.linspace(1.0e-9, 1.3e-8, 20).tolist()
+    conc_ls = np.logspace(-7.0, 0.7, 200, base=10.0).tolist()  #! 200にする -7から
+
+    # sort
+    ch_ls = sort_by_center(ch_ls, 1.0e-7)
+    conc_ls = sort_by_center(conc_ls, 0.01)
+    t_ls = np.linspace(273.15, 498.15, 200).tolist() #!
+    r_t_ch_cna_init_dict: Dict = {}
+    pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+    for _r in r_ls:
+        # calc_t_ch_cna_init_smec_trun(
+        #     r_t_ch_cna_init_dict, _r=_r, t_ls=t_ls, ch_ls=ch_ls, conc_ls=conc_ls
+        # )
+        pool.submit(
+            calc_t_ch_cna_init_smec_trun,
+            r_t_ch_cna_init_dict=r_t_ch_cna_init_dict,
+            _r=_r,
+            t_ls=t_ls,
+            ch_ls=ch_ls,
+            conc_ls=conc_ls,
+        )
+    pool.shutdown(wait=True)
 
     with open(f"./smectite_trun_init.pkl", "wb") as pklf:
-        pickle.dump(t_r_ch_cna_init_dict, pklf)
+        pickle.dump(r_t_ch_cna_init_dict, pklf)
 
     start = time.time()
     with open(f"./smectite_trun_init.pkl", "rb") as pklf:
@@ -1048,28 +1118,27 @@ def test_mobility():
     nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
     # _ls = [20., 50., 80., 110., 140., 170., 200.]
     ion_props: Dict = deepcopy(const.ion_props_default)
-    mu_na_ls: List = []
+    mu_na_msa_ls: List = []
+    mu_na_revil_ls = []
     mu_cl_ls: List = []
     cond_ls: List = []
     _cna = 1.0
-    # for i in tempe_ls:
-    #     print("=======")
-    #     print(f"Tempe: {i}")  #!
-    #     ion_props["Na"]["Concentration"] = _cna
-    #     ion_props["Cl"]["Concentration"] = _cna
-    #     _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
-    #     m_na = _msa_props["Na"]["mobility"]
-    #     m_cl = _msa_props["Cl"]["mobility"]
-    #     print(m_na)  #!
-    #     mu_na_ls.append(m_na)
-    #     mu_cl_ls.append(m_cl)
-    #     _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.0
-
-    #     cond_ls.append(_coeff * (m_na + m_cl))
-    # _, ax = plt.subplots()
-    # ax.plot(tempe_ls, mu_na_ls)
+    for i in tempe_ls:
+        print("=======")
+        print(f"Tempe: {i}")  #!
+        ion_props["Na"]["Concentration"] = _cna
+        ion_props["Cl"]["Concentration"] = _cna
+        _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
+        nacl = NaCl(temperature=i + 273.15, cnacl=_cna, pressure=5.0e6)
+        mu_na_revil_ls.append(nacl.ion_props["Na"]["MobilityTrunDiffuse"])
+        m_na = _msa_props["Na"]["mobility"] * 0.1
+        mu_na_msa_ls.append(m_na)
+    _, ax = plt.subplots()
+    ax.plot(tempe_ls, mu_na_msa_ls, label="MSA")
+    ax.plot(tempe_ls, mu_na_revil_ls, label="Linear")
+    ax.legend()
     # ax.set_yscale("log")
-    # plt.show()
+    plt.show()
 
     _min, _max = 1, 1000
     nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
@@ -1544,6 +1613,31 @@ def test_poros_distribution():
     plt_any_val(prob_ls, (10, 10, 10), f"./aniso/{r}")
 
 
+import iapws
+
+
+def test_dielec():
+    t_ls = np.linspace(0.0, 200.0, 100).tolist()
+    p_ls = [5.0e6]
+    fig, ax = plt.subplots()
+    for i, p in enumerate(p_ls):
+        x = []
+        y = []
+        for t in t_ls:
+            water = iapws.IAPWS97(T=t + 297.13, P=p * 1.0e-6)
+            if water.phase != "Liquid":
+                continue
+            y.append(iapws._iapws._Dielectric(water.rho, t + 273.15))
+            x.append(t)
+        ax.plot(x, y, label=p * 1.0e-6, color=cm.jet(float(i) / len(p_ls)))
+    y = []
+    for t in t_ls:
+        y.append(88.15 - 0.414 * t + 0.131 * 1.0e-2 * t**2 - 0.046 * 1.0e-4 * t**3)
+    ax.plot(t_ls, y, linestyle="dotted")
+    ax.legend()
+    fig.savefig(path.join(test_dir(), "dielec.png"), dpi=200)
+
+
 def test_levy_etal_2018():
     pass
 
@@ -1581,11 +1675,11 @@ def test_elementary_number():
 def main():
     return
 
-from math import log10
+
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    # get_smectite_init_params_truncated()
+    get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
@@ -1598,8 +1692,10 @@ if __name__ == "__main__":
     # test_mobility()
     # test_quartz()
     # qurtz_cond()
-    smectite_cond_intra()
-    potential_smectite_intra()
+    # smectite_cond_intra()
+    # potential_smectite_intra()
+    # test_dielec()
+    # smec_cond_intra_r_dependence()
     # smectite_cond_inf()
     # potential_smectite_inf()
     # Revil_etal_fig2()

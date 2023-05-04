@@ -16,7 +16,6 @@ from copy import deepcopy
 
 import numpy as np
 from scipy.optimize import newton
-from scipy.integrate import quad
 import iapws
 
 import constants as const
@@ -155,30 +154,6 @@ class Quartz:
         )
         _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x**4 - 1.0
         return _t1 * _t2 * _t3 * _t4 + _t5
-
-    def __calc_cond_at_x_inf_diffuse(self, _x: float) -> float:
-        """Calculate the conductivity of the infinite diffuse layer.
-
-        Args:
-            _x (float): Distance from the surface (stern layer)
-
-        Returns:
-            float: Consuctivity at the point _x
-        """
-        phi_x = self.potential_stern * exp(-1.0 * self.kappa * _x)
-        _e = const.ELEMENTARY_CHARGE
-        _kb = const.BOLTZMANN_CONST
-        _na = const.AVOGADRO_CONST
-        _cond = 0.0
-        for _s, _prop in self.ion_props.items():
-            if _s in (Species.H.name, Species.OH.name):
-                continue
-            _conc = 1000.0 * _prop[IonProp.Concentration.name]
-            _v = _prop[IonProp.Valence.name]
-            _mobility = _prop[IonProp.MobilityInfDiffuse.name]
-            _conc *= exp((-1.0) * _v * _e * phi_x / (_kb * self.temperature))
-            _cond += _e * abs(_v) * _mobility * _na * _conc
-        return _cond
 
     def __calc_cond_diffuse(self) -> None:
         """Calculate the specific conductivity of diffuse layer by Revil & Glover 1998"""

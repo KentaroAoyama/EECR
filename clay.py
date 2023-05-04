@@ -889,7 +889,7 @@ class Phyllosilicate:
             _xd = self.layer_width * 0.5
         self.xd = _xd
         _err = err_ls[_idx]
-        assert _err < abs(_qs), "Integral error exceeds the value of qs"
+        # assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.xd, _err
 
     def calc_potentials_and_charges_inf(

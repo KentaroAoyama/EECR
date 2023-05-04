@@ -956,6 +956,7 @@ def calc_t_ch_cna_init_smec_trun(r_t_ch_cna_init_dict, _r, t_ls, ch_ls, conc_ls)
                 ch_cna_dct: Dict = t_ch_cna_init_dict.setdefault(_t, {})
                 cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
                 cna_dct.setdefault(cna, xn)
+                print(xn)
 
     makedirs("./tmp/params", exist_ok=True) #!
     with open(f"./tmp/params/{_r}.pickle", "wb") as pkf:
@@ -973,14 +974,14 @@ def sort_by_center(_ls: List, center: float, logspace=True) -> List:
 
 def get_smectite_init_params_truncated():
     # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
-    ch_ls = np.logspace(-14, -1, 42, base=10.0).tolist()  #! 100にする
-    r_ls = np.linspace(1.0e-9, 1.3e-8, 20).tolist()
-    conc_ls = np.logspace(-7.0, 0.7, 200, base=10.0).tolist()  #! 200にする -7から
+    ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()  #! 100にする
+    r_ls = np.linspace(1.0e-9, 1.3e-8, 14).tolist()
+    conc_ls = np.logspace(-7.0, 0.7, 50, base=10.0).tolist()  #! 200にする -7から
 
     # sort
-    ch_ls = sort_by_center(ch_ls, 1.0e-7)
-    conc_ls = sort_by_center(conc_ls, 0.01)
-    t_ls = np.linspace(273.15, 498.15, 200).tolist() #!
+    # ch_ls = sort_by_center(ch_ls, 1.0e-7)
+    # conc_ls = sort_by_center(conc_ls, 0.01)
+    t_ls = np.linspace(273.15, 498.15, 20).tolist() #!
     r_t_ch_cna_init_dict: Dict = {}
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
     for _r in r_ls:
@@ -1705,13 +1706,7 @@ if __name__ == "__main__":
     # analysis_WS_result()
     # test_poros_distribution()
 
-    # cnacl_ls = np.logspace(-3, 0.7, 10, base=10.).tolist()
-    # for cnacl in cnacl_ls:
-    #     nacl = NaCl(cnacl=cnacl)
-    #     smectite = Smectite(nacl)
-    #     smectite.calc_cond_infdiffuse()
-    #     smectite.calc_potentials_and_charges_truncated()
-    #     print("==============")
-    #     print(smectite.calc_cond_infdiffuse())
-    #     print(smectite.get_double_layer_length())
+    with open("./smectite_trun_init.pkl", "rb") as pkf:
+        dct= pickle.load(pkf)
+        print(dct)
     pass

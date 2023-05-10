@@ -5,7 +5,7 @@
 from typing import Dict, List, Tuple
 from logging import Logger
 from sys import float_info
-from os import path, PathLike
+from os import path, listdir, PathLike
 import math
 from copy import deepcopy
 from functools import partial
@@ -26,20 +26,25 @@ smectite_inf_init_pth: PathLike = path.join(
 with open(smectite_inf_init_pth, "rb") as pkf:
     smectite_inf_init_params = pickle.load(pkf)
 
-# for smectite, truncated diffuse layer case
-# TODO: refactor
-smectite_trun_init_pth: PathLike = path.join(
-    path.dirname(__file__), "params", "smectite_trun_init.pkl"
-)
-with open(smectite_trun_init_pth, "rb") as pkf:
-    smectite_trun_init_params = pickle.load(pkf)
-
 # for kaolinite
 kaolinite_init_pth: PathLike = path.join(
     path.dirname(__file__), "params", "kaolinite_init.pkl"
 )
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
+
+
+# for smectite, truncated diffuse layer case
+smectite_trun_init_params: Dict = {}
+smectite_trun_init_dir: PathLike = path.join(
+    path.dirname(__file__), "params", "smectite_truncated"
+)
+# fname stands for layer width (m) of smectite
+for fname in listdir(smectite_trun_init_dir):
+    fpth = path.join(smectite_trun_init_dir, fname)
+    with open(fpth, "rb") as pkf:
+        smectite_trun_init_params.setdefault(
+            float(path.splitext(fname)[0]), pickle.load(pkf))
 
 
 class Phyllosilicate:
@@ -1073,14 +1078,23 @@ class Phyllosilicate:
         if self.xd is None:
             self.calc_xd()
         if x_init is None:
+            # layer width
             r_ls = list(smectite_trun_init_params.keys())
             _r = self.layer_width
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
-            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
+            # temperature
+            t_ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
+            t_ls = list(t_ch_cna_dict.keys())
+            _idx = np.argmin(
+                np.square((np.array(t_ls, dtype=np.float64) - self.temperature))
+            )
+            ch_cna_dict: Dict = t_ch_cna_dict[t_ls[_idx]]
+            # pH
             _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
             _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
             ch_ls = list(ch_cna_dict.keys())
             _idx = np.argmin(np.square((np.array(ch_ls, dtype=np.float64) - _ch)))
+            # sodium concentration
             cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
             cna_ls = list(cna_dct.keys())
             _idx = np.argmin(np.square((np.array(cna_ls, dtype=np.float64) - _cna)))

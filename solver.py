@@ -9,7 +9,6 @@ import pickle
 import numpy as np
 from cube import FEM_Input_Cube, calc_m
 
-
 class FEM_Cube:
     """Calculate effective conductivity in systems with cubic elements.
     This program is based on Garboczi (1998).
@@ -66,7 +65,7 @@ class FEM_Cube:
         """
         # m_u
         pix_tensor: np.ndarray = self.fem_input.get_pix_tensor()
-        ib: List = self.fem_input.get_ib()
+        ib: np.ndarray = np.array(self.fem_input.get_ib())
         ex: np.float64 = self.fem_input.get_ex()
         ey: np.float64 = self.fem_input.get_ey()
         ez: np.float64 = self.fem_input.get_ez()
@@ -87,10 +86,7 @@ class FEM_Cube:
         # m_u2d
         if self.logger is not None:
             self.logger.info("Expand u 2d")
-        u_2d: List = [None for _ in range(self.u.shape[0])]
-        for m in range(nxyz):
-            self.__expand_2d(self.u, u_2d, m, ib)
-        u_2d: np.ndarray = np.array(u_2d, dtype=np.float64)
+        u_2d: np.ndarray = self.u[ib]
         self.u2d = u_2d
 
         # m_a (2d array contains nxyz rows and 27 columns)
@@ -102,7 +98,6 @@ class FEM_Cube:
         for m in range(nxyz):
             self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
         self.a = np.array(a, dtype=np.float64)
-
         # m_gb and u_tot
         self.__calc_energy()
         # m_h (conjugate direction vector)
@@ -114,10 +109,7 @@ class FEM_Cube:
         # the counter micro is increased.
         self.h = deepcopy(self.gb)
         # h_2d
-        h_2d: List = [None for _ in range(nxyz)]
-        for m in range(nxyz):
-            self.__expand_2d(self.h, h_2d, m, ib)
-        self.h2d = np.array(h_2d, dtype=np.float64)
+        self.h2d: np.ndarray = self.h[ib]
 
         # gg is the norm squared of the gradient (gg=gb*gb)
         self.gg: np.ndarray = np.dot(self.gb, self.gb)
@@ -258,16 +250,6 @@ class FEM_Cube:
         )
         a[m] = am
 
-    def __expand_2d(self, arr1d: np.ndarray, ls2d: List, m: int, ib: List) -> None:
-        """Convert a 1d list with m elements to an m x 27 2d list
-        Args:
-            arr1d (np.ndarray): 1d array
-            ls2d (List): 2d array. 27 values adjacent to m are stored in the second dimension
-            m (int): Global 1d lablling index.
-            ib (List): Neighbor labeling list
-        """
-        ls2d[m] = arr1d[ib[m]]
-
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
         and the square value of the step width (self.gg), and update the these member variables.
@@ -299,10 +281,7 @@ class FEM_Cube:
         # Conjugate gradient loop
         for _ in range(ldemb):
             # expand h
-            h_2d: List = [None for _ in range(nxyz)]
-            for m in range(nxyz):
-                self.__expand_2d(self.h, h_2d, m, ib)
-            self.h2d = np.array(h_2d, dtype=np.float64)
+            self.h2d = self.h[ib]
 
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
             ah: np.ndarray = np.sum(self.a * self.h2d, axis=1)  # 1d

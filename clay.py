@@ -27,6 +27,7 @@ with open(smectite_inf_init_pth, "rb") as pkf:
     smectite_inf_init_params = pickle.load(pkf)
 
 # for smectite, truncated diffuse layer case
+# TODO: refactor
 smectite_trun_init_pth: PathLike = path.join(
     path.dirname(__file__), "params", "smectite_trun_init.pkl"
 )
@@ -1324,7 +1325,7 @@ class Phyllosilicate:
         # cannot pass between the layers of smectite (Shirozu, 1998)
         assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
         assert self._check_if_calculated_electrical_params_truncated(), (
-            "Before calculating the conductivity of interlayer, we should"
+            "Before calculating the conductivity of interlayer, we should "
             "obtain electrical parameters for truncated diffuse layer case"
         )
         # TODO: Currently, it is assumed that this function is called only in the case of

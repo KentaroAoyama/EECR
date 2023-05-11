@@ -128,13 +128,12 @@ class FEM_Input_Cube:
             instance_adj_rate_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
                 and value is the tuple containing instance to be considered adjacent or not and the
                 adjacent rate.
-            rotation_setting (str or Tuple): Argument that control the rotation of the
+            (OUTDATED) rotation_setting (str or Tuple): Argument that control the rotation of the
                 conductivity tensor of each element. If you set as "rondom", conductivity tensor
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
                 conductivity tensor are rotated based on these angles (Defaults to "random").
         """
         assert len(volume_frac_dict) > 0
-        _gamma = None # for debug variable
         # Check to see if the volume fractions sum to 1
         _sum = 0.0
         for _, frac in volume_frac_dict.items():
@@ -150,7 +149,8 @@ class FEM_Input_Cube:
         rot_mat_const = None
         if isinstance(rotation_setting, tuple):
             if len(rotation_setting) == 3:
-                rot_mat_const: np.ndarray = calc_rotation_matrix(rotation_setting)
+                # TODO: consider another implementation
+                rot_mat_const: np.ndarray = random_rotation_matrix()
 
         # first create pixel as 3d list
         instance_set_ls: List = []
@@ -198,9 +198,9 @@ class FEM_Input_Cube:
             if _instance in instance_range_dict:
                 # anisotoropic scale
                 range_yz = instance_range_dict[_instance]
-                _m_selected, _gamma = self.__calc_anisotropic_distribution(
+                _m_selected = self.__calc_anisotropic_distribution(
                     m_remain, _num, shape, range_yz, seed
-                )  #! TODO: delete _gamma
+                )
                 if self.logger is not None:
                     self.logger.info(
                         f"Set by anisotoropic distoribution done for {_instance}"
@@ -233,7 +233,7 @@ class FEM_Input_Cube:
                 if rot_mat_const is not None:
                     _rot_mat = rot_mat_const
                 elif rotation_setting == "random":
-                    _rot_mat = calc_rotation_matrix()
+                    _rot_mat = random_rotation_matrix()
                 else:
                     raise RuntimeError("rotation_setting argument is not valid")
                 assert _rot_mat is not None
@@ -310,7 +310,6 @@ class FEM_Input_Cube:
 
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
-        return _gamma  #!
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -954,9 +953,8 @@ class FEM_Input_Cube:
             np.argsort(-1.0 * prob)[: _num - num1]
         ].tolist()
         m_initial_1: List = np.array(m_initial)[np.array(values_in) == 1.0].tolist()
-        m_initial_0: List = np.array(m_initial)[np.array(values_in) == 0.0].tolist() #!
         m_selected.extend(m_initial_1)
-        return set(m_selected), (m_initial_0, m_initial_1, m_remain, prob)  #!
+        return set(m_selected)
 
     def __calc_position(self, i: int, j: int, k: int) -> np.ndarray:
         """Calculate potition from 3d indecices.
@@ -1260,58 +1258,17 @@ def calc_ijk(m: int, nx: int, ny: int) -> Tuple[int]:
     return i, j, k
 
 
-def calc_rotation_matrix(
-    _x: float = None, _y: float = None, _z: float = None, seed: int = None
-) -> np.ndarray:
+def random_rotation_matrix() -> np.ndarray:
     """Calculate rotation matrix
-
-    Args:
-        _x (float): Rotation angle around x-axis
-        _y (float): Rotation angle around y-axis
-        _z (float): Rotation angle around z-axis
-        seed (int): Seed of the random number
-
     Returns:
         np.ndarray: 3d rotation matrix with 3 rows and 3 columns
     """
-    if seed is not None:
-        random.seed(seed)
-    if _x is None:
-        _x: float = random.uniform(0.0, 2.0 * np.pi)
-    if _y is None:
-        _y: float = random.uniform(0.0, 2.0 * np.pi)
-    if _z is None:
-        _z: float = random.uniform(0.0, 2.0 * np.pi)
-
-    # around x-axis
-    _x_rot = np.array(
-        [
-            [1.0, 0.0, 0.0],
-            [0.0, np.cos(_x), -1.0 * np.sin(_x)],
-            [0.0, np.sin(_x), np.cos(_x)],
-        ],
-        dtype=np.float64,
-    )
-    # around y-axis
-    _y_rot = np.array(
-        [
-            [np.cos(_y), 0.0, np.sin(_y)],
-            [0.0, 1.0, 0.0],
-            [-1.0 * np.sin(_y), 0.0, np.cos(_y)],
-        ],
-        dtype=np.float64,
-    )
-    # around z-axis
-    _z_rot = np.array(
-        [
-            [np.cos(_z), -1.0 * np.sin(_z), 0.0],
-            [np.sin(_z), np.cos(_z), 0.0],
-            [0.0, 0.0, 1.0],
-        ],
-        dtype=np.float64,
-    )
-    _rot = np.matmul(np.matmul(_x_rot, _y_rot), _z_rot)
-    return _rot
+    random_matrix = np.random.rand(3, 3)
+    q, _ = np.linalg.qr(random_matrix)
+    det = np.linalg.det(q)
+    if det < 0:
+        q[:, 0] *= -1
+    return q
 
 
 def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.ndarray:

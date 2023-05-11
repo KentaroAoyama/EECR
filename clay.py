@@ -5,7 +5,7 @@
 from typing import Dict, List, Tuple
 from logging import Logger
 from sys import float_info
-from os import path, listdir, PathLike
+from os import path, PathLike
 import math
 from copy import deepcopy
 from functools import partial
@@ -34,17 +34,12 @@ with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
 
-# for smectite, truncated diffuse layer case
-smectite_trun_init_params: Dict = {}
-smectite_trun_init_dir: PathLike = path.join(
-    path.dirname(__file__), "params", "smectite_truncated"
+# TODO: refactor
+smectite_trun_init_pth: PathLike = path.join(
+    path.dirname(__file__), "params", "smectite_trun_init.pkl"
 )
-# fname stands for layer width (m) of smectite
-for fname in listdir(smectite_trun_init_dir):
-    fpth = path.join(smectite_trun_init_dir, fname)
-    with open(fpth, "rb") as pkf:
-        smectite_trun_init_params.setdefault(
-            float(path.splitext(fname)[0]), pickle.load(pkf))
+with open(smectite_trun_init_pth, "rb") as pkf:
+    smectite_trun_init_params = pickle.load(pkf)
 
 
 class Phyllosilicate:
@@ -1079,16 +1074,11 @@ class Phyllosilicate:
             self.calc_xd()
         if x_init is None:
             # layer width
+            # TODO: pH, Cnaclはlogspaceで探索したほうがいいか検討する
             r_ls = list(smectite_trun_init_params.keys())
             _r = self.layer_width
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
-            # temperature
-            t_ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
-            t_ls = list(t_ch_cna_dict.keys())
-            _idx = np.argmin(
-                np.square((np.array(t_ls, dtype=np.float64) - self.temperature))
-            )
-            ch_cna_dict: Dict = t_ch_cna_dict[t_ls[_idx]]
+            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
             # pH
             _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
             _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]

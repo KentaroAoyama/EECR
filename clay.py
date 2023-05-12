@@ -1024,7 +1024,7 @@ class Phyllosilicate:
         self,
         x_init: List = None,
         iter_max: int = 1000,
-        convergence_condition: float = 1.0e-10,
+        convergence_condition: float = 1.0e-9,
         step_tol: float = 1.0e-10,
         oscillation_tol: float = 1.0e-04,
         beta: float = 0.75,
@@ -1074,7 +1074,6 @@ class Phyllosilicate:
             self.calc_xd()
         if x_init is None:
             # layer width
-            # TODO: pH, Cnaclはlogspaceで探索したほうがいいか検討する
             r_ls = list(smectite_trun_init_params.keys())
             _r = self.layer_width
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
@@ -1083,11 +1082,11 @@ class Phyllosilicate:
             _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
             _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
             ch_ls = list(ch_cna_dict.keys())
-            _idx = np.argmin(np.square((np.array(ch_ls, dtype=np.float64) - _ch)))
+            _idx = np.argmin(np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch))))
             # sodium concentration
             cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
             cna_ls = list(cna_dct.keys())
-            _idx = np.argmin(np.square((np.array(cna_ls, dtype=np.float64) - _cna)))
+            _idx = np.argmin(np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna))))
             x_init = cna_dct[cna_ls[_idx]]
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)

@@ -1,6 +1,7 @@
 # TODO: docker化
 # TODO: pyrite実装する
 # TODO: pycacheはコミットからignoreする
+# TODO: 高温域における初期値の作成
 # pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures

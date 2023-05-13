@@ -17,12 +17,14 @@ from os import path, getcwd, listdir, cpu_count, makedirs
 from copy import deepcopy
 from concurrent import futures
 from collections import OrderedDict
+from statistics import mean, stdev
 
 from matplotlib import pyplot as plt
 import matplotlib.ticker as ticker
 import matplotlib.cm as cm
 import numpy as np
 from tqdm import tqdm
+import pandas as pd
 
 from clay import Smectite, Kaolinite
 from mineral import Quartz
@@ -394,9 +396,10 @@ def goncalves_fig6():
         r_ls = [2.0e-9 * i for i in range(1, 6)]
         for _r in r_ls:
             print(f"_r: {_r}")  #!
-            smectite = Smectite(nacl=nacl, layer_width=_r / 2.0)
+            smectite = Smectite(nacl=nacl, layer_width=_r)
             smectite.calc_potentials_and_charges_truncated()
             _dct.setdefault(_r, smectite.potential_zeta)
+
     # plot
     fig, ax = plt.subplots()
     for ph, _dct in ph_r_zeta.items():
@@ -979,8 +982,8 @@ def get_smectite_init_params_truncated():
     conc_ls = np.logspace(-7.0, 0.7, 50, base=10.0).tolist()  #! 200にする -7から
 
     # sort
-    # ch_ls = sort_by_center(ch_ls, 1.0e-7)
-    # conc_ls = sort_by_center(conc_ls, 0.01)
+    ch_ls = sort_by_center(ch_ls, 1.0e-7)
+    conc_ls = sort_by_center(conc_ls, 0.01)
     t_ls = np.linspace(273.15, 498.15, 20).tolist() #!
     r_t_ch_cna_init_dict: Dict = {}
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
@@ -1181,8 +1184,8 @@ def tmp():
     sol_input.create_pixel_by_macro_variable(volume_frac_dict=_frac)
 
 
-def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id):
-    fpth = path.join(save_dir, "solver.pkl")
+def ws_single_1(seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id):
+    fpth = path.join(save_dir, "cond.pkl")
     # if path.exists(fpth):
     #     return #!
     if not path.exists(save_dir):
@@ -1205,7 +1208,7 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     # set solver_input
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
-        shape=(10, 10, 10),
+        shape=(20, 20, 20),
         edge_length=5.0e-8,
         volume_frac_dict=OrderedDict(
             [
@@ -1232,7 +1235,8 @@ def test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_i
     solver = FEM_Cube(solver_input, logger=logger)
     solver.run(100, 30, 1.0e-9)
 
-    solver.save(fpth)
+    with open(fpth, "wb") as pkf:
+        pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
 
     return solver
 
@@ -1303,15 +1307,7 @@ core_props_ws = {
     },
 }
 
-
-def compare_WS_shaly_1():
-    """Compare with the core data in Waxman & Smits (1968)"""
-    # pore anisotoropy & smectite concentration rate around proe
-    _t = 298.15
-    _ph = 7.0
-    # smectite (25, 26, 27)
-    # mS/cm
-    cw_ls = [
+cw_ws_ls = [
         2.085,
         4.049,
         7.802,
@@ -1325,39 +1321,34 @@ def compare_WS_shaly_1():
         233.5,
         250.5,
     ]
-    # cond_calc_ls = []
-    # cnacl_ref = np.logspace(
-    #     np.log10(1.0e-3), np.log10(5.0), num=4000, base=10.0
-    # ).tolist()
-    # for _cnacl in cnacl_ref:
-    #     nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph)
-    #     nacl.sen_and_goode_1992()
-    #     cond_calc_ls.append(nacl.conductivity)
-    # cnacl_pred = []
-    # for _cw in cw_ls:
-    #     cnacl_pred.append(
-    #         cnacl_ref[np.argmin(np.square(np.array(cond_calc_ls) - _cw / 10.0))]
-    #     )
-    cnacl_pred = [
-        0.017920058530648788,
-        0.03557795402409026,
-        0.07063541731046197,
-        0.14113638267178488,
-        0.28381174927200864,
-        0.5768283904053048,
-        1.1823955302050524,
-        1.9924220835304471,
-        2.4185438030909934,
-        3.203690045037204,
-        4.4758071901410315,
-        5.000000000000001,
-    ]
+cnacl_ws_pred = [
+    0.017920058530648788,
+    0.03557795402409026,
+    0.07063541731046197,
+    0.14113638267178488,
+    0.28381174927200864,
+    0.5768283904053048,
+    1.1823955302050524,
+    1.9924220835304471,
+    2.4185438030909934,
+    3.203690045037204,
+    4.4758071901410315,
+    5.000000000000001,
+]
+
+def compare_WS_shaly_1():
+    """Compare with the core data in Waxman & Smits (1968)"""
+    # pore anisotoropy & smectite concentration rate around proe
+    _t = 298.15
+    _ph = 7.0
+    # smectite (25, 26, 27)
+    # mS/cm
 
     for _id, _prop in core_props_ws.items():
         _poros = _prop["porosity"]
         _label_ls_tmp: List = _prop["bulk"]
         label_ls, cnacl_ls = [], []
-        for _label, _cnacl in zip(_label_ls_tmp, cnacl_pred):
+        for _label, _cnacl in zip(_label_ls_tmp, cnacl_ws_pred):
             if _label is None:
                 continue
             label_ls.append(_label * 0.1)
@@ -1372,85 +1363,48 @@ def compare_WS_shaly_1():
         qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
         xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
         print(_id, xsmec)  #!
-        # print(f"xsmec: {xsmec}") #!
-        # anisotoropic scaling factors
-        range_pore_ls: List = np.linspace(0.5, 2.0, 10).tolist()
+        seed_ls = [42, 10, 20]
+        range_pore_ls: List = [0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.0]
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
         cou = 0
-        for ayz_pore in range_pore_ls:
-            print("=========")  #!
-            print("ayz_pore:")
-            print(ayz_pore)  #!
-            for adj_rate in reversed(adj_rate_ls):
-                print("=========")
-                print("adj_rate:")
-                print(adj_rate)  #!
-                for _cnacl in reversed(cnacl_ls):
-                    print(f"_cnacl: {_cnacl}")  #!
-                    dir_name = path.join(
-                        test_dir(),
-                        "pickle",
-                        str(_id),
-                        f"{ayz_pore}_{adj_rate}_{_cnacl}",
-                    )
-                    # solver = test_tmp(_t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, dir_name, cou)
-                    # print(solver.cond_x) #!
-                    # if solver is not None:
-                    #     plot_instance(solver, 1.0e-6, "tmp/instance")
-                    future = pool.submit(
-                        test_tmp,
-                        _t=_t,
-                        _cnacl=_cnacl,
-                        _ph=_ph,
-                        _poros=_poros,
-                        xsmec=xsmec,
-                        ayz_pore=ayz_pore,
-                        adj_rate=adj_rate,
-                        save_dir=dir_name,
-                        log_id=cou,
-                    )
-                    cou += 1
-                    # result_ls.append(solver.cond_x)
-                # fig, ax = plt.subplots()
-                # ax.plot(cnacl_ls, result_ls)
-                # plt.show() #!
-        pool.shutdown(wait=True)
+        for seed in seed_ls:
+            pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+            for ayz_pore in range_pore_ls:
+                print("=========")  #!
+                print("ayz_pore:")
+                print(ayz_pore)  #!
+                for adj_rate in reversed(adj_rate_ls):
+                    print("=========")
+                    print("adj_rate:")
+                    print(adj_rate)  #!
+                    for _cnacl in reversed(cnacl_ls):
+                        print(f"_cnacl: {_cnacl}")  #!
+                        dir_name = path.join(
+                            test_dir(),
+                            "WS1",
+                            str(_id),
+                            f"{seed}_{ayz_pore}_{adj_rate}_{_cnacl}",
+                        )
+                        pool.submit(
+                            ws_single_1,
+                            seed=seed,
+                            _t=_t,
+                            _cnacl=_cnacl,
+                            _ph=_ph,
+                            _poros=_poros,
+                            xsmec=xsmec,
+                            ayz_pore=ayz_pore,
+                            adj_rate=adj_rate,
+                            save_dir=dir_name,
+                            log_id=cou,
+                        )
+                        cou += 1
+            pool.shutdown(wait=True)
     return
 
 
-def test_mobility_2():
-    cnacl_ls = np.logspace(-3, 0.3, 5, base=10).tolist()
-    tempe_ls = np.linspace(298.15, 500.0, 10).tolist()
-    dct = {}
-    for t in tempe_ls:
-        for cnacl in cnacl_ls:
-            nacl = NaCl(temperature=t, cnacl=cnacl)
-            dct.setdefault(t, []).append(nacl.ion_props["Na"]["MobilityInfDiffuse"])
-
-    fig, ax = plt.subplots()
-    for t, ls in dct.items():
-        ax.plot(cnacl_ls, ls, label=t)
-    ax.legend()
-    fig.savefig("./test/mobility.png", dpi=200)
-
-
-def analysis_WS_result():
-    cnacl_ws = [
-        0.017920058530648788,
-        0.03557795402409026,
-        0.07063541731046197,
-        0.14113638267178488,
-        0.28381174927200864,
-        0.5768283904053048,
-        1.1823955302050524,
-        1.9924220835304471,
-        2.4185438030909934,
-        3.203690045037204,
-        4.4758071901410315,
-        5.000000000000001,
-    ]
+def analysis_WS1_result():
     ws_result: Dict = {}
     for _id, _dct in core_props_ws.items():
         _ls: List[List] = ws_result.setdefault(_id, [[], []])
@@ -1458,42 +1412,45 @@ def analysis_WS_result():
         for i, bk in enumerate(bk_ls):
             if bk is None:
                 continue
-            _ls[0].append(cnacl_ws[i])
+            _ls[0].append(cnacl_ws_pred[i])
             _ls[1].append(bk / 10.0)
     id_cond_result: Dict[int, Dict] = {}
-    pickle_dir = path.join(test_dir(), "pickle")
+    pickle_dir = path.join(test_dir(), "WS1")
     for id_name in listdir(pickle_dir):
-        print(id_name)
+        if "fig" in id_name:
+            continue
         dirname_id = path.join(pickle_dir, id_name)
         id_dct: Dict[Tuple, float] = id_cond_result.setdefault(id_name, {})
         for cond_name in tqdm(listdir(dirname_id)):
             # get conditions
-            ayz_pore, adj_rate, cnacl = cond_name.split("_")
+            seed, ayz_pore, adj_rate, cnacl = cond_name.split("_")
+            seed = int(seed)
             ayz_pore = float(ayz_pore)
             adj_rate = float(adj_rate)
             cnacl = float(cnacl)
             # load result
-            solver: FEM_Cube = None
-            pkl_pth: str = path.join(dirname_id, cond_name, "solver.pkl")
+            cond_tuple = None
+            pkl_pth: str = path.join(dirname_id, cond_name, "cond.pkl")
             if path.isfile(pkl_pth):
                 with open(pkl_pth, "rb") as pkf:
-                    solver = pickle.load(pkf)
-            if solver is not None:
-                id_dct.setdefault((ayz_pore, adj_rate, cnacl), solver.cond_x)
+                    cond_tuple = pickle.load(pkf)
+            if cond_tuple is not None:
+                id_dct.setdefault((seed, ayz_pore, adj_rate, cnacl), cond_tuple[0])
     # plot (ayz)
     # key: ayz_pore, adj_rate
     for _id, _dct in id_cond_result.items():
         fig, ax = plt.subplots()
         ayz_cnacl_props: Dict = {}
-        for (ayz_pore, adj_rate, cnacl), bk in _dct.items():
+        for (seed, ayz_pore, adj_rate, cnacl), bk in _dct.items():
             _dct: Dict[float, List] = ayz_cnacl_props.setdefault(ayz_pore, {})
             _dct.setdefault(cnacl, []).append(bk)
         # cal
         for i, ayz in enumerate(sorted(ayz_cnacl_props.keys())):
             _dct = ayz_cnacl_props[ayz]
             cnacl_ls, mean_ls, err_ls = [], [], []
-            for cnacl, bk_ls in _dct.items():
+            for cnacl in sorted(_dct.keys()):
                 cnacl_ls.append(cnacl)
+                bk_ls = _dct[cnacl]
                 mean_ls.append(np.mean(bk_ls))
                 err_ls.append(np.std(bk_ls))
             ax.errorbar(
@@ -1508,11 +1465,11 @@ def analysis_WS_result():
         ax.scatter(_ls[0], _ls[1])
         # save
         ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-        ax.set_xlabel("Salinity (Mol)")
+        ax.set_xlabel("Salinity (M)")
         ax.set_ylabel("Conductivity (S/m)")
         ax.grid()
         # ax.set_xticks([0, 1, 2, 3, 4, 5])
-        fig.savefig(f"./test/{_id}_ayz.png", bbox_inches="tight", dpi=200)
+        fig.savefig(f"./test/WS1/fig/{_id}_ayz.png", bbox_inches="tight", dpi=200)
         plt.clf()
         plt.close()
 
@@ -1520,7 +1477,7 @@ def analysis_WS_result():
     # key: ayz_pore, adj_rate
     for _id, _dct in id_cond_result.items():
         ayz_cnacl_props: Dict = {}
-        for (ayz_pore, adj_rate, cnacl), bk in _dct.items():
+        for (seed, ayz_pore, adj_rate, cnacl), bk in _dct.items():
             adj_dct: Dict[float, List] = ayz_cnacl_props.setdefault(ayz_pore, {})
             cnacl_bk_ls: List[List] = adj_dct.setdefault(adj_rate, [[], []])
             cnacl_bk_ls[0].append(cnacl)
@@ -1544,14 +1501,193 @@ def analysis_WS_result():
             # save
             ax.grid()
             ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-            fig.savefig(f"./test/{_id}_{ayz}.png", bbox_inches="tight", dpi=200)
+            fig.savefig(f"./test/WS1/fig/{_id}_{ayz}.png", bbox_inches="tight", dpi=200)
             plt.clf()
             plt.close()
 
+def ws_single_2(_t, _cnacl, _ph, _poros, xsmec, _r, save_dir, log_id):
+    xsmec = 0. #!
+    # 割り当て方法：random, layer_widthを変更して
+    fpth = path.join(save_dir, "cond.pkl")
+    if not path.exists(save_dir):
+        makedirs(save_dir)
+
+    logger = create_logger(log_id, path.join(save_dir, "log.txt"))
+
+    # nacl
+    nacl = NaCl(temperature=_t, cnacl=_cnacl, ph=_ph, logger=logger)
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
+    # smectite
+    smectite = Smectite(nacl=nacl, layer_width=_r, logger=logger)  #!
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    # quartz
+    quartz = Quartz(nacl=nacl, logger=logger)
+    # set solver_input
+    solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
+    solver_input.create_pixel_by_macro_variable(
+        shape=(20, 20, 20),
+        edge_length=1.0e-6,
+        volume_frac_dict=OrderedDict(
+            [
+                (nacl, _poros),
+                (smectite, (1.0 - _poros) * xsmec),
+                (quartz, (1.0 - _poros) * (1.0 - xsmec)),
+            ],
+        ),
+        seed=42,
+    )
+    solver_input.set_ib()
+    solver_input.femat()
+
+    solver = FEM_Cube(solver_input, logger=logger)
+    solver.run(100, 30, 1.0e-9)
+    with open(fpth, "wb") as pkf:
+        pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
+
+
+def compare_WS_shaly_2():
+    """Compare with the core data in Waxman & Smits (1968)"""
+    # pore anisotoropy & smectite concentration rate around proe
+    _t = 298.15
+    _ph = 7.0
+    for _id, _prop in core_props_ws.items():
+        _poros = _prop["porosity"]
+        _label_ls_tmp: List = _prop["bulk"]
+        label_ls, cnacl_ls = [], []
+        for _label, _cnacl in zip(_label_ls_tmp, cnacl_ws_pred):
+            if _label is None:
+                continue
+            label_ls.append(_label * 0.1)
+            cnacl_ls.append(_cnacl)
+
+        # fraction of clay minerals
+        _xsmec = _prop["xsmec"]
+        _xkaol = _prop["xkaol"]
+        assert _xsmec + _xkaol <= 1.0
+        # calculate volume fraction of smectite from Qv
+        # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
+        qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
+        xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
+        r_ls: List = np.linspace(1.0e-9, 1.3e-8, 10).tolist()
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
+        cou = 0
+        for _r in r_ls:
+            for _cnacl in reversed(cnacl_ls):
+                dir_name = path.join(
+                    test_dir(),
+                    "WS2",
+                    str(_id),
+                    f"{_r}_{_cnacl}",
+                )
+                # ws_single_2(_t=_t,
+                #     _cnacl=_cnacl,
+                #     _ph=_ph,
+                #     _poros=_poros,
+                #     xsmec=xsmec,
+                #     _r=_r,
+                #     save_dir=dir_name,
+                #     log_id=cou,
+                # )
+                pool.submit(
+                    ws_single_2,
+                    _t=_t,
+                    _cnacl=_cnacl,
+                    _ph=_ph,
+                    _poros=_poros,
+                    xsmec=xsmec,
+                    _r=_r,
+                    save_dir=dir_name,
+                    log_id=cou,
+                )
+                cou += 1
+        pool.shutdown(wait=True)
+
+
+def analysis_WS_result2():
+    ws_result: Dict = {}
+    for _id, _dct in core_props_ws.items():
+        _ls: List[List] = ws_result.setdefault(_id, [[], []])
+        bk_ls: List = _dct["bulk"]
+        for i, bk in enumerate(bk_ls):
+            if bk is None:
+                continue
+            _ls[0].append(cnacl_ws_pred[i])
+            _ls[1].append(bk / 10.0)
+    id_cond_result: Dict[int, Dict] = {}
+    pickle_dir = path.join(test_dir(), "WS2",)
+    for id_name in listdir(pickle_dir):
+        dirname_id = path.join(pickle_dir, id_name)
+        id_dct: Dict[Tuple, float] = id_cond_result.setdefault(id_name, {})
+        for cond_name in tqdm(listdir(dirname_id)):
+            # get conditions
+            _r, cnacl = cond_name.split("_")
+            _r = float(_r)
+            cnacl = float(cnacl)
+            # load result
+            cond_tuple = None
+            pkl_pth: str = path.join(dirname_id, cond_name, "solver.pkl")
+            if path.isfile(pkl_pth):
+                with open(pkl_pth, "rb") as pkf:
+                    cond_tuple = pickle.load(pkf)
+            if cond_tuple is not None:
+                id_dct.setdefault((_r, cnacl), cond_tuple[0])
+    # plot (r)
+    # key: _r, adj_rate
+    for _id, _dct in id_cond_result.items():
+        fig, ax = plt.subplots()
+        r_cnacl_props: Dict = {}
+        for (_r, cnacl), bk in _dct.items():
+            _dct: Dict[float, List] = r_cnacl_props.setdefault(_r, {})
+            _dct.setdefault(cnacl, []).append(bk)
+        # cal
+        for i, _r in enumerate(sorted(r_cnacl_props.keys())):
+            _dct = r_cnacl_props[_r]
+            cnacl_ls, mean_ls, err_ls = [], [], []
+            for cnacl, bk_ls in _dct.items():
+                cnacl_ls.append(cnacl)
+                mean_ls.append(mean(bk_ls))
+                err_ls.append(stdev(bk_ls))
+            ax.errorbar(
+                cnacl_ls,
+                mean_ls,
+                err_ls,
+                label=_r,
+                color=cm.jet(float(i) / len(r_cnacl_props)),
+            )
+        # obs
+        _ls = ws_result[int(_id)]
+        ax.scatter(_ls[0], _ls[1])
+        # save
+        ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+        ax.set_xlabel("Salinity (M)")
+        ax.set_ylabel("Conductivity (S/m)")
+        ax.grid()
+        # ax.set_xticks([0, 1, 2, 3, 4, 5])
+        fig.savefig(f"./test/{_id}_ayz.png", bbox_inches="tight", dpi=200)
+        plt.clf()
+        plt.close()
+
+
+def test_mobility_2():
+    cnacl_ls = np.logspace(-3, 0.3, 5, base=10).tolist()
+    tempe_ls = np.linspace(298.15, 500.0, 10).tolist()
+    dct = {}
+    for t in tempe_ls:
+        for cnacl in cnacl_ls:
+            nacl = NaCl(temperature=t, cnacl=cnacl)
+            dct.setdefault(t, []).append(nacl.ion_props["Na"]["MobilityInfDiffuse"])
+
+    fig, ax = plt.subplots()
+    for t, ls in dct.items():
+        ax.plot(cnacl_ls, ls, label=t)
+    ax.legend()
+    fig.savefig("./test/mobility.png", dpi=200)
 
 from output import plt_any_val  #!
-from cube import calc_ijk
-
 
 def tmp():
     dirname = "0.7000000000000001_0.0_0.5768283904053048"
@@ -1598,18 +1734,6 @@ def test_poros_distribution():
             prob_ls[m] = prob[m_remain.index(m)]
     assert None not in prob_ls
 
-    # before
-    # m_remain, prob = _gamma
-    # prob = prob.tolist()
-    # prob_ls = [None for _ in range(1000)]
-    # for m in range(len(prob_ls)):
-    #     if m in m_remain:
-    #         prob_ls[m] = prob[m_remain.index(m)]
-    # assert None not in prob_ls
-
-    # result = tortuosity.calc_objective(m_selected, m_remain, (10, 10, 10), (1., 1., 1.), (10., 10., 10.,))
-    # print(result) #!
-
     plot_instance(solver_input, 1.0e-6, f"./instance/{r}")
     plt_any_val(prob_ls, (10, 10, 10), f"./aniso/{r}")
 
@@ -1639,9 +1763,106 @@ def test_dielec():
     fig.savefig(path.join(test_dir(), "dielec.png"), dpi=200)
 
 
-def test_levy_etal_2018():
-    pass
+def compare_levi_et_al_2018():
+    def calc_fitting_value(a2, b2, c2, d2, cond_w):
+        return a2 * cond_w + b2 + c2 * cond_w / (1. + c2 / d2 * cond_w)
+    table_b = pd.read_csv("./test/levy_data/Levy_appendixB.csv")
+    table_c = pd.read_csv("./test/levy_data/Levy_TableC.csv")
+    data = pd.merge(table_b, table_c, left_on="ID", right_on="Parameter")
+    # remove outliers
+    # L12a, L30, L35, L76, L81, L85, L104, L106, L108, L111, L112, L117
+    outlier_id_ls = ['L12a', 'L30', 'L35', 'L76', 'L81', 'L85', 'L104', 'L106', 'L108', 'L111', 'L112', 'L117']
+    data = data[np.logical_not(data["ID"].isin(outlier_id_ls))].copy()
+    data['porosity'] = data['porosity'] / 100.
+    data['Smectite'] = data['Smectite'] / 100.
+    
+    # a = 4./1.67
+    # mass = 1. / const.AVOGADRO_CONST * (52. + 136. * a) # g
+    # volume = 5.1 * 8.9 * 6.6 * 1.0e-30 # m^-3
+    # print(mass/volume/1000.)
+    
+    for row in data.iterrows():
+        # get Xsmec
+        pass
 
+
+def seed_tempe_cnacl_n(seed, n):
+    fpth = f"./tmp/optimize_n_default/{seed}_0.0_1.0_{n}.pkl"
+    # if path.isfile(fpth):
+    #     return
+    nacl = NaCl()
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
+    
+    smectite = Smectite(nacl)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_infdiffuse()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+
+    sol_input = FEM_Input_Cube()
+    sol_input.create_pixel_by_macro_variable(shape = (n, n, n),
+                                             volume_frac_dict={smectite: 1.},
+                                             seed=seed)
+    sol_input.set_ib()
+    sol_input.femat()
+    solver = FEM_Cube(sol_input)
+    solver.run(100, 30, 1.0e-9)
+    with open(fpth, "wb") as pkf:
+        pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
+
+def optimize_n():
+    n_ls = np.linspace(1, 30, 30).tolist()
+    seed_ls = (42, 10, 20)
+    for seed in seed_ls:
+        pool = futures.ProcessPoolExecutor(cpu_count() - 2)
+        for n in n_ls:
+            print("=========")
+            print(seed, n)
+            n = int(n)
+            # seed_tempe_cnacl_n(seed=seed, tempe=tempe, cnacl=cnacl, n=n)
+            pool.submit(seed_tempe_cnacl_n, seed=seed, n=n)
+        pool.shutdown(wait=True)
+
+def analyse_result():
+    results = {}
+    for fname in listdir("./tmp/optimize_n_default"):
+        fpth = f"./tmp/optimize_n_default/{fname}"
+        fname = fname.replace(".pkl", "")
+        condition_ls = fname.split("_")
+        # seed
+        condition_ls[0] = int(condition_ls[0])
+        # poros
+        condition_ls[1] = float(condition_ls[1])
+        # xsmec
+        condition_ls[2] = float(condition_ls[2])
+        # n
+        condition_ls[3] = int(condition_ls[3])
+        with open(fpth, "rb") as pkf:
+            result = pickle.load(pkf)
+        results.setdefault(tuple(condition_ls), result)
+    
+    # plot (poros, xsmec, n)
+    n_val = {}
+    for (_, poros, xsmec, n), result in results.items():
+        if poros != 0. or xsmec != 1.:
+            continue
+        n_val.setdefault(n, []).append(result)
+    n_ls = []
+    mean_ls = []
+    std_ls = []
+    for n in sorted(n_val.keys()):
+        val = n_val[n]
+        _ls = []
+        for c_ls in val:
+            _ls.extend(c_ls)
+        n_ls.append(n)
+        print(_ls) #!
+        mean_ls.append(mean(_ls))
+        std_ls.append(stdev(_ls))
+    fig, ax = plt.subplots()
+    ax.errorbar(n_ls, mean_ls, std_ls)
+    fig.savefig(path.join(test_dir(), "./n_error.png"), bbox_inches="tight", dpi=200)
 
 def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
     nacl = NaCl()
@@ -1665,22 +1886,32 @@ def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
     solver.save(savepth)
 
 
-def test_elementary_number():
-    num_ls = np.linspace(10, 30, 5).tolist()
-    pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
-    for n in num_ls:
-        pass
-    pass
-
-
 def main():
     return
+
+def search_maximum_anisotoropic_condition():
+    # (1.0000002302585358, 4.918367346938775e-09)
+    cnacl_ls = np.logspace(1.0e-7, 0.7, 50, base=10.).tolist()
+    r_ls = np.linspace(1.0e-9, 1.3e-8, 50).tolist()
+    aniso_ls = []
+    condition_ls: List[Tuple] = []
+    for cnacl in tqdm(cnacl_ls):
+        for _r in r_ls:
+            nacl = NaCl(temperature=498.15, cnacl=cnacl, pressure=5.0e6)
+            smectite = Smectite(layer_width=_r, nacl=nacl)
+            smectite.calc_potentials_and_charges_truncated()
+            smectite.calc_cond_interlayer()
+            smectite.calc_cond_tensor()
+            tensor = smectite.get_cond_tensor()
+            aniso_ls.append(tensor[0][0] / tensor[2][2])
+            condition_ls.append((cnacl, _r))
+    print(condition_ls[np.argmin(aniso_ls)])
 
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    # get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
@@ -1703,10 +1934,23 @@ if __name__ == "__main__":
 
     # Grieser_and_Healy()
     # compare_WS_shaly_1()
-    # analysis_WS_result()
+    analysis_WS1_result()
     # test_poros_distribution()
+    # compare_WS_shaly_2()
+    # analysis_WS_result2()
 
-    with open("./smectite_trun_init.pkl", "rb") as pkf:
-        dct= pickle.load(pkf)
-        print(dct)
+    # optimize_n()
+    # analyse_result()
+
+    # search_maximum_anisotoropic_condition()
+    
+    # compare_levi_et_al_2018()
+
+    # with open("./test/WS2/25/1e-09_4.4758071901410315/cond.pkl", "rb") as pkf:
+    #     t = pickle.load(pkf)
+    #     print(t)
+    # a = 4./1.67
+    # mass = 1. / const.AVOGADRO_CONST * (52. + 136. * a) # g
+    # volume = 5.1 * 8.9 * 6.6 * 1.0e-30 # m^-3
+    # print(mass/volume/1000.)
     pass

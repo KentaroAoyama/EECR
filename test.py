@@ -938,6 +938,7 @@ def __get_nearest_init(_dct, _t, ch, cna) -> np.array:
 
 def calc_t_ch_cna_init_smec_trun(r_t_ch_cna_init_dict, _r, t_ls, ch_ls, conc_ls):
     t_ch_cna_init_dict = r_t_ch_cna_init_dict.setdefault(_r, {})
+    not_converged: Dict = {}
     xn = None
     for _t in t_ls:
         for ch in ch_ls:
@@ -949,22 +950,30 @@ def calc_t_ch_cna_init_smec_trun(r_t_ch_cna_init_dict, _r, t_ls, ch_ls, conc_ls)
                     nacl=nacl,
                     layer_width=_r,
                 )
+                flag_converged = False
                 if xn is None:
-                    xn = smectite.calc_potentials_and_charges_truncated()
+                    xn, flag_converged = smectite.calc_potentials_and_charges_truncated()
+                    if not flag_converged:
+                        xn, flag_converged = smectite.calc_potentials_and_charges_truncated_by_ga(xn)
                 else:
                     # calc dist
                     xn = __get_nearest_init(t_ch_cna_init_dict, _t, ch, cna)
                 smectite.calc_potentials_and_charges_inf()
-                xn = smectite.calc_potentials_and_charges_truncated(xn)
+                xn, flag_converged = smectite.calc_potentials_and_charges_truncated(xn)
+                if not flag_converged:
+                    xn, flag_converged = smectite.calc_potentials_and_charges_truncated_by_ga(xn)
                 ch_cna_dct: Dict = t_ch_cna_init_dict.setdefault(_t, {})
                 cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
                 cna_dct.setdefault(cna, xn)
+                print(flag_converged)
                 print(xn)
 
     makedirs("./tmp/params", exist_ok=True) #!
     with open(f"./tmp/params/{_r}.pickle", "wb") as pkf:
         pickle.dump(t_ch_cna_init_dict, pkf, pickle.HIGHEST_PROTOCOL)
-
+    if not flag_converged:
+        with open(f"./tmp/params/{_r}_not_converged.pickle", "wb") as pkf:
+           pickle.dump(not_converged, pkf, pickle.HIGHEST_PROTOCOL)
 
 def sort_by_center(_ls: List, center: float, logspace=True) -> List:
     _arr = np.array(_ls)
@@ -977,28 +986,28 @@ def sort_by_center(_ls: List, center: float, logspace=True) -> List:
 
 def get_smectite_init_params_truncated():
     # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
-    ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()  #! 100にする
-    r_ls = np.linspace(1.0e-9, 1.3e-8, 14).tolist()
-    conc_ls = np.logspace(-7.0, 0.7, 50, base=10.0).tolist()  #! 200にする -7から
+    ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()
+    r_ls = np.linspace(1.0e-9, 1.3e-8, 10).tolist()
+    conc_ls = np.logspace(-7.0, 0.7, 100, base=10.0).tolist()
 
     # sort
     ch_ls = sort_by_center(ch_ls, 1.0e-7)
     conc_ls = sort_by_center(conc_ls, 0.01)
-    t_ls = np.linspace(273.15, 498.15, 20).tolist() #!
+    t_ls = np.linspace(298.15, 498.15, 10).tolist()
     r_t_ch_cna_init_dict: Dict = {}
     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
     for _r in r_ls:
-        # calc_t_ch_cna_init_smec_trun(
-        #     r_t_ch_cna_init_dict, _r=_r, t_ls=t_ls, ch_ls=ch_ls, conc_ls=conc_ls
-        # )
-        pool.submit(
-            calc_t_ch_cna_init_smec_trun,
-            r_t_ch_cna_init_dict=r_t_ch_cna_init_dict,
-            _r=_r,
-            t_ls=t_ls,
-            ch_ls=ch_ls,
-            conc_ls=conc_ls,
+        calc_t_ch_cna_init_smec_trun(
+            r_t_ch_cna_init_dict, _r=_r, t_ls=t_ls, ch_ls=ch_ls, conc_ls=conc_ls
         )
+        # pool.submit(
+        #     calc_t_ch_cna_init_smec_trun,
+        #     r_t_ch_cna_init_dict=r_t_ch_cna_init_dict,
+        #     _r=_r,
+        #     t_ls=t_ls,
+        #     ch_ls=ch_ls,
+        #     conc_ls=conc_ls,
+        # )
     pool.shutdown(wait=True)
 
     with open(f"./smectite_trun_init.pkl", "wb") as pklf:
@@ -1029,7 +1038,7 @@ def test_single_condition():
         nacl=nacl,
         layer_width=_r,
     )
-    xn = smectite.calc_potentials_and_charges_truncated(x_init)
+    xn, _ = smectite.calc_potentials_and_charges_truncated(x_init)
 
 
 def test_sen_and_goode_1992():
@@ -1911,7 +1920,7 @@ def search_maximum_anisotoropic_condition():
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    # get_smectite_init_params_truncated()
+    get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
@@ -1934,7 +1943,7 @@ if __name__ == "__main__":
 
     # Grieser_and_Healy()
     # compare_WS_shaly_1()
-    analysis_WS1_result()
+    # analysis_WS1_result()
     # test_poros_distribution()
     # compare_WS_shaly_2()
     # analysis_WS_result2()

@@ -2,17 +2,20 @@
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Set, Callable
 from logging import Logger
 from sys import float_info
 from os import path, PathLike
 import math
 from copy import deepcopy
 from functools import partial
+import random
 
 import pickle
 import numpy as np
 from scipy.integrate import quad
+from deap import creator, base, tools
+import optuna
 
 import constants as const
 from constants import Species, IonProp
@@ -210,7 +213,7 @@ class Phyllosilicate:
             2000.0
             * self.ion_props[Species.Na.name][IonProp.Concentration.name]
             * const.AVOGADRO_CONST
-            * _e**2
+            * _e ** 2
         )
         bottom = self.dielec_water * _kb * self.temperature
         self.kappa = np.sqrt(top / bottom)
@@ -460,7 +463,7 @@ class Phyllosilicate:
         right2_1 = _e * _na * cf / dielec
         right2_2 = np.sinh(c * phir) * (xd - _r) ** 2
         right2 = right2_1 * right2_2
-        right3_1 = _e**3 * _na**2 * cf**2 / (12.0 * dielec**2 * kb * _t)
+        right3_1 = _e ** 3 * _na ** 2 * cf ** 2 / (12.0 * dielec ** 2 * kb * _t)
         right3_2 = np.sinh(2.0 * c * phir) * (xd - _r) ** 4
         right3 = right3_1 * right3_2
         return phid - phir - right2 - right3
@@ -576,7 +579,7 @@ class Phyllosilicate:
         top1_2 = 2.0 * d * e * np.exp(x)
         top1 = b * (top1_1 + top1_2)
         top2 = d * e * np.exp(2.0 * x)
-        top3 = b**2 * d * e
+        top3 = b ** 2 * d * e
         top = top1 + top2 + top3
         bottom1 = 1.0 + b / np.exp(x)
         bottom2 = np.exp(x) + b
@@ -703,7 +706,7 @@ class Phyllosilicate:
         xd = self.xd
         b = _e * _na * cf / dielec
         c = _e / (kb * _t)
-        d = _e**3 * _na**2 * cf**2 / (12.0 * dielec**2 * kb * _t)
+        d = _e ** 3 * _na ** 2 * cf ** 2 / (12.0 * dielec ** 2 * kb * _t)
         _1 = -c * b * np.cosh(c * phir) * (xd - _r) ** 2
         _2 = -2.0 * c * d * np.cosh(2.0 * c * phir) * (xd - _r) ** 4
         return -1.0 + _1 + _2
@@ -974,7 +977,7 @@ class Phyllosilicate:
             # At least once, enter the following loop
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = 1.0 / (lamda**_cou_damp)
+                _mu = 1.0 / (lamda ** _cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_inf(xn_tmp)
@@ -1024,7 +1027,7 @@ class Phyllosilicate:
         self,
         x_init: List = None,
         iter_max: int = 1000,
-        convergence_condition: float = 1.0e-9,
+        convergence_condition: float = 1.0e-6,
         step_tol: float = 1.0e-10,
         oscillation_tol: float = 1.0e-04,
         beta: float = 0.75,
@@ -1082,11 +1085,15 @@ class Phyllosilicate:
             _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
             _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
             ch_ls = list(ch_cna_dict.keys())
-            _idx = np.argmin(np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch))))
+            _idx = np.argmin(
+                np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
+            )
             # sodium concentration
             cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
             cna_ls = list(cna_dct.keys())
-            _idx = np.argmin(np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna))))
+            _idx = np.argmin(
+                np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
+            )
             x_init = cna_dct[cna_ls[_idx]]
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)
@@ -1094,6 +1101,7 @@ class Phyllosilicate:
         # The convergence condition is that the L2 norm in eqs.1~7
         # becomes sufficiently small.
         cou = 0
+        is_norm_converged: bool = False
         while convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian_truncated(
                 xn[0][0], xn[1][0], xn[2][0], xn[3][0]
@@ -1110,7 +1118,7 @@ class Phyllosilicate:
             # At least once, enter the following loop
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = 1.0 / (lamda**_cou_damp)
+                _mu = 1.0 / (lamda ** _cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_truncated(xn_tmp)
@@ -1118,6 +1126,8 @@ class Phyllosilicate:
                 # calculate right hand side of eq.(21) of [1]
                 _rhs = (1.0 - (1.0 - beta) * _mu) * norm_fn
                 _cou_damp += 1
+                if norm_fn < convergence_condition:
+                    break
                 if _cou_damp > 10000:
                     break
             xn = xn_tmp
@@ -1139,6 +1149,8 @@ class Phyllosilicate:
                     if self.logger is not None:
                         self.logger.error(_msg)
                     raise RuntimeError(_msg)
+        if norm_fn < convergence_condition:
+            is_norm_converged = True
         xn = xn.T.tolist()[0]
 
         # assign member variables
@@ -1174,7 +1186,203 @@ class Phyllosilicate:
             self.logger.debug(f"m_charge_0: {self.charge_0}")
             self.logger.debug(f"m_charge_stern: {self.charge_stern}")
             self.logger.debug(f"m_charge_diffuse: {self.charge_diffuse}")
-        return xn
+        return xn, is_norm_converged
+
+    def calc_potentials_and_charges_truncated_by_ga(
+        self,
+        x_init: List = None,
+        convergence_tol=1.0e-6,
+        seed: int = 42,
+        g_gen: int = 100000,
+        pop_size: int = 100,
+        cx_pb: float = 0.8,
+        mut_pb: float = 0.2,
+    ) -> List:
+        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+
+        # obtain init values based on infinity developed diffuse layer
+        # phi0, phib, phid, phir, q0, qb, qs
+        if not self._check_if_calculated_electrical_params_inf():
+            self.calc_potentials_and_charges_inf()
+        # TODO: Currently, it is assumed that this function is called only in the case of
+        # smectite. If we want to calculate the electrochemical properties of another clay
+        # mineral, such as vermiculite, we should modify this function.
+        if not self.__check_constant_as_smectite_truncated():
+            self.__set_constant_for_smectite_truncated()
+        if self.xd is None:
+            self.calc_xd()
+        if x_init is None:
+            # layer width
+            r_ls = list(smectite_trun_init_params.keys())
+            _r = self.layer_width
+            _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
+            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
+            # pH
+            _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
+            _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            ch_ls = list(ch_cna_dict.keys())
+            _idx = np.argmin(
+                np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
+            )
+            # sodium concentration
+            cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
+            cna_ls = list(cna_dct.keys())
+            _idx = np.argmin(
+                np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
+            )
+            x_init = cna_dct[cna_ls[_idx]]
+        num = len(x_init)
+        random.seed(seed)
+        np.random.seed(seed)
+        # set properties
+        _methods: Set[str] = set(dir(creator))
+        # set creator
+        if "FitnessMin" not in _methods:
+            creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
+        if "Individual" not in _methods:
+            creator.create("Individual", list, fitness=creator.FitnessMin)
+
+        # set toolbox
+        toolbox = base.Toolbox()
+        toolbox.register("attr_gene", lambda: random.random() - 1.0)
+        toolbox.register(
+            "individual", tools.initRepeat, creator.Individual, toolbox.attr_gene, num,
+        )
+        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+        # evaluation function
+        def __callback(xn: List):
+            fn = self.__calc_functions_truncated(np.array(xn).reshape(-1, 1))
+            cost = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
+            if np.isnan(cost):
+                return (float_info.max, )
+            if not (fn[0][0] <= fn[1][0] <= fn[2][0] <= fn[3][0]):
+                return (float_info.max, )
+            if fn[0][0] > 0. or fn[1][0] > 0. or fn[2][0] > 0. or fn[3][0] > 0.:
+                return (float_info.max, )
+            return (cost, )
+        toolbox.register("evaluate", __callback)
+        toolbox.register("mate", tools.cxBlend, alpha=0.4)
+        toolbox.register("mutate", tools.mutShuffleIndexes, indpb=0.2)
+        toolbox.register("select", tools.selTournament, tournsize=5)
+        cou: int = 0
+        pop = toolbox.population(n=pop_size)
+        # Set initial values for no dupulicates
+        _mu, _std = np.array(x_init), np.abs(np.array(x_init)) * 10.
+        for i, ind in enumerate(pop):
+            ind.clear()
+            if i == 0:
+                ind.extend(x_init)
+            ind.extend(np.random.normal(_mu, _std).tolist())
+
+        # start roop
+        fitnesses = list(map(toolbox.evaluate, pop))
+        flag_converged = True
+        flag_approriate = False
+        _f = float_info.max
+        best_ind_ls = [__callback(x_init)[0], x_init] # norm, gene
+        while _f > convergence_tol:
+            cou += 1
+            offspring = toolbox.select(pop, len(pop))
+            offspring = list(map(toolbox.clone, offspring))
+            for child1, child2 in zip(offspring[::2], offspring[1::2]):
+                if random.random() < cx_pb:
+                    toolbox.mate(child1, child2)
+                    del child1.fitness.values
+                    del child2.fitness.values
+
+            for mutant in offspring:
+                if random.random() < mut_pb:
+                    toolbox.mutate(mutant)
+                    del mutant.fitness.values
+            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
+            fitnesses = list(map(toolbox.evaluate, invalid_ind))
+            for ind, fit in zip(invalid_ind, fitnesses):
+                ind.fitness.values = fit
+            pop[:] = offspring
+            fits = [ind.fitness.values[0] for ind in pop]
+            _f = min(fits)
+            best_ind = tools.selBest(pop, 1)[0]
+            if cou % 500 == 0:
+               print(best_ind_ls)
+               for i, ind in enumerate(pop):
+                    if i > int(pop_size / 4):
+                        ind.clear()
+                        ind.extend(np.random.normal(_mu, _std).tolist())
+            if best_ind_ls[0] is None:
+                continue
+            elif _f < best_ind_ls[0]:
+                best_ind_ls[0] = _f
+                best_ind_ls[1] = best_ind
+            if not flag_approriate and best_ind_ls[0] < 1.:
+                cou = 0
+            if g_gen > cou:
+                flag_converged = False
+                break
+        if not flag_converged:
+            return best_ind_ls[1], flag_converged
+        return best_ind_ls[1], flag_converged
+    
+    def calc_potentials_and_charges_truncated_by_bayse(
+        self,
+        x_init: List = None,
+    ) -> List:
+        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+
+        # obtain init values based on infinity developed diffuse layer
+        # phi0, phib, phid, phir, q0, qb, qs
+        if not self._check_if_calculated_electrical_params_inf():
+            self.calc_potentials_and_charges_inf()
+        # TODO: Currently, it is assumed that this function is called only in the case of
+        # smectite. If we want to calculate the electrochemical properties of another clay
+        # mineral, such as vermiculite, we should modify this function.
+        if not self.__check_constant_as_smectite_truncated():
+            self.__set_constant_for_smectite_truncated()
+        if self.xd is None:
+            self.calc_xd()
+        if x_init is None:
+            # layer width
+            r_ls = list(smectite_trun_init_params.keys())
+            _r = self.layer_width
+            _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
+            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
+            # pH
+            _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
+            _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            ch_ls = list(ch_cna_dict.keys())
+            _idx = np.argmin(
+                np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
+            )
+            # sodium concentration
+            cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
+            cna_ls = list(cna_dct.keys())
+            _idx = np.argmin(
+                np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
+            )
+            x_init = cna_dct[cna_ls[_idx]]
+        
+        def objective(trial):
+            x1 = trial.suggest_float("x1", -1., 0.,)
+            x2 = trial.suggest_float("x2", -1., 0.,)
+            x3 = trial.suggest_float("x3", -1., 0.,)
+            x4 = trial.suggest_float("x4", -1., 0.,)
+            x5 = trial.suggest_float("x5", -1., 1.,)
+            x6 = trial.suggest_float("x6", -1., 1.,)
+            x7 = trial.suggest_float("x7", -1., 1.,)
+
+            obj = np.sum(np.sqrt(np.square(np.array([x1, x2, x3, x4, x5, x6, x7]).reshape(-1, 1))), axis=0)[0]
+            if np.isnan(obj):
+                return float_info.max
+            return obj
+
+        # We use the multivariate TPE sampler.
+        sampler = optuna.samplers.TPESampler(multivariate=True)
+        
+        study = optuna.create_study(sampler=sampler)
+        study.optimize(objective, n_trials=10000)
+
+        print(study.best_params)
+
+
 
     def _check_if_calculated_electrical_params_inf(self) -> bool:
         """Check if the electrical properties for infinite diffuse layer
@@ -1346,8 +1554,11 @@ class Phyllosilicate:
         _xdl = self.layer_width * 0.5
         # Na+ number (n/m^2) in diffuse layer
         gamma_diffuse = 0.0
-        if not math.isclose(self.xd, _xdl):
+        if self.potential_zeta > self.potential_r:
+            pass
+        elif not math.isclose(self.xd, _xdl):
             gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
+
         # total number density
         na_prop: Dict = self.ion_props[Species.Na.name]
         cond_stern = gamma_stern * na_prop[IonProp.MobilityStern.name]

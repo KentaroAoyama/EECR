@@ -113,10 +113,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     # set mineral instance
     smectite = Smectite(
         nacl=nacl,
-        logger=logger,
-    )
-    kaolinite = Kaolinite(
-        nacl=nacl,
+        layer_width=7.5e-8,
         logger=logger,
     )
     quartz = Quartz(
@@ -127,16 +124,13 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
     smectite.calc_cond_interlayer()
     smectite.calc_cond_tensor()
-    kaolinite.calc_potentials_and_charges_inf()
-    kaolinite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    kaolinite.calc_cond_tensor()
 
     # set solver input
     solver_input = FEM_Input_Cube(logger=logger)
     smec_frac_tol = (1.0 - porosity) * smec_frac
     siica_frac_tol = (1.0 - porosity) * (1.0 - smec_frac)
     solver_input.create_pixel_by_macro_variable(
-        shape=(10, 10, 10),  #!
+        shape=(20, 20, 20),
         edge_length=edge_length,
         volume_frac_dict={
             nacl: porosity,
@@ -170,9 +164,9 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         pickle.dump(quartz, pkf, pickle.HIGHEST_PROTOCOL)
 
     # solver
-    solver_fpth: str = path.join(outdir, "solver.pkl")
+    solver_fpth: str = path.join(outdir, "cond.pkl")
     with open(solver_fpth, "wb") as pkf:
-        pickle.dump(solver, pkf, pickle.HIGHEST_PROTOCOL)
+        pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf, pickle.HIGHEST_PROTOCOL)
 
     # remove handler
     for h in logger.handlers:
@@ -212,7 +206,7 @@ def experiment():
         seed_ls = [42]
 
     for seed in seed_ls:
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
         for smec_frac in smec_frac_ls:
             for temperature in temperature_ls:
                 for cnacl in cnacl_ls:
@@ -253,10 +247,12 @@ def output_fig():
             date_dirname: str = date_dirname_ls[datetime_ls.index(max(datetime_ls))]
             date_dir = path.join(seed_dir, date_dirname)
             # get solver pickle
-            solver_pth = path.join(date_dir, "solver.pkl")
+            solver_pth = path.join(date_dir, "cond.pkl")
+            if not path.isfile(solver_pth):
+                continue
             with open(solver_pth, "rb") as pkf:
-                solver: FEM_Cube = pickle.load(pkf)
-            cond_x, cond_y, cond_z = solver.cond_x, solver.cond_y, solver.cond_z
+                cond: tuple = pickle.load(pkf)
+            cond_x, cond_y, cond_z = cond
             if None in (cond_x, cond_y, cond_z):
                 continue
             cond_ave_ls.append(np.mean([cond_x, cond_y, cond_z]))
@@ -349,6 +345,6 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    experiment()
+    # experiment()
     output_fig()
     # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

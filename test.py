@@ -346,7 +346,7 @@ def Revil_etal_fig2():
             # truncated
             smectite.calc_potentials_and_charges_truncated()
             _ls[0].append(nacl.conductivity)
-            _ls[1].append(smectite.calc_cond_interlayer() / base)
+            _ls[1].append(smectite.calc_cond_interlayer()[0] / base)
     ex_x = [
         0.184519667,
         0.320670798,
@@ -1195,8 +1195,8 @@ def tmp():
 
 def ws_single_1(seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id):
     fpth = path.join(save_dir, "cond.pkl")
-    # if path.exists(fpth):
-    #     return #!
+    if path.exists(fpth):
+        return #!
     if not path.exists(save_dir):
         makedirs(save_dir)
 
@@ -1207,7 +1207,7 @@ def ws_single_1(seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_d
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
     # smectite
-    smectite = Smectite(nacl=nacl, layer_width=1.3e-9, logger=logger)  #!
+    smectite = Smectite(nacl=nacl, layer_width=5.0e-9, logger=logger)  #!
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
     smectite.calc_cond_interlayer()
@@ -1217,8 +1217,9 @@ def ws_single_1(seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_d
     # set solver_input
     solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
+        seed=seed,
         shape=(20, 20, 20),
-        edge_length=5.0e-8,
+        edge_length=1.0e-6,
         volume_frac_dict=OrderedDict(
             [
                 (nacl, _poros),
@@ -1236,7 +1237,6 @@ def ws_single_1(seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_d
                 (smectite, (nacl, adj_rate)),
             ]
         ),
-        seed=42,
     )
     solver_input.set_ib()
     solver_input.femat()
@@ -1916,11 +1916,52 @@ def search_maximum_anisotoropic_condition():
             condition_ls.append((cnacl, _r))
     print(condition_ls[np.argmin(aniso_ls)])
 
+def tmp():
+    nacl = NaCl()
+    nacl.sen_and_goode_1992()
+    nacl.calc_cond_tensor_cube_oxyz()
+    smectite = Smectite(nacl)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    smectite.calc_cond_infdiffuse()
+    quartz = Quartz(nacl)
+
+    _poros = 0.187
+    xsmec = 0.14
+    ayz_pore = 0.75
+    adj_rate = 0.5
+
+    solver_input = FEM_Input_Cube()
+    solver_input.create_pixel_by_macro_variable(
+        seed=42,
+        shape=(20, 20, 20),
+        edge_length=1.0e-6,
+        volume_frac_dict=OrderedDict(
+            [
+                (nacl, _poros),
+                (smectite, (1.0 - _poros) * xsmec),
+                (quartz, (1.0 - _poros) * (1.0 - xsmec)),
+            ],
+        ),
+        instance_range_dict=OrderedDict(
+            [
+                (nacl, (ayz_pore, ayz_pore)),
+            ]
+        ),
+        instance_adj_rate_dict=OrderedDict(
+            [
+                (smectite, (nacl, adj_rate)),
+            ]
+        ),
+    )
+    plot_instance(solver_input, 1.0e-6, "./tmp/fig_0.75")
+
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    # get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
@@ -1942,8 +1983,8 @@ if __name__ == "__main__":
     # Revil_etal_fig2()
 
     # Grieser_and_Healy()
-    # compare_WS_shaly_1()
-    # analysis_WS1_result()
+    compare_WS_shaly_1()
+    analysis_WS1_result()
     # test_poros_distribution()
     # compare_WS_shaly_2()
     # analysis_WS_result2()
@@ -1955,11 +1996,5 @@ if __name__ == "__main__":
     
     # compare_levi_et_al_2018()
 
-    # with open("./test/WS2/25/1e-09_4.4758071901410315/cond.pkl", "rb") as pkf:
-    #     t = pickle.load(pkf)
-    #     print(t)
-    # a = 4./1.67
-    # mass = 1. / const.AVOGADRO_CONST * (52. + 136. * a) # g
-    # volume = 5.1 * 8.9 * 6.6 * 1.0e-30 # m^-3
-    # print(mass/volume/1000.)
+    # tmp()
     pass

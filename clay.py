@@ -1164,12 +1164,13 @@ class Phyllosilicate:
 
         # fix minor error
         # zeta potential
-        if self.potential_zeta <= 0.0:
+        if math.isclose(self.potential_zeta, self.potential_r):
+            self.potential_r = self.potential_zeta
+        # Align zeta potential and truncated plane potential to the same sign
+        elif self.potential_zeta <= 0.0:
             if self.potential_r > 0.0:
                 self.potential_r -= 2.0 * self.potential_r
-        # stern potential
-        # High concentration case
-        if self.potential_zeta > 0.0:
+        elif self.potential_zeta > 0.0:
             if self.potential_r < 0.0:
                 self.potential_r -= 2.0 * self.potential_r
 
@@ -1554,9 +1555,7 @@ class Phyllosilicate:
         _xdl = self.layer_width * 0.5
         # Na+ number (n/m^2) in diffuse layer
         gamma_diffuse = 0.0
-        if self.potential_zeta > self.potential_r:
-            pass
-        elif not math.isclose(self.xd, _xdl):
+        if not math.isclose(self.xd, _xdl):
             gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
 
         # total number density

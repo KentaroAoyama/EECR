@@ -133,6 +133,7 @@ class FEM_Input_Cube:
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
                 conductivity tensor are rotated based on these angles (Defaults to "random").
         """
+        # TODO: 時間計測して高速化
         assert len(volume_frac_dict) > 0
         # Check to see if the volume fractions sum to 1
         _sum = 0.0

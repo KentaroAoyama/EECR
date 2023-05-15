@@ -952,28 +952,38 @@ def calc_t_ch_cna_init_smec_trun(r_t_ch_cna_init_dict, _r, t_ls, ch_ls, conc_ls)
                 )
                 flag_converged = False
                 if xn is None:
-                    xn, flag_converged = smectite.calc_potentials_and_charges_truncated()
+                    (
+                        xn,
+                        flag_converged,
+                    ) = smectite.calc_potentials_and_charges_truncated()
                     if not flag_converged:
-                        xn, flag_converged = smectite.calc_potentials_and_charges_truncated_by_ga(xn)
+                        (
+                            xn,
+                            flag_converged,
+                        ) = smectite.calc_potentials_and_charges_truncated_by_ga(xn)
                 else:
                     # calc dist
                     xn = __get_nearest_init(t_ch_cna_init_dict, _t, ch, cna)
                 smectite.calc_potentials_and_charges_inf()
                 xn, flag_converged = smectite.calc_potentials_and_charges_truncated(xn)
                 if not flag_converged:
-                    xn, flag_converged = smectite.calc_potentials_and_charges_truncated_by_ga(xn)
+                    (
+                        xn,
+                        flag_converged,
+                    ) = smectite.calc_potentials_and_charges_truncated_by_ga(xn)
                 ch_cna_dct: Dict = t_ch_cna_init_dict.setdefault(_t, {})
                 cna_dct: Dict = ch_cna_dct.setdefault(ch, {})
                 cna_dct.setdefault(cna, xn)
                 print(flag_converged)
                 print(xn)
 
-    makedirs("./tmp/params", exist_ok=True) #!
+    makedirs("./tmp/params", exist_ok=True)  #!
     with open(f"./tmp/params/{_r}.pickle", "wb") as pkf:
         pickle.dump(t_ch_cna_init_dict, pkf, pickle.HIGHEST_PROTOCOL)
     if not flag_converged:
         with open(f"./tmp/params/{_r}_not_converged.pickle", "wb") as pkf:
-           pickle.dump(not_converged, pkf, pickle.HIGHEST_PROTOCOL)
+            pickle.dump(not_converged, pkf, pickle.HIGHEST_PROTOCOL)
+
 
 def sort_by_center(_ls: List, center: float, logspace=True) -> List:
     _arr = np.array(_ls)
@@ -1193,10 +1203,12 @@ def tmp():
     sol_input.create_pixel_by_macro_variable(volume_frac_dict=_frac)
 
 
-def ws_single_1(seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id):
+def ws_single_1(
+    seed, _t, _cnacl, _ph, _poros, xsmec, ayz_pore, adj_rate, save_dir, log_id
+):
     fpth = path.join(save_dir, "cond.pkl")
     if path.exists(fpth):
-        return #!
+        return  #!
     if not path.exists(save_dir):
         makedirs(save_dir)
 
@@ -1317,19 +1329,19 @@ core_props_ws = {
 }
 
 cw_ws_ls = [
-        2.085,
-        4.049,
-        7.802,
-        14.92,
-        28.22,
-        52.49,
-        94.5,
-        139.8,
-        160.0,
-        192.2,
-        233.5,
-        250.5,
-    ]
+    2.085,
+    4.049,
+    7.802,
+    14.92,
+    28.22,
+    52.49,
+    94.5,
+    139.8,
+    160.0,
+    192.2,
+    233.5,
+    250.5,
+]
 cnacl_ws_pred = [
     0.017920058530648788,
     0.03557795402409026,
@@ -1344,6 +1356,7 @@ cnacl_ws_pred = [
     4.4758071901410315,
     5.000000000000001,
 ]
+
 
 def compare_WS_shaly_1():
     """Compare with the core data in Waxman & Smits (1968)"""
@@ -1373,7 +1386,7 @@ def compare_WS_shaly_1():
         xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
         print(_id, xsmec)  #!
         seed_ls = [42, 10, 20]
-        range_pore_ls: List = [0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2.0]
+        range_pore_ls: List = [0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
         # range_smec_ls: List = np.linspace(0.01, 0.4, 10).tolist()[-1:]
         adj_rate_ls: List = np.linspace(0, 1.0, 5).tolist()
         cou = 0
@@ -1514,8 +1527,9 @@ def analysis_WS1_result():
             plt.clf()
             plt.close()
 
+
 def ws_single_2(_t, _cnacl, _ph, _poros, xsmec, _r, save_dir, log_id):
-    xsmec = 0. #!
+    xsmec = 0.0  #!
     # 割り当て方法：random, layer_widthを変更して
     fpth = path.join(save_dir, "cond.pkl")
     if not path.exists(save_dir):
@@ -1627,7 +1641,10 @@ def analysis_WS_result2():
             _ls[0].append(cnacl_ws_pred[i])
             _ls[1].append(bk / 10.0)
     id_cond_result: Dict[int, Dict] = {}
-    pickle_dir = path.join(test_dir(), "WS2",)
+    pickle_dir = path.join(
+        test_dir(),
+        "WS2",
+    )
     for id_name in listdir(pickle_dir):
         dirname_id = path.join(pickle_dir, id_name)
         id_dct: Dict[Tuple, float] = id_cond_result.setdefault(id_name, {})
@@ -1696,7 +1713,9 @@ def test_mobility_2():
     ax.legend()
     fig.savefig("./test/mobility.png", dpi=200)
 
+
 from output import plt_any_val  #!
+
 
 def tmp():
     dirname = "0.7000000000000001_0.0_0.5768283904053048"
@@ -1772,24 +1791,58 @@ def test_dielec():
     fig.savefig(path.join(test_dir(), "dielec.png"), dpi=200)
 
 
+def calc_tot_density():
+    m_al = 26.981539
+    m_si = 28.0855
+    m_o = 15.9994
+    m_h = 1.00749
+    dens = (4.0 * m_al + 8.0 * m_si + 24.0 * m_o + 4.0 * m_h) / (
+        const.AVOGADRO_CONST * 5.2 * 9.0 * 6.6 * 1.0e-30
+    ) / 1.0e3
+    return dens
+
+def calc_gamma_na():
+    m_na = 22.989768
+    return m_na / (const.AVOGADRO_CONST * 3. * 5.2 * 9.0 * 1.0e-20) / 1.0e3
+
+def calc_smec_density(r: float=1.3e-8):
+    dens_tot = calc_tot_density()
+    _water = iapws.IAPWS97(P=0.1, T=298.15)
+    dens_water = _water.rho
+    gamma_na = calc_gamma_na()
+    return (dens_tot * 6.6e-10 + dens_water * r + gamma_na) / (6.6e-10 + r)
+
 def compare_levi_et_al_2018():
     def calc_fitting_value(a2, b2, c2, d2, cond_w):
-        return a2 * cond_w + b2 + c2 * cond_w / (1. + c2 / d2 * cond_w)
+        return a2 * cond_w + b2 + c2 * cond_w / (1.0 + c2 / d2 * cond_w)
+
     table_b = pd.read_csv("./test/levy_data/Levy_appendixB.csv")
     table_c = pd.read_csv("./test/levy_data/Levy_TableC.csv")
     data = pd.merge(table_b, table_c, left_on="ID", right_on="Parameter")
     # remove outliers
     # L12a, L30, L35, L76, L81, L85, L104, L106, L108, L111, L112, L117
-    outlier_id_ls = ['L12a', 'L30', 'L35', 'L76', 'L81', 'L85', 'L104', 'L106', 'L108', 'L111', 'L112', 'L117']
+    outlier_id_ls = [
+        "L12a",
+        "L30",
+        "L35",
+        "L76",
+        "L81",
+        "L85",
+        "L104",
+        "L106",
+        "L108",
+        "L111",
+        "L112",
+        "L117",
+    ]
     data = data[np.logical_not(data["ID"].isin(outlier_id_ls))].copy()
-    data['porosity'] = data['porosity'] / 100.
-    data['Smectite'] = data['Smectite'] / 100.
-    
-    # a = 4./1.67
-    # mass = 1. / const.AVOGADRO_CONST * (52. + 136. * a) # g
-    # volume = 5.1 * 8.9 * 6.6 * 1.0e-30 # m^-3
-    # print(mass/volume/1000.)
-    
+    data["porosity"] = data["porosity"] / 100.0
+    data["Smectite"] = data["Smectite"] / 100.0
+
+    # Step
+    # 1. choose r
+    # 2. Smec% → Xsmec (input r)
+    # 3. Simulation with r (seed, anisotoropic adj_rate)
     for row in data.iterrows():
         # get Xsmec
         pass
@@ -1802,7 +1855,7 @@ def seed_tempe_cnacl_n(seed, n):
     nacl = NaCl()
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
-    
+
     smectite = Smectite(nacl)
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()
@@ -1810,15 +1863,16 @@ def seed_tempe_cnacl_n(seed, n):
     smectite.calc_cond_tensor()
 
     sol_input = FEM_Input_Cube()
-    sol_input.create_pixel_by_macro_variable(shape = (n, n, n),
-                                             volume_frac_dict={smectite: 1.},
-                                             seed=seed)
+    sol_input.create_pixel_by_macro_variable(
+        shape=(n, n, n), volume_frac_dict={smectite: 1.0}, seed=seed
+    )
     sol_input.set_ib()
     sol_input.femat()
     solver = FEM_Cube(sol_input)
     solver.run(100, 30, 1.0e-9)
     with open(fpth, "wb") as pkf:
         pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
+
 
 def optimize_n():
     n_ls = np.linspace(1, 30, 30).tolist()
@@ -1832,6 +1886,7 @@ def optimize_n():
             # seed_tempe_cnacl_n(seed=seed, tempe=tempe, cnacl=cnacl, n=n)
             pool.submit(seed_tempe_cnacl_n, seed=seed, n=n)
         pool.shutdown(wait=True)
+
 
 def analyse_result():
     results = {}
@@ -1850,11 +1905,11 @@ def analyse_result():
         with open(fpth, "rb") as pkf:
             result = pickle.load(pkf)
         results.setdefault(tuple(condition_ls), result)
-    
+
     # plot (poros, xsmec, n)
     n_val = {}
     for (_, poros, xsmec, n), result in results.items():
-        if poros != 0. or xsmec != 1.:
+        if poros != 0.0 or xsmec != 1.0:
             continue
         n_val.setdefault(n, []).append(result)
     n_ls = []
@@ -1866,12 +1921,13 @@ def analyse_result():
         for c_ls in val:
             _ls.extend(c_ls)
         n_ls.append(n)
-        print(_ls) #!
+        print(_ls)  #!
         mean_ls.append(mean(_ls))
         std_ls.append(stdev(_ls))
     fig, ax = plt.subplots()
     ax.errorbar(n_ls, mean_ls, std_ls)
     fig.savefig(path.join(test_dir(), "./n_error.png"), bbox_inches="tight", dpi=200)
+
 
 def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
     nacl = NaCl()
@@ -1898,9 +1954,10 @@ def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
 def main():
     return
 
+
 def search_maximum_anisotoropic_condition():
     # (1.0000002302585358, 4.918367346938775e-09)
-    cnacl_ls = np.logspace(1.0e-7, 0.7, 50, base=10.).tolist()
+    cnacl_ls = np.logspace(1.0e-7, 0.7, 50, base=10.0).tolist()
     r_ls = np.linspace(1.0e-9, 1.3e-8, 50).tolist()
     aniso_ls = []
     condition_ls: List[Tuple] = []
@@ -1915,6 +1972,7 @@ def search_maximum_anisotoropic_condition():
             aniso_ls.append(tensor[0][0] / tensor[2][2])
             condition_ls.append((cnacl, _r))
     print(condition_ls[np.argmin(aniso_ls)])
+
 
 def tmp():
     nacl = NaCl()
@@ -1983,8 +2041,8 @@ if __name__ == "__main__":
     # Revil_etal_fig2()
 
     # Grieser_and_Healy()
-    compare_WS_shaly_1()
-    analysis_WS1_result()
+    # compare_WS_shaly_1()
+    # analysis_WS1_result()
     # test_poros_distribution()
     # compare_WS_shaly_2()
     # analysis_WS_result2()
@@ -1993,7 +2051,7 @@ if __name__ == "__main__":
     # analyse_result()
 
     # search_maximum_anisotoropic_condition()
-    
+
     # compare_levi_et_al_2018()
 
     # tmp()

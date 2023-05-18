@@ -113,7 +113,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     # set mineral instance
     smectite = Smectite(
         nacl=nacl,
-        layer_width=7.5e-8,
+        layer_width=2.0e-9,
         logger=logger,
     )
     quartz = Quartz(
@@ -311,7 +311,7 @@ def output_fig():
         tempe, poros = tempe_poros
         save_pth = path.join(cnacl_dir, f"temperature-{tempe}_porosity-{poros}.png")
         # lateral: cnacl, ledgend: smectite fraction
-        plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Salinity (Mol)", logscale=True)
+        plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Salinity (M)", logscale=True)
 
     # plot porosity variation
     poros_dir = path.join(fig_dir, "poros")

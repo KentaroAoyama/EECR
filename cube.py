@@ -111,6 +111,7 @@ class FEM_Input_Cube:
         volume_frac_dict: DictLike = {},
         instance_range_dict: DictLike = {},
         instance_adj_rate_dict: DictLike = {},
+        cluster_size: DictLike = {},
         seed: int = 42,
         rotation_setting: str or Tuple[float] = "random",
     ) -> None:
@@ -128,6 +129,10 @@ class FEM_Input_Cube:
             instance_adj_rate_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
                 and value is the tuple containing instance to be considered adjacent or not and the
                 adjacent rate.
+            cluster_size (Dict): Dictionary containing whose key is the instance of the mineral or fluid
+                and value is the cluster size. Cluster size indicates the length of the sides of a
+                cube-shaped cluster. NOTE: Currently, only the first element of volume_frac_dict can
+                apply this method
             (OUTDATED) rotation_setting (str or Tuple): Argument that control the rotation of the
                 conductivity tensor of each element. If you set as "rondom", conductivity tensor
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
@@ -196,7 +201,15 @@ class FEM_Input_Cube:
                 _num += 1
                 error_cuml += frac_unit
             _m_selected: Set = None
-            if _instance in instance_range_dict:
+            if _instance in cluster_size:
+                _size: int = int(cluster_size[_instance])
+                assert _i == 0, _i  # TODO: remove this assertion
+                assert _size <= nx and _size <= ny and _size <= nz, _size
+                assert _size**3 <= _num, _size**3
+                _m_selected = self.__calc_cluster_distribution(_num, shape, _size)
+                if self.logger is not None:
+                    self.logger.info(f"Adjust cluster size done for {_instance}")
+            elif _instance in instance_range_dict:
                 # anisotoropic scale
                 range_yz = instance_range_dict[_instance]
                 _m_selected = self.__calc_anisotropic_distribution(
@@ -837,6 +850,59 @@ class FEM_Input_Cube:
         _m_selected: List = random.sample(list(m_remain), k=_num)
         return set(_m_selected)
 
+    def __calc_cluster_distribution(
+        self,
+        num: int,
+        nxyz: Tuple[int],
+        cluster_size: int,
+    ) -> Set or None:
+        """_summary_
+
+        Args:
+            num (int): Number to be selected
+            nxyz (Tuple[int]): Tuple containing nx, ny, nz
+            cluster_size (int): Number indicates the length of the sides of a
+                cube-shaped cluster
+
+        Returns:
+            Set: Selected global flatten indecies
+        """
+        # get cluser index
+        nx, ny, nz = nxyz
+        cix = list(range(nx))[::cluster_size]
+        ciy = list(range(ny))[::cluster_size]
+        ciz = list(range(nz))[::cluster_size]
+        ci_mls_dct: Dict = {}
+        for i in cix:
+            for j in ciy:
+                for k in ciz:
+                    m = calc_m(i, j, k, nx, ny)
+                    for itmp in range(i, i + cluster_size):
+                        for jtmp in range(j, j + cluster_size):
+                            for ktmp in range(k, k + cluster_size):
+                                if itmp > nx - 1:
+                                    continue
+                                if jtmp > ny - 1:
+                                    continue
+                                if ktmp > nz - 1:
+                                    continue
+                                ci_mls_dct.setdefault(m, []).append(
+                                    calc_m(itmp, jtmp, ktmp, nx, ny)
+                                )
+        m_selected_ls = []
+        cou, num_selected = 0, 0
+        m_keys = list(ci_mls_dct.keys())
+        random.shuffle(m_keys)
+        while num_selected < num:
+            m_ls_tmp = ci_mls_dct[m_keys[cou]]
+            m_selected_ls.extend(m_ls_tmp)
+            num_selected += len(m_ls_tmp)
+            cou += 1
+        if num_selected > num:
+            m_selected_ls = m_selected_ls[:num]
+        assert len(m_selected_ls) == num, len(m_selected_ls)
+        return set(m_selected_ls)
+
     def __calc_anisotropic_distribution(
         self,
         m_remain: Set,
@@ -882,9 +948,9 @@ class FEM_Input_Cube:
         x_all: np.ndarray = np.array(x_all)
 
         # calculate centroids
-        c_all = KMeans(init="k-means++", n_clusters=num_initial, random_state=seed, n_init="auto").fit(
-            x_all
-        )
+        c_all = KMeans(
+            init="k-means++", n_clusters=num_initial, random_state=seed, n_init="auto"
+        ).fit(x_all)
         # set value to each centroids
         values_in: List = [0.0 if i < num0 else 1.0 for i in range(num_initial)]
         random.shuffle(values_in)
@@ -970,7 +1036,7 @@ class FEM_Input_Cube:
         return (
             np.array([float(i), float(j), float(k)]) + np.random.rand(3) / 10.0 - 0.05
         )
-        
+
     def __set_by_adjacent_rate(
         self, m_remain: Set, num: int, m_target: Set, adj_rate: float, shape: Tuple
     ) -> Set:

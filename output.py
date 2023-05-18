@@ -57,14 +57,14 @@ def plot_smec_frac_cond(
             continue
 
         ax.errorbar(
-            _x, _y, _e, label=str(_label), color=cm.jet(float(i) / len(keys_sorted))
+            _x, _y, _e, label=str(_label), capsize=3, color=cm.jet(float(i) / len(keys_sorted))
         )
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
     if xlabel is not None:
-        ax.set_xlabel(xlabel)
+        ax.set_xlabel(xlabel, fontsize=14.)
     if logscale:
         ax.set_xscale("log")
-    ax.set_ylabel("Conductivity (S/m)")
+    ax.set_ylabel("Conductivity (S/m)", fontsize=14.)
     fig.savefig(save_pth, dpi=200, bbox_inches="tight")
 
     # close
@@ -186,7 +186,6 @@ def __plot_current_grid(
 
 
 def plot_instance(solver_like: SolverLike,
-                  edge_length: float,
                   out_dir: str,):
     fem_input = None
     if isinstance(solver_like, FEM_Cube):
@@ -214,8 +213,8 @@ def plot_instance(solver_like: SolverLike,
     _tmp = np.transpose(instance_arr, (2, 0, 1))
     _, ax1, ax2 = _tmp.shape
     grid_x, grid_y = np.meshgrid(
-        np.array([edge_length * i for i in range(ax2)]),
-        np.array([edge_length * i for i in range(ax1)]),
+        np.array(list(range(ax2))) + 0.5,
+        np.array(list(range(ax1))) + 0.5,
     )
     __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "x", title)
 
@@ -223,8 +222,8 @@ def plot_instance(solver_like: SolverLike,
     _tmp = np.transpose(instance_arr, (1, 0, 2))
     _, ax1, ax2 = _tmp.shape
     grid_x, grid_y = np.meshgrid(
-        np.array([edge_length * i for i in range(ax2)]),
-        np.array([edge_length * i for i in range(ax1)]),
+        np.array(list(range(ax2))) + 0.5,
+        np.array(list(range(ax1))) + 0.5,
     )
     __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "y", title)
 
@@ -232,8 +231,8 @@ def plot_instance(solver_like: SolverLike,
     _tmp = deepcopy(instance_arr)
     _, ax1, ax2 = _tmp.shape
     grid_x, grid_y = np.meshgrid(
-        np.array([edge_length * i for i in range(ax2)]),
-        np.array([edge_length * i for i in range(ax1)]),
+        np.array(list(range(ax2))) + 0.5,
+        np.array(list(range(ax1))) + 0.5,
     )
     __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "z", title)
 

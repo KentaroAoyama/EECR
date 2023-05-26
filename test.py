@@ -379,10 +379,122 @@ def Revil_etal_fig2():
     ax.scatter(ex_x, ex_y, zorder=2)
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     ax.set_xscale("log")
-    ax.set_xlabel("Salinity (M)", fontsize=14)
-    ax.set_ylabel("Normalized Conductivity\n$σ_{s}$($σ_{f}$)/$σ_{s}$ (5.249 S/m )", fontsize=14)
+    ax.set_xlabel("Water conductivity", fontsize=14)
+    ax.set_ylabel(
+        "Normalized Conductivity\n$σ_{s}$($σ_{f}$)/$σ_{s}$ (5.249 S/m )", fontsize=14
+    )
     plt.show()
     fig.savefig("./test/Revil_etal_fig2.png", dpi=200, bbox_inches="tight")
+
+
+def exec_etal_fig2_by_bulk(_r: float, cnacl: float, fpth):
+    if path.isfile(fpth):
+        return
+
+    nacl = NaCl(cnacl=cnacl, temperature=273.15 + 25.0, ph=7.0)
+
+    smectite = Smectite(nacl=nacl, layer_width=_r)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    smectite.calc_potentials_and_charges_inf()
+    smectite.calc_cond_infdiffuse()
+    solver_input = FEM_Input_Cube()
+    solver_input.create_pixel_by_macro_variable(
+        shape=(20, 20, 20), volume_frac_dict={smectite: 1.0}
+    )
+    solver_input.set_ib()
+    solver_input.femat()
+    solver = FEM_Cube(solver_input)
+    solver.run(kmax=100, gtest=1.0e-9)
+
+    with open(fpth, "wb") as pkf:
+        pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
+
+
+def Revil_etal_fig2_by_bulk():
+    cnacl_ref = 0.577
+    cnacl_ls: List = np.logspace(-2, 0.7, 20, base=10.0).tolist()
+
+    r_ls = [1.0e-9, 3.0e-9, 5.0e-9, 7.0e-9, 9.0e-9, 11.0e-9, 13.0e-9]
+    savedir = path.join(test_dir(), "result_Revil_etal_fig2_by_bulk")
+    makedirs(savedir, exist_ok=True)
+    pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
+    for _r in r_ls:
+        print("=====")
+        print(f"r: {_r}")
+        fpth = path.join(savedir, f"{_r}_{cnacl_ref}.pkl")  #!
+        pool.submit(exec_etal_fig2_by_bulk, _r=_r, cnacl=cnacl_ref, fpth=fpth)
+
+        for i, cnacl in enumerate(cnacl_ls):
+            print(f"cnacl: {cnacl}")  #!
+            fpth = path.join(savedir, f"{_r}_{cnacl}")
+            pool.submit(exec_etal_fig2_by_bulk, _r=_r, cnacl=cnacl, fpth=fpth)
+    pool.shutdown(wait=True)
+
+    # collect results
+    r_result: Dict = {}
+    for fname in listdir(savedir):
+        fname = fname.replace(".pkl", "")
+        _r, cnacl = fname.split("_")
+        _r = float(_r)
+        cnacl = float(cnacl)
+        fpth = path.join(savedir, fname)
+        if not path.isfile(fpth):
+            continue
+        with open(path.join(savedir, fname), "rb") as pkf:
+            cond_x, cond_y, cond_z = pickle.load(pkf)
+        _ls: List = r_result.setdefault(_r, [[], []])
+        nacl = NaCl(cnacl=cnacl, temperature=298.15, ph=7.0)
+        nacl.sen_and_goode_1992()
+        _ls[0].append(nacl.get_cond())
+        _ls[1].append((cond_x + cond_y + cond_z) / 3.0)
+
+    nacl_ref = NaCl(cnacl=0.577, temperature=273.15 + 25.0, ph=7.0)
+    nacl_ref.sen_and_goode_1992()
+    fig, ax = plt.subplots()
+    for i, _r in enumerate(sorted(r_result.keys())):
+        _ls = r_result[_r]
+        # get base
+        base = _ls[1][np.square(np.array(_ls[0]) - nacl_ref.get_cond()).argmin()]
+        print(f"base: {base}") #!
+        _vert = [i / base for i in _ls[1]]
+        ax.plot(_ls[0], _vert, label=_r, color=cm.jet(float(i) / len(r_result)))
+
+    ex_x = [
+        0.184519667,
+        0.320670798,
+        0.553585104,
+        0.955673135,
+        1.617182583,
+        2.736583684,
+        4.449465081,
+        6.125092764,
+        8.101527856,
+        9.505377372,
+    ]
+    ex_y = [
+        1.063802817,
+        1.001549296,
+        1.021690141,
+        0.979577465,
+        0.992394366,
+        0.996056338,
+        0.977746479,
+        0.99971831,
+        1.050985915,
+        1.096760563,
+    ]
+
+    ax.scatter(ex_x, ex_y, zorder=2)
+    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.set_xscale("log")
+    ax.set_xlabel("Water conductivity", fontsize=14)
+    ax.set_ylabel(
+        "Normalized Conductivity\n$σ_{s}$($σ_{f}$)/$σ_{s}$ (5.249 S/m )", fontsize=14
+    )
+    plt.show()
+    fig.savefig("./test/Revil_etal_fig2_by_bulk.png", dpi=200, bbox_inches="tight")
 
 
 def goncalves_fig6():
@@ -436,7 +548,9 @@ def qurtz_cond():
             condnacl_ls.append(nacl.conductivity)
             q = Quartz(nacl)
             conds_ls.append(q.cond_diffuse * q.get_double_layer_length())
-        ax.plot(cnacl_ls, conds_ls, color=cm.jet(float(i) / n), label=int(_t-273.15)) # TODO: 四捨五入にする
+        ax.plot(
+            cnacl_ls, conds_ls, color=cm.jet(float(i) / n), label=int(_t - 273.15)
+        )  # TODO: 四捨五入にする
     ex_x = [
         4.95e-07,
         1.83759e-06,
@@ -460,7 +574,9 @@ def qurtz_cond():
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     ax.set_xscale("log")
     ax.set_yscale("log")
-    fig.savefig(path.join(test_dir(), "RevilGlover1998.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(
+        path.join(test_dir(), "RevilGlover1998.png"), dpi=200, bbox_inches="tight"
+    )
 
 
 def smectite_cond_intra():
@@ -1462,7 +1578,7 @@ def analysis_WS1_result():
                 cnacl_ls,
                 mean_ls,
                 err_ls,
-                alpha=.75,
+                alpha=0.75,
                 capsize=3,
                 label=ayz,
                 color=cm.jet(float(i) / len(ayz_cnacl_props)),
@@ -1501,7 +1617,7 @@ def analysis_WS1_result():
                     cnacl_ls,
                     bk_ls,
                     std_ls,
-                    alpha=.75,
+                    alpha=0.75,
                     capsize=3,
                     label=adj_rate,
                     color=cm.jet(float(i) / len(adj_dct)),
@@ -1509,7 +1625,10 @@ def analysis_WS1_result():
 
             # obs
             _ls = ws_result[int(_id)]
-            ax.scatter(_ls[0], _ls[1],)
+            ax.scatter(
+                _ls[0],
+                _ls[1],
+            )
             # save
             ax.grid()
             ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
@@ -1518,7 +1637,9 @@ def analysis_WS1_result():
             plt.close()
 
 
-def ws_single_2(_t, _cnacl, _ph, _poros, xsmec, seed, adj_rate, cluster_size, save_dir, log_id):
+def ws_single_2(
+    _t, _cnacl, _ph, _poros, xsmec, seed, adj_rate, cluster_size, save_dir, log_id
+):
     xsmec = 0.0  #!
     # 割り当て方法：random, layer_widthを変更して
     fpth = path.join(save_dir, "cond.pkl")
@@ -1550,7 +1671,6 @@ def ws_single_2(_t, _cnacl, _ph, _poros, xsmec, seed, adj_rate, cluster_size, sa
                 (smectite, (1.0 - _poros) * xsmec),
                 (quartz, (1.0 - _poros) * (1.0 - xsmec)),
             ],
-
         ),
         instance_adj_rate_dict=OrderedDict(
             [
@@ -1592,11 +1712,13 @@ def compare_WS_shaly_2():
         # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
         qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
         xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
-        cluster_size_ls: List = [1,2,3,4,5]
+        cluster_size_ls: List = [1, 2, 3, 4, 5]
         pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
         cou = 0
         for seed in [40, 50, 60, 70, 80, 90, 100]:
-            for adj_rate in [1.,]:
+            for adj_rate in [
+                1.0,
+            ]:
                 for _size in cluster_size_ls:
                     for _cnacl in reversed(cnacl_ls):
                         print(f"size: {_size}, cnacl: {_cnacl}")
@@ -1677,10 +1799,10 @@ def analysis_WS_result2():
             for cnacl in sorted(cnacl_dct.keys()):
                 bk_ls = cnacl_dct[cnacl]
                 cnacl_ls.append(cnacl)
-                if len(bk_ls)>1:
+                if len(bk_ls) > 1:
                     mean_ls.append(mean(bk_ls))
                     # std_ls.append(stdev(bk_ls) / 10.) #!
-                    std_ls.append(0.)
+                    std_ls.append(0.0)
                 else:
                     mean_ls.append(bk_ls[0])
                     std_ls.append(0)
@@ -1693,18 +1815,19 @@ def analysis_WS_result2():
             #     capsize=3,
             #     color=cm.jet(float(i) / len(size_cnacl)),
             # )
-            ax.plot(cnacl_ls,
-                    mean_ls,
-                    label=int(size),
-                    color=cm.jet(float(i) / len(size_cnacl)),
-                    )
+            ax.plot(
+                cnacl_ls,
+                mean_ls,
+                label=int(size),
+                color=cm.jet(float(i) / len(size_cnacl)),
+            )
         # obs
         _ls = ws_result[int(_id)]
         ax.scatter(_ls[0], _ls[1], zorder=2)
         # save
         ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-        ax.set_xlabel("Salinity (M)", fontsize=14.)
-        ax.set_ylabel("Conductivity (S/m)", fontsize=14.)
+        ax.set_xlabel("Salinity (M)", fontsize=14.0)
+        ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
         ax.grid()
         fig.savefig(f"./test/WS2/fig/{_id}_ayz.png", bbox_inches="tight", dpi=200)
         plt.clf()
@@ -1737,22 +1860,30 @@ def analysis_WS_result2():
                 #             capsize=3,
                 #             color=cm.jet(float(i) / len(adj_dct)),
                 #         )
-                ax.plot(cnacl_ls,
-                        mean_ls,
-                        label=int(adj_rate),
-                        color=cm.jet(float(i) / len(adj_dct),),
-                    )
+                ax.plot(
+                    cnacl_ls,
+                    mean_ls,
+                    label=int(adj_rate),
+                    color=cm.jet(
+                        float(i) / len(adj_dct),
+                    ),
+                )
             # obs
             _ls = ws_result[int(_id)]
             ax.scatter(_ls[0], _ls[1], zorder=2)
             # save
             ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
-            ax.set_xlabel("Salinity (M)", fontsize=14.)
-            ax.set_ylabel("Conductivity (S/m)", fontsize=14.)
+            ax.set_xlabel("Salinity (M)", fontsize=14.0)
+            ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
             ax.grid()
-            fig.savefig(f"./test/WS2/fig/{_id}_{_size}_adj_rate.png", bbox_inches="tight", dpi=200)
+            fig.savefig(
+                f"./test/WS2/fig/{_id}_{_size}_adj_rate.png",
+                bbox_inches="tight",
+                dpi=200,
+            )
             plt.clf()
             plt.close()
+
 
 def test_mobility_2():
     cnacl_ls = np.logspace(-3, 0.3, 5, base=10).tolist()
@@ -1841,21 +1972,26 @@ def calc_tot_density():
     m_si = 28.0855
     m_o = 15.9994
     m_h = 1.00749
-    dens = (4.0 * m_al + 8.0 * m_si + 24.0 * m_o + 4.0 * m_h) / (
-        const.AVOGADRO_CONST * 5.2 * 9.0 * 6.6 * 1.0e-30
-    ) / 1.0e3
+    dens = (
+        (4.0 * m_al + 8.0 * m_si + 24.0 * m_o + 4.0 * m_h)
+        / (const.AVOGADRO_CONST * 5.2 * 9.0 * 6.6 * 1.0e-30)
+        / 1.0e3
+    )
     return dens
+
 
 def calc_gamma_na():
     m_na = 22.989768
-    return 4. * m_na / (const.AVOGADRO_CONST * 5.2 * 9.0 * 1.0e-20) / 1.0e3
+    return 4.0 * m_na / (const.AVOGADRO_CONST * 5.2 * 9.0 * 1.0e-20) / 1.0e3
 
-def calc_smec_density(r: float=1.0e-9):
+
+def calc_smec_density(r: float = 1.0e-9):
     dens_tot = calc_tot_density()
     _water = iapws.IAPWS97(P=0.1, T=298.15)
     dens_water = _water.rho
     gamma_na = calc_gamma_na()
     return (dens_tot * 6.6e-10 + dens_water * r + gamma_na) / (6.6e-10 + r)
+
 
 def compare_levi_et_al_2018():
     def calc_fitting_value(a2, b2, c2, d2, cond_w):
@@ -1887,7 +2023,7 @@ def compare_levi_et_al_2018():
     # layer width
     # Smectite density is average value (Levy et al., 2018)
     dens_ave = 2.21978022 * 1.0e3
-    r_ls = np.linspace(0., 1.3e-8, 1000).tolist()
+    r_ls = np.linspace(0.0, 1.3e-8, 1000).tolist()
     dens_ls = [calc_smec_density(r) for r in r_ls]
     r = r_ls[np.argmin(np.square(np.array(dens_ls) - dens_ave))]
     # Step
@@ -1895,9 +2031,10 @@ def compare_levi_et_al_2018():
     # 2. Simulation (seed, anisotoropic adj_rate)
     for _, row in data.iterrows():
         smec_per = row["Smec_or_MLC"]
-        dens_sol = row["Grain_density"] * 1000.
+        dens_sol = row["Grain_density"] * 1000.0
         xsmec = smec_per * dens_sol / dens_ave  # fraction of solid
-        print(xsmec) #!
+        print(xsmec)  #!
+
 
 def seed_tempe_cnacl_n(seed, n):
     fpth = f"./tmp/optimize_n_default/{seed}_0.0_1.0_{n}.pkl"
@@ -2066,8 +2203,9 @@ def plt_ws_instance():
     )
     plot_instance(solver_input, "./tmp/fig_0.75")
 
+
 def tmp():
-    r_ls = np.linspace(0., 1.3e-8, 1000).tolist()
+    r_ls = np.linspace(0.0, 1.3e-8, 1000).tolist()
     dens_ls = [calc_smec_density(r) for r in r_ls]
     fig, ax = plt.subplots()
     ax.plot(r_ls, dens_ls)
@@ -2091,13 +2229,16 @@ def test_cluster():
                 [
                     (nacl, 0.2),
                     (quartz, 0.8),
-                ],),
-            cluster_size = OrderedDict(
+                ],
+            ),
+            cluster_size=OrderedDict(
                 [
                     (nacl, size),
-                ],)
-            )
+                ],
+            ),
+        )
         plot_instance(solver_input, f"./tmp/cluster{size}")
+
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()
@@ -2121,8 +2262,8 @@ if __name__ == "__main__":
     # smec_cond_intra_r_dependence()
     # smectite_cond_inf()
     # potential_smectite_inf()
-    Revil_etal_fig2()
-
+    # Revil_etal_fig2()
+    Revil_etal_fig2_by_bulk()
     # Grieser_and_Healy()
     # compare_WS_shaly_1()
     # analysis_WS1_result()

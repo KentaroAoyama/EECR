@@ -1,5 +1,4 @@
 """Calculate electrical properties of fluid"""
-# TODO: H+とOH-の移動度の温度依存性を実装する
 # pylint: disable=import-error
 from typing import Dict
 from copy import deepcopy
@@ -57,7 +56,6 @@ class NaCl(Fluid):
         self.cond_tensor = cond_tensor
         self.logger = logger
 
-        # TODO: 活量を計算する (それにあわせてTLMのパラメータも修正する必要ある)
         # Set ion_props and activities other than mobility
         ion_props: Dict = deepcopy(ion_props_default)
         for _s, _prop in ion_props.items():
@@ -108,11 +106,16 @@ class NaCl(Fluid):
         self.ion_props: Dict = ion_props
 
         # get dielectric constant
+        # TODO: consider salinity
         water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
+        # TODO: consider salinity
         self.viscosity: float = iapws._iapws._Viscosity(water.rho, self.temperature)
+
+        # TODO: calc activity
+
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.

@@ -45,8 +45,8 @@ class ConstPitzer:
             "beta0": 0.07650,
             "beta1": 0.2664,
             "cphi": 0.00127,
-            "rm": 2.18e-10,  # TODO: 単位確認する
-            "rx": 2.24e-10,
+            "rm": 2.18,
+            "rx": 2.24,
         }
     }
 
@@ -56,6 +56,8 @@ def calc_nacl_activities(
 ) -> Dict:
     """Calculate Na+ and Cl- activity by Pizer equation
     Reference:
+    Pitzer K.S, Activity coefficients in electrolyte solutions,
+        https://doi.org/10.1201/9781351069472
     Leroy P., C. Tournassat, O. Bernard, N. Devau, M. Azaroual,
         The electrophoretic mobility of montmorillonite. Zeta potential
         and surface conductivity effects, http://dx.doi.org/10.1016/j.jcis.2015.03.047
@@ -87,10 +89,9 @@ def calc_nacl_activities(
         if _s not in (Species.Na.name, Species.Cl.name):
             continue
         conc = ion_props[_s][IonProp.Concentration.name]
-        weight_solute = conc * 58.44  # 10^-3×10^+3
         _prop: Dict = ion_props_tmp.setdefault(_s, {})
         # mol/l × l/kg
-        _prop.setdefault("mol_kg", conc / (1.0e-3 * (weight_solute + density_water)))
+        _prop.setdefault("mol_kg", conc * 1.0e3 / (conc * 58.44 + density_water))
 
     # calculate temperature dependence of Pitzer's parameters
     # based on Simoes et al. (2017)
@@ -219,9 +220,6 @@ def __calc_f(
     m_minus = ion_props[Species.Cl.name]["mol_kg"]
     bdash = __calc_bdash(ion_strength, beta1)
     aphi = __calc_aphi(T, rho, dielec_water)
-    print("========")  #!
-    print(f"aphi: {aphi}")  #!
-    print(T, rho, dielec_water)
     return (
         -aphi * (im_sqrt / (1.0 + b * im_sqrt) + 2.0 / b * log(1.0 + b * im_sqrt))
         + m_plus * m_minus * bdash
@@ -239,10 +237,10 @@ def __calc_aphi(T: float, rho: float, dielec_water: float) -> float:
     Returns:
         float: Aφ
     """
-    # TODO: 見直す(A4の2piがいらない気がする)
     return (
-        sqrt(1.0e-3 * pi * AVOGADRO_CONST * rho)
-        * (ELEMENTARY_CHARGE**2 / (dielec_water * BOLTZMANN_CONST * T)) ** 1.5
+        sqrt(2.0 * pi * AVOGADRO_CONST * rho)
+        * (ELEMENTARY_CHARGE**2 / (4.0 * pi * dielec_water * BOLTZMANN_CONST * T))
+        ** 1.5
         / 3.0
     )
 
@@ -293,11 +291,35 @@ def __calc_b(ion_strength: float, beta0: float, beta1: float) -> float:
 
 
 from constants import ion_props_default, DIELECTRIC_VACUUM
+from matplotlib import pyplot as plt
+import matplotlib.cm as cm
 
+# TODO: 出力が正しいか, Simones et al. (2017)と比較して確認する
 if __name__ == "__main__":
-    ion_props_default["Na"]["Concentration"] = 1.
-    ion_props_default["Cl"]["Concentration"] = 1.
-    print(
-        calc_nacl_activities(298.15, 1.0e5, 80 * DIELECTRIC_VACUUM, ion_props_default)
-    )
-    pass
+    p = 5.0e6
+    ion_props = ion_props_default
+    t_ls = [298.15, 323.15, 348.15, 373.15, 398.15]
+    cnacl_ls = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 5.0]
+    t_result_dct = {}
+    for t in t_ls:
+        result_ls = t_result_dct.setdefault(t, [])
+        for cnacl in cnacl_ls:
+            print("=======")
+            print(t, cnacl)
+            ion_props["Na"]["Concentration"] = cnacl
+            ion_props["Cl"]["Concentration"] = cnacl
+            # dielectric permittivity
+            water = iapws.IAPWS97(T=t, P=p * 1.0e-6)
+            dielc = iapws._Dielectric(water.rho, t)
+            print(dielc)
+            result_ls.append(
+                calc_nacl_activities(t, p, dielc * DIELECTRIC_VACUUM, ion_props)["Na"]["Activity"] / cnacl
+            )
+
+    # plot
+    fig, ax = plt.subplots()
+    for i, t in enumerate(sorted(t_result_dct.keys())):
+        _ls = t_result_dct[t]
+        ax.plot(cnacl_ls, _ls, label=t, color=cm.jet(float(i) / len(t_result_dct)))
+    ax.legend()
+    plt.show()

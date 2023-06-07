@@ -30,7 +30,7 @@ import pandas as pd
 from clay import Smectite, Kaolinite
 from mineral import Quartz
 import constants as const
-from fluid import NaCl
+from fluid import NaCl, calc_nacl_activities
 from msa import calc_mobility
 from solver import FEM_Cube
 from cube import FEM_Input_Cube
@@ -1116,7 +1116,8 @@ def sort_by_center(_ls: List, center: float, logspace=True) -> List:
 def get_smectite_init_params_truncated():
     # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
     ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()
-    r_ls = np.linspace(1.0e-9, 1.3e-8, 10).tolist()
+    # r_ls = np.linspace(1.0e-9, 1.3e-8, 10).tolist()
+    r_ls = [1.166666666666666666e-8, 1.3e-8]
     conc_ls = np.logspace(-7.0, 0.7, 100, base=10.0).tolist()
 
     # sort
@@ -1124,7 +1125,7 @@ def get_smectite_init_params_truncated():
     conc_ls = sort_by_center(conc_ls, 0.01)
     t_ls = np.linspace(298.15, 498.15, 10).tolist()
     r_t_ch_cna_init_dict: Dict = {}
-    pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 1)
+    pool = futures.ProcessPoolExecutor(max_workers=2)
     for _r in r_ls:
         calc_t_ch_cna_init_smec_trun(
             r_t_ch_cna_init_dict, _r=_r, t_ls=t_ls, ch_ls=ch_ls, conc_ls=conc_ls
@@ -2213,6 +2214,43 @@ def tmp():
     ax.set_ylabel("Density (kg/m^3)")
     fig.savefig(path.join(test_dir(), "smec_density.png"), dpi=200)
 
+def test_activity():
+    P = 5.0e6
+    DIELECTRIC_VACUUM = const.DIELECTRIC_VACUUM
+    ion_props_default = const.ion_props_default
+    cnacl_ls = np.logspace(-5, 0.7, 100, base=10).tolist()
+    t_ls = np.linspace(273.15, 500, 10).tolist()
+    fig, ax = plt.subplots()
+    for i, t in enumerate(t_ls):
+        water = iapws.IAPWS97(T=t, P=P / 1.0e6)
+        dielec_water = iapws._iapws._Dielectric(water.rho, t) * DIELECTRIC_VACUUM
+        results_ls = []
+        for cnacl in cnacl_ls:
+            print("==========")
+            print(t, cnacl)
+            ion_props = deepcopy(ion_props_default)
+            ion_props["Na"]["Concentration"] = cnacl
+            ion_props["Cl"]["Concentration"] = cnacl
+            props = calc_nacl_activities(
+                T=t, P=P, dielec_water=dielec_water, ion_props=ion_props, method="THEREDA"
+            )
+            results_ls.append(props["Na"]["Activity"] / cnacl)
+        ax.plot(cnacl_ls, results_ls, label=t, color=cm.jet(float(i) / len(t_ls)))
+    ax.legend()
+    plt.show()
+
+    # t_ls = np.linspace(273.15, 500., 100).tolist()
+    # result_ls = []
+    # for t in t_ls:
+    #     water = iapws.IAPWS97(T=t, P=P / 1.0e6)
+    #     dielec_water = iapws._iapws._Dielectric(water.rho, t) * DIELECTRIC_VACUUM
+    #     beta0, beta1, cphi = calc_nacl_activities(
+    #             T=t, P=P, dielec_water=dielec_water, ion_props=deepcopy(ion_props_default)
+    #         )
+    #     result_ls.append(beta0)
+    # fig, ax = plt.subplots()
+    # ax.plot(t_ls, result_ls)
+    # plt.show()
 
 def test_cluster():
     nacl = NaCl()
@@ -2243,7 +2281,7 @@ def test_cluster():
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    # get_smectite_init_params_truncated()
+    get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
@@ -2263,7 +2301,7 @@ if __name__ == "__main__":
     # smectite_cond_inf()
     # potential_smectite_inf()
     # Revil_etal_fig2()
-    Revil_etal_fig2_by_bulk()
+    # Revil_etal_fig2_by_bulk()
     # Grieser_and_Healy()
     # compare_WS_shaly_1()
     # analysis_WS1_result()

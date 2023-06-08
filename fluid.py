@@ -364,6 +364,7 @@ def calc_nacl_activities(
         conc = ion_props[_s][IonProp.Concentration.name]
         _prop: Dict = ion_props_tmp.setdefault(_s, {})
         # mol/l × l/kg
+        # TODO: fix
         _prop.setdefault("mol_kg", conc * 1.0e3 / density_water)
 
     zm = ion_props_tmp[Species.Na.name][IonProp.Valence.name]
@@ -597,38 +598,53 @@ def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
     _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
     return DIELECTRIC_VACUUM / _invert
 
+def calc_viscosity(T: float, P: float, cnacl: float) -> float:
+    """
+    Reference:
+        A revised empirical model to calculate the dynamic viscosity of
+            H2OeNaCl fluids at elevated temperatures and pressures (≦1000℃,
+            ≦500 MPa, 0-100 wt % NaCl) http://dx.doi.org/10.1016/j.fluid.2016.11.002
+        
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+        cnacl (float): Salinity of Nacl (M)
 
-# def calc_density(T: float, P: float, ion_props: Dict):
-#     assert Species.Na.name in ion_props, ion_props
-#     assert Species.Cl.name in ion_props, ion_props
+    Returns:
+        float: Viscosity (Pa s)
+    """
+    # TODO:
+    e1 = -35.9858 * 1.
+    pass
 
-#     # set constants in Table 3 in Driesner(2007)
-#     l0 = 2.1704e3
-#     l1 = -2.4599e-1
-#     l2 = -9.5797e-5
-#     l3 = 5.727e-3
-#     l4 = 2.715e-3
-#     l5 = 733.4
-#     m0 = 58443.0
-#     m1 = 23.772
-#     m2 = 0.018639
-#     m3 = -1.9687e-6
-#     m4 = -1.5259e-5
-#     m5 = 5.5058e-8
+def calc_density(T: float, P: float, ion_props: Dict):
+    assert Species.Na.name in ion_props, ion_props
+    assert Species.Cl.name in ion_props, ion_props
 
-#     # calculate ρ0Nacl, liquid by eq.(5) in Driesner(2007)
-#     rho0_nacl = m0 / (m1 + m2 * T + m3 * T **2)
+    # set constants in Table 3 in Driesner(2007)
+    l0 = 2.1704e3
+    l1 = -2.4599e-1
+    l2 = -9.5797e-5
+    l3 = 5.727e-3
+    l4 = 2.715e-3
+    l5 = 733.4
+    m0 = 58443.0
+    m1 = 23.772
+    m2 = 0.018639
+    m3 = -1.9687e-6
+    m4 = -1.5259e-5
+    m5 = 5.5058e-8
 
-#     # calculate κ by eq.(6) in Driesner(2007)
-#     kappa = m4 + m5 * T
+    # calculate ρ0Nacl, liquid by eq.(5) in Driesner(2007)
+    rho0_nacl = m0 / (m1 + m2 * T + m3 * T **2)
 
-#     # calculate ρNacl, liquid by eq.(4) in Driesner(2007)
-#     rho_nacl = 0
+    # calculate κ by eq.(6) in Driesner(2007)
+    kappa = m4 + m5 * T
 
-from constants import ion_props_default
+    # calculate ρNacl, liquid by eq.(4) in Driesner(2007)
+    rho_nacl = 0
 
-from matplotlib import pyplot as plt
-import matplotlib.cm as cm
+
 
 if __name__ == "__main__":
     pass

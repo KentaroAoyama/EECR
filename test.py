@@ -1174,6 +1174,12 @@ def test_single_condition():
 def test_sen_and_goode_1992():
     cnacl_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
     tempe_ls = [273.15 + i for i in range(20, 200, 1)]
+    experimental = {0.09: [0.92, 1.46, 2.11, 2.79, 3.38, 3.87, 4.33],
+                    0.26: [2.44, 3.80, 5.70, 7.36, 8.80, 10.16, 11.16],
+                    0.858: [7.10, 10.79, 15.31, 19.61, 23.56, 26.88, 29.13],
+                    1.76: [12.51, 20.31, 28.64, 36.84, 44.14, 50.12, 54.94],
+                    4.74: [22.42, 36.70, 51.77, 66.59, 79.77, 90.59, 99.29]}
+    t_exp = [22., 50., 80., 110., 140., 170., 200.]
     ion_props: Dict = const.ion_props_default.copy()
     cnacl_tempe_dct: Dict = {}
     for cnacl in cnacl_ls:
@@ -1191,6 +1197,9 @@ def test_sen_and_goode_1992():
             tempe_ls.append(_tempe - 273.15)
             cond_ls.append(_cond)
         ax.plot(tempe_ls, cond_ls, label=str(cnacl))
+    for cnacl, _ls in experimental.items():
+        ax.scatter(t_exp, _ls)
+
     ax.legend()
     fig.savefig("./test/sen_and_goode.png", dpi=200)
 
@@ -2277,11 +2286,19 @@ def test_cluster():
         )
         plot_instance(solver_input, f"./tmp/cluster{size}")
 
+def investigate_temperature_dependence():
+    # Revil et al., 1998のFig.6を検証する
+    # Sen & Goodes (1992) 0.09-4.74 mol/kg
+    # Waxman & Thomas (1968) 0.09-4.74 mol/kg
+
+
+    pass
+
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
-    get_smectite_init_params_truncated()
+    # get_smectite_init_params_truncated()
     # test_single_condition()
 
     # Revil_etal_1998_fig3()
@@ -2301,7 +2318,7 @@ if __name__ == "__main__":
     # smectite_cond_inf()
     # potential_smectite_inf()
     # Revil_etal_fig2()
-    # Revil_etal_fig2_by_bulk()
+    Revil_etal_fig2_by_bulk()
     # Grieser_and_Healy()
     # compare_WS_shaly_1()
     # analysis_WS1_result()

@@ -66,7 +66,7 @@ class Quartz:
 
         # set pH
         self.ph = -1.0 * log10(
-            self.ion_props[Species.H.name][IonProp.Concentration.name]
+            self.ion_props[Species.H.name][IonProp.Molarity.name]
         )
 
         # re-set k_plus (eq.91)
@@ -115,7 +115,7 @@ class Quartz:
         for _s, _prop in self.ion_props.items():
             if _s in (Species.Na.name, Species.Cl.name):
                 _if += (
-                    _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Concentration.name]
+                    _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Molarity.name]
                 )
         _if *= 0.5
         _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
@@ -143,7 +143,7 @@ class Quartz:
         """
         if _x == 0.0:
             return -1 * float_info.max
-        _cf = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+        _cf = self.ion_props[Species.Na.name][IonProp.Molarity.name]
         _t1 = self.eta / 2.0
         _t2 = sqrt(_cf + 10.0 ** (-1.0 * self.ph) + 10.0 ** (self.ph - self.pkw))
         _t3 = _x - 1.0 / _x
@@ -176,8 +176,8 @@ class Quartz:
                 * const.AVOGADRO_CONST
                 * const.ELEMENTARY_CHARGE**2
                 * (
-                    self.ion_props[Species.Na.name][IonProp.Concentration.name]
-                    + self.ion_props[Species.H.name][IonProp.Concentration.name]
+                    self.ion_props[Species.Na.name][IonProp.Molarity.name]
+                    + self.ion_props[Species.H.name][IonProp.Molarity.name]
                 )
             )
         )
@@ -195,7 +195,7 @@ class Quartz:
             )
             n += (
                 b
-                * _prop[IonProp.Concentration.name]
+                * _prop[IonProp.Molarity.name]
                 * (
                     exp(
                         -v
@@ -229,8 +229,8 @@ class Quartz:
             float: Ωm
         """
         # Assuming Cf equals Na+ concentration
-        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name]
-        ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
+        cf = self.ion_props[Species.Na.name][IonProp.Molarity.name]
+        ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
         top = km * cf
         bottom = ch + self.k_minus + top
         return top / bottom

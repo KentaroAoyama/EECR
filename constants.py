@@ -72,7 +72,9 @@ class Species(IntEnum):
 
 
 class IonProp(IntEnum):
-    Concentration = auto()
+    Molarity = auto() # mol/l fraction of bulk
+    Molality = auto() # mol/kg fraction of solvent
+    MolFraction = auto()
     Activity = auto()
     MobilityInfDiffuse = auto()
     MobilityTrunDiffuse = auto()
@@ -81,13 +83,15 @@ class IonProp(IntEnum):
 
 
 # http://apchem2.kanagawa-u.ac.jp/matsumotolab/Echem3.pdf
-# Mobility_TrunDiffuseは, Mobility_InfDiffuseの1/10と設定した.
-# 参考文献：doi:10.1029/2008JB006114
+# Mobility_TrunDiffuseは, Mobility_InfDiffuseの1/10と設定した. # TODO: fix
+# Reference：doi:10.1029/2008JB006114
 # In the dynamic stern layer assumtion, stern layer has surtain
 # mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
 ion_props_default = {
     Species.Na.name: {
-        IonProp.Concentration.name: 1.0e-3,
+        IonProp.Molarity.name: 1.0e-3,
+        IonProp.Molality.name: None,
+        IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-3,
         IonProp.MobilityInfDiffuse.name: 5.19e-8,
         IonProp.MobilityTrunDiffuse.name: 0.52e-8,
@@ -95,7 +99,9 @@ ion_props_default = {
         IonProp.Valence.name: 1,
     },
     Species.Cl.name: {
-        IonProp.Concentration.name: 1.0e-3,
+        IonProp.Molarity.name: 1.0e-3,
+        IonProp.Molality.name: None,
+        IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-3,
         IonProp.MobilityInfDiffuse.name: 7.91e-8,
         IonProp.MobilityTrunDiffuse.name: 0.791e-8,
@@ -103,14 +109,18 @@ ion_props_default = {
         IonProp.Valence.name: -1,
     },
     Species.H.name: {
-        IonProp.Concentration.name: 1.0e-7,
+        IonProp.Molarity.name: 1.0e-7,
+        IonProp.Molality.name: None,
+        IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-7,
         IonProp.MobilityInfDiffuse.name: 36.3e-8,
         IonProp.MobilityTrunDiffuse.name: 1.6e-8,
         IonProp.Valence.name: 1,
     },
     Species.OH.name: {
-        IonProp.Concentration.name: 1.0e-7,
+        IonProp.Molarity.name: 1.0e-7,
+        IonProp.Molality.name: None,
+        IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-7,
         IonProp.MobilityInfDiffuse.name: 20.5e-8,
         IonProp.MobilityTrunDiffuse.name: 2.05e-8,

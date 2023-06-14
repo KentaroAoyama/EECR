@@ -203,15 +203,15 @@ class Phyllosilicate:
         strength = 0.0
         for elem, props in self.ion_props.items():
             if elem in (Species.Na.name, Species.Cl.name):
-                strength += props[IonProp.Concentration.name]
-        strength += self.ion_props[Species.H.name][IonProp.Concentration.name]
+                strength += props[IonProp.Molarity.name]
+        strength += self.ion_props[Species.H.name][IonProp.Molarity.name]
         self.ionic_strength = strength
 
         # calculate kappa (eq.(11) of Gonçalvès et al., 2004)
         # Electrolyte concentration is assumed to be equal to Na+ concentration
         top = (
             2000.0
-            * self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            * self.ion_props[Species.Na.name][IonProp.Molarity.name]
             * const.AVOGADRO_CONST
             * _e ** 2
         )
@@ -428,7 +428,7 @@ class Phyllosilicate:
         dielec = self.dielec_water
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
-        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
+        cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
         c = _e / (kb * _t)
@@ -451,7 +451,7 @@ class Phyllosilicate:
         """
         # TODO: ６回微分まで実装する
         # electrolyte concentration assumed equal to cf
-        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
+        cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         dielec = self.dielec_water
         _t = self.temperature
@@ -649,7 +649,7 @@ class Phyllosilicate:
         _t = self.temperature
         _e = const.ELEMENTARY_CHARGE
         # electrolyte concentration is assumed to be equal to Na+ concentration
-        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
+        cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _na = const.AVOGADRO_CONST
         b = np.sqrt(_na * cf * kb * _t * dielec)
         c = _e / (kb * _t)
@@ -674,7 +674,7 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
         # electrolyte concentration is assumed to be equal to Na+ concentration
-        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
+        cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
         b = np.sqrt(_na * cf * kb * _t * dielec)
@@ -696,7 +696,7 @@ class Phyllosilicate:
         """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29d-x-a*sinh%5C%2840%29b*x%5C%2841%29*%5C%2840%29y-r%5C%2841%29**2-c*sinh%5C%2840%292*b*x%5C%2841%29*%5C%2840%29y-r%5C%2841%29**4%5C%2841%29%2Cx%5D&lang=ja
         # electrolyte concentration is assumed to be equal to Na+ concentration
-        cf = self.ion_props[Species.Na.name][IonProp.Concentration.name] * 1.0e3
+        cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
@@ -841,7 +841,7 @@ class Phyllosilicate:
             2000.0
             * _e
             * const.AVOGADRO_CONST
-            * self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            * self.ion_props[Species.Na.name][IonProp.Molarity.name]
         )
         self.qs_coeff2_inf = (
             -_e * self.potential_zeta / (const.BOLTZMANN_CONST * self.temperature)
@@ -947,10 +947,10 @@ class Phyllosilicate:
             else:
                 # TODO: Prepare more initial parameters in other minerals.
                 params = kaolinite_init_params
-            ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
+            ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
             ch_ls = list(params.keys())
             _idx_ch: int = np.argmin(np.square(np.array(ch_ls, dtype=np.float64) - ch))
-            cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
             cna_dct: Dict = params[ch_ls[_idx_ch]]
             cna_ls = list(cna_dct.keys())
             _idx_cna: int = np.argmin(
@@ -1082,8 +1082,8 @@ class Phyllosilicate:
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
             ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
             # pH
-            _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
-            _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            _ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
+            _cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
             ch_ls = list(ch_cna_dict.keys())
             _idx = np.argmin(
                 np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
@@ -1219,8 +1219,8 @@ class Phyllosilicate:
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
             ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
             # pH
-            _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
-            _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            _ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
+            _cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
             ch_ls = list(ch_cna_dict.keys())
             _idx = np.argmin(
                 np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
@@ -1347,8 +1347,8 @@ class Phyllosilicate:
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
             ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
             # pH
-            _ch = self.ion_props[Species.H.name][IonProp.Concentration.name]
-            _cna = self.ion_props[Species.Na.name][IonProp.Concentration.name]
+            _ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
+            _cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
             ch_ls = list(ch_cna_dict.keys())
             _idx = np.argmin(
                 np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
@@ -1469,7 +1469,7 @@ class Phyllosilicate:
             )
             * 1000.0
             * const.AVOGADRO_CONST
-            * _props[IonProp.Concentration.name]
+            * _props[IonProp.Molarity.name]
             * abs(v)
         )
         return bx * n
@@ -1498,7 +1498,7 @@ class Phyllosilicate:
             )
             * 1000.0
             * const.AVOGADRO_CONST
-            * na_props[IonProp.Concentration.name]
+            * na_props[IonProp.Molarity.name]
             * abs(v)
         )
         return n
@@ -1517,7 +1517,7 @@ class Phyllosilicate:
             self.gamma_3
             * 1.0e18
             / self.__calc_C(self.potential_stern)
-            * (self.ion_props[Species.Na.name][IonProp.Concentration.name])
+            * (self.ion_props[Species.Na.name][IonProp.Molarity.name])
             / self.k4
             * np.exp(
                 -const.ELEMENTARY_CHARGE
@@ -1581,8 +1581,6 @@ class Phyllosilicate:
         Returns:
             Tuple[float]: conductivity, integral error
         """
-        # TODO: May need to consider other cases (e.g., illite, etc.)
-        # osmotic flowを考慮
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             self.__set_constant_for_smectite_inf()
         else:

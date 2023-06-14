@@ -1,3 +1,6 @@
+# TODO: sen and goodes molality
+# TODO: density calculation
+# TODO: viscosity calculation
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
 from typing import Dict
@@ -51,6 +54,7 @@ class NaCl(Fluid):
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
             logger (Logger): Logger
         """
+        # TODO: molality, mol_fraction, activityを計算
         self.temperature = temperature
         self.pressure = pressure
         self.conductivity = conductivity
@@ -70,16 +74,16 @@ class NaCl(Fluid):
                 continue
             if _s == Species.H.name:
                 _c = 10.0 ** (-1.0 * ph)
-                _prop[IonProp.Concentration.name] = _c
+                _prop[IonProp.Molarity.name] = _c
                 _prop[IonProp.Activity.name] = _c
                 continue
             if _s == Species.OH.name:
                 _c = DISSOSIATION_WATER / (10.0 ** (-1.0 * ph))
-                _prop[IonProp.Concentration.name] = _c
+                _prop[IonProp.Molarity.name] = _c
                 _prop[IonProp.Activity.name] = _c
                 continue
             # Na or Cl
-            _prop[IonProp.Concentration.name] = cnacl
+            _prop[IonProp.Molarity.name] = cnacl
             _prop[IonProp.Activity.name] = cnacl
 
         # get dielectric constant
@@ -97,10 +101,12 @@ class NaCl(Fluid):
         for _s, _prop in ion_props.items():
             if _s not in msa_props_tref:
                 continue
-            _m = msa_props_tref[_s]["mobility"]
             # Under a wide range of NaCl concentrations, the mobility of ions in the electric
             # double layer is 1/10, and linear temperature depandence regardless of the species.
+            # TODO: fix this
+            _m = msa_props_tgiven[_s]["mobility"]
             _m *= 0.1 * (1.0 + 0.037 * (temperature - tempe_ref))
+            # _m = 0.51e-8 * (1.0 + 0.037 * (temperature - tempe_ref)) # 実験データと合わなくなるのでコメントアウト
             _prop[IonProp.MobilityInfDiffuse.name] = msa_props_tgiven[_s]["mobility"]
             _prop[IonProp.MobilityTrunDiffuse.name] = _m
             if _s == Species.H.name:
@@ -347,8 +353,8 @@ def calc_nacl_activities(
     assert Species.Na.name in ion_props, ion_props
     assert Species.Cl.name in ion_props, ion_props
     assert (
-        ion_props[Species.Na.name][IonProp.Concentration.name]
-        == ion_props[Species.Cl.name][IonProp.Concentration.name]
+        ion_props[Species.Na.name][IonProp.Molarity.name]
+        == ion_props[Species.Cl.name][IonProp.Molarity.name]
     )
     method = method.lower()
     assert method in ("thereda", "simones")
@@ -361,7 +367,7 @@ def calc_nacl_activities(
     for _s, _ in ion_props_tmp.items():
         if _s not in (Species.Na.name, Species.Cl.name):
             continue
-        conc = ion_props[_s][IonProp.Concentration.name]
+        conc = ion_props[_s][IonProp.Molarity.name]
         _prop: Dict = ion_props_tmp.setdefault(_s, {})
         # mol/l × l/kg
         # TODO: fix
@@ -450,10 +456,10 @@ def calc_nacl_activities(
 
     # set activity
     ion_props_tmp[Species.Na.name][IonProp.Activity.name] = (
-        gamma_plus * ion_props_tmp[Species.Na.name][IonProp.Concentration.name]
+        gamma_plus * ion_props_tmp[Species.Na.name][IonProp.Molarity.name]
     )
     ion_props_tmp[Species.Cl.name][IonProp.Activity.name] = (
-        gamma_minus * ion_props_tmp[Species.Cl.name][IonProp.Concentration.name]
+        gamma_minus * ion_props_tmp[Species.Cl.name][IonProp.Molarity.name]
     )
 
     return ion_props_tmp
@@ -582,8 +588,8 @@ def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
     """Calculate dielectric permittivity of H2O-NaCl liquid.
 
     Reference:
-        Real Ionic Solutions in the Mean Spherical Approximation. 2.
-            Pure Strong Electrolytes up to Very High Concentrations,
+        Simonin J.P, Real Ionic Solutions in the Mean Spherical Approximation.
+            2. Pure Strong Electrolytes up to Very High Concentrations,
             and Mixtures, in the Primitive Model, https://doi.org/10.1021/jp970102k
 
     Args:
@@ -598,13 +604,14 @@ def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
     _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
     return DIELECTRIC_VACUUM / _invert
 
+
 def calc_viscosity(T: float, P: float, cnacl: float) -> float:
     """
     Reference:
         A revised empirical model to calculate the dynamic viscosity of
             H2OeNaCl fluids at elevated temperatures and pressures (≦1000℃,
             ≦500 MPa, 0-100 wt % NaCl) http://dx.doi.org/10.1016/j.fluid.2016.11.002
-        
+
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
@@ -613,38 +620,137 @@ def calc_viscosity(T: float, P: float, cnacl: float) -> float:
     Returns:
         float: Viscosity (Pa s)
     """
-    # TODO:
-    e1 = -35.9858 * 1.
+    # TODO: after density
+    e1 = -35.9858 * 1.0
     pass
 
-def calc_density(T: float, P: float, ion_props: Dict):
+
+def calc_density(T: float, P: float, ion_props: Dict) -> float:
+    """Calculate density (kg/m3) by  Driesner(2007)
+
+    Reference:
+        Driesner T., The system H2O-NaCl. Part II: Correlations for molar
+            volume, enthalpy, and isobaric heat capacity from 0 to 1000℃,
+            1 to 5000 bar, and 0 to 1 XNaCl, 2007, http://dx.doi.org/10.1016/j.gca.2007.05.026
+        Mao S., Hu J., Zhang Y., Lü M., A predictive model for the PVTx properties of
+            CO2-H2O-NaCl fluid mixture up to high temperature and high pressure, 2015,
+            http://dx.doi.org/10.1016/j.apgeochem.2015.01.003
+
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+        ion_props (Dict): Dictionary containing ion properties. Default
+            values are defined in constants.py.
+
+    Returns:
+        float: Density (kg/m3)
+    """
     assert Species.Na.name in ion_props, ion_props
     assert Species.Cl.name in ion_props, ion_props
+    assert IonProp.MolFraction.name in ion_props[Species.Na.name]
+    assert IonProp.MolFraction.name in ion_props[Species.Cl.name]
+    assert (
+        ion_props[Species.Na.name][IonProp.MolFraction.name]
+        == ion_props[Species.Cl.name][IonProp.MolFraction.name]
+    )
 
-    # set constants in Table 3 in Driesner(2007)
-    l0 = 2.1704e3
-    l1 = -2.4599e-1
-    l2 = -9.5797e-5
-    l3 = 5.727e-3
-    l4 = 2.715e-3
-    l5 = 733.4
-    m0 = 58443.0
-    m1 = 23.772
-    m2 = 0.018639
-    m3 = -1.9687e-6
-    m4 = -1.5259e-5
-    m5 = 5.5058e-8
+    Xnacl = ion_props[Species.Na.name][IonProp.MolFraction.name]
+    assert 0.0 <= Xnacl <= 1.0, Xnacl
 
-    # calculate ρ0Nacl, liquid by eq.(5) in Driesner(2007)
-    rho0_nacl = m0 / (m1 + m2 * T + m3 * T **2)
+    # convert K to ℃
+    T -= 273.15
+    # convert Pa to bar
+    P *= 1.0e-5
 
-    # calculate κ by eq.(6) in Driesner(2007)
-    kappa = m4 + m5 * T
+    # parameter to calculate eq.(9)
+    n11 = -0.45146040e2 - 0.29812895e2 * exp(-0.13786998e-2 * P)
+    # eq.(11)
+    n10 = (
+        330.47
+        + 0.942876 * sqrt(P)
+        + 0.0817193 * P
+        - 2.47556e-8 * P**2
+        + 3.45052e-10 * P**3
+    )
+    n12 = -(n11 + n10)
+    # eq.(9)
+    n1 = n10 + n11 * (1.0 - Xnacl) + n12 * (1.0 - Xnacl) ** 2
 
-    # calculate ρNacl, liquid by eq.(4) in Driesner(2007)
-    rho_nacl = 0
+    # parameter to calculate eq.(10)
+    n21 = -2.6105212 - 0.20362282e-3 * P
+    n22 = 0.031998439 + 0.36137426e-5 * P + 0.15608215e-8 * P**2
+    n20 = 1.0 - n21 * sqrt(n22)
+    # eq.(12)
+    n2_xnacl1 = (
+        -0.0370751
+        + 0.00237723 * sqrt(P)
+        + 5.42049e-5 * P
+        + 5.84709e-9 * P**2
+        - 5.99373e-13 * P**3
+    )
+    n23 = n2_xnacl1 - n20 - n21 * (sqrt(1.0 + n22))
+    n2 = n20 + n21 * sqrt(Xnacl + n22) + n23 * Xnacl
+
+    # parameter to calculate eq.(14)
+    n300 = 0.64988075e7 / (P + 0.42937670e3) ** 2
+    n301 = -0.47287373e2 - 0.81190283e2 * exp(-0.59264170e-3 * P)
+    n302 = 0.28803474e3 * exp(-0.56045287e-2 * P)
+    n310 = -0.68388688e-1 * exp(-0.22339191e-2 * P) - 0.53332903e-4 * P
+    n311 = -0.41933849e2 + 0.19198040e2 * exp(-0.10315741e-2 * P)
+    n312 = -0.29097042 - 0.83864808e-3 * P
+
+    # calculate eq.(15)
+    n30 = n300 * (exp(n301 * Xnacl) - 1.0) + n302 * Xnacl
+    n31 = n310 * exp(n311 * Xnacl) + n312 * Xnacl
+    D = n30 * exp(n31 * T)
+
+    # calculate eq.(14)
+    Tv = n1 + n2 * T + D
+    # calculate eq.(7)
+    Tv += 273.15
+    P *= 1.0e-1
+    water = iapws.IAPWS95(T=Tv, P=P)
+
+    return water.rho
 
 
+def _tmp(T, P, xNaCl):
+    xH2O = 1 - xNaCl
+
+    n11 = -54.2958 - 45.7623 * exp(-0.000944785 * P)
+    n21 = -2.6142 - 0.000239092 * P
+    n22 = 0.0356828 + 0.00000437235 * P + 0.0000000020566 * P ** 2
+
+    n300 = 0.64988075e7 / ((P + 472.051) ** 2)
+    n301 = -50 - 86.1446 * exp(-0.000621128 * P)
+    n302 = 294.318 * exp(-0.00566735 * P)
+    n310 = -0.0732761 * exp(-0.0023772 * P) - 0.000052948 * P
+    n311 = -47.2747 + 24.3653 * exp(-0.00125533 * P)
+    n312 = -0.278529 - 0.00081381 * P
+    n30 = n300 * (exp(n301 * xNaCl) - 1) + n302 * xNaCl
+    n31 = n310 * exp(n311 * xNaCl) + n312 * xNaCl
+
+    n_oneNaCl = 330.47 + 0.942876 * P ** 0.5 + 0.0817193 * P - 0.0000000247556 * P ** 2 + 0.000000000345052 * P ** 3
+    n10 = n_oneNaCl
+    n12 = -n11 - n10
+    n20 = 1 - n21 * n22 ** 0.5
+    n_twoNaCl = -0.0370751 + 0.00237723 * P ** 0.5 + 0.0000542049 * P + 0.00000000584709 * P ** 2 - 5.99373E-13 * P ** 3
+    n23 = n_twoNaCl - n20 - n21 * (1 + n22) ** 0.5
+    n1 = n10 + n11 * xH2O + n12 * xH2O ** 2
+    n2 = n20 + n21 * (xNaCl + n22) ** 0.5 + n23 * xNaCl
+    d = n30 * exp(n31 * T)
+
+    T_Star_V = n1 + n2 * T + d
 
 if __name__ == "__main__":
+    ion_props_default = deepcopy(ion_props_default)
+    Xnacl = 0.1
+    T = 298.15
+    P = 1.0e5
+    ion_props_default[Species.Na.name][IonProp.MolFraction.name] = Xnacl
+    ion_props_default[Species.Cl.name][IonProp.MolFraction.name] = Xnacl
+    rho = calc_density(T, P, ion_props_default)
+    print(Xnacl, rho)
+
+    # _tmp(25., 1.0, 0.1)
     pass

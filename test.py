@@ -30,7 +30,7 @@ import pandas as pd
 from clay import Smectite, Kaolinite
 from mineral import Quartz
 import constants as const
-from fluid import NaCl, calc_nacl_activities
+from fluid import NaCl, calc_nacl_activities, calc_density
 from msa import calc_mobility
 from solver import FEM_Cube
 from cube import FEM_Input_Cube
@@ -2290,10 +2290,55 @@ def investigate_temperature_dependence():
     # Revil et al., 1998のFig.6を検証する
     # Sen & Goodes (1992) 0.09-4.74 mol/kg
     # Waxman & Thomas (1968) 0.09-4.74 mol/kg
+    Qv_sen_2797G = 0.9
+    Qv_sen_2830C = 0.64
+    Qv_sen_2799B = 0.99
+    Qv_sen_2830A = 0.99
 
 
     pass
 
+
+def test_nacl_density():
+    t_ls = np.linspace(298.15, 623.15, 100).tolist()
+    p_ls = np.linspace(1.0e5, 180.0e5, 100).tolist()
+    x_ls = np.linspace(0.0, 1.0, 100).tolist()
+
+    # XNaCl dependence
+    r_ls = []
+    for x in x_ls:
+        Xnacl = x
+        T = 298.15
+        P = 1.0e5
+        rho = calc_density(T, P, Xnacl)
+        r_ls.append(rho)
+    fig, ax = plt.subplots()
+    ax.plot(x_ls, r_ls)
+    plt.show()
+
+    # temperature dependence
+    r_ls = []
+    for t in t_ls:
+        Xnacl = 0.3
+        T = t
+        P = 1.0e5
+        rho = calc_density(T, P, Xnacl)
+        r_ls.append(rho)
+    fig, ax = plt.subplots()
+    ax.plot(t_ls, r_ls)
+    plt.show()
+
+    # pressure dependence
+    r_ls = []
+    for p in p_ls:
+        Xnacl = 0.09
+        T = 298.15
+        P = p
+        rho = calc_density(T, P, Xnacl)
+        r_ls.append(rho)
+    fig, ax = plt.subplots()
+    ax.plot(p_ls, r_ls)
+    plt.show()
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()

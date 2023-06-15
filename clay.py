@@ -1,3 +1,4 @@
+# TODO: 温度依存性の計算方法を変える
 """Calculate electrical properties of phyllosilicate"""
 # pylint: disable=import-error
 # pylint: disable=invalid-name

@@ -1,12 +1,13 @@
 # TODO: sen and goodes molality
 # TODO: density calculation
 # TODO: viscosity calculation
+# TODO: molalityの入力も受け付ける仕様にする
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict
+from typing import Dict, Tuple
 from copy import deepcopy
 from logging import Logger
-from math import pi, sqrt, log, exp
+from math import pi, sqrt, log, log10, exp, isclose
 
 import pickle
 import numpy as np
@@ -625,37 +626,133 @@ def calc_viscosity(T: float, P: float, cnacl: float) -> float:
     pass
 
 
-def calc_density(T: float, P: float, ion_props: Dict) -> float:
-    """Calculate density (kg/m3) by  Driesner(2007)
+def calc_density(T: float, P: float, Xnacl: float) -> float:
+    """Calculate H2O-NaCl fluid density (kg/m3)
 
     Reference:
         Driesner T., The system H2O-NaCl. Part II: Correlations for molar
             volume, enthalpy, and isobaric heat capacity from 0 to 1000℃,
             1 to 5000 bar, and 0 to 1 XNaCl, 2007, http://dx.doi.org/10.1016/j.gca.2007.05.026
-        Mao S., Hu J., Zhang Y., Lü M., A predictive model for the PVTx properties of
+        Driesner T., C. A. Heinrich,  The system H2O-NaCl. Part I: Correlation formulae for
+            phase relations in temperature-pressure-composition space from 0 to 1000 C,
+            0 to 5000 bar, and 0 to 1 XNaCl, 2007, http://dx.doi.org/10.1016/j.gca.2006.01.033
+        Mao S., J. Hu, Y. Zhang, M. Lü, A predictive model for the PVTx properties of
             CO2-H2O-NaCl fluid mixture up to high temperature and high pressure, 2015,
             http://dx.doi.org/10.1016/j.apgeochem.2015.01.003
+        Y.I. Klyukin, E.L. Haroldson, M. Steele-Maclnnis, A comprehensive numerical model
+            for the thermodynamic and transport properties of H2O-NaCl fluids, 2020,
+            https://doi.org/10.1016/j.chemgeo.2020.119840
+        Wagner W., Pruß A., The IAPWS Formulation 1995 for the Thermodynamic Properties of
+            Ordinary Water Substance for General and Scientific Use, 2002,
+            https://doi.org/10.1063/1.1461829
 
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
-        ion_props (Dict): Dictionary containing ion properties. Default
-            values are defined in constants.py.
+        Xnacl (float): Molar fraction of NaCl
 
     Returns:
         float: Density (kg/m3)
     """
-    assert Species.Na.name in ion_props, ion_props
-    assert Species.Cl.name in ion_props, ion_props
-    assert IonProp.MolFraction.name in ion_props[Species.Na.name]
-    assert IonProp.MolFraction.name in ion_props[Species.Cl.name]
-    assert (
-        ion_props[Species.Na.name][IonProp.MolFraction.name]
-        == ion_props[Species.Cl.name][IonProp.MolFraction.name]
-    )
-
-    Xnacl = ion_props[Species.Na.name][IonProp.MolFraction.name]
+    assert 273.15 <= T <= 1273.15, T
+    assert 1.0e5 <= P <= 5.0e8, P
     assert 0.0 <= Xnacl <= 1.0, Xnacl
+
+    # molar mass (kg/mol)
+    mh2o = 18.015e-3
+    mnacl = 58.443e-3
+
+    # This condition branch is implemented based on line 370 of "Driesner_eqs"
+    # in Klyukin et al. (2020).
+    v = calc_X_L_Sat(T, P)
+    V: float = None
+    if P <= calc_Water_Boiling_Curve(T) and T <= 473.15 and v - Xnacl < 0.01:
+        T = calc_T_Star_V(T, P, Xnacl)
+        # calculate molar volume (m3/mol)
+        Vsat = mh2o / calc_rho_sat_water(T)
+        # Vwat = mh2o / iapws.IAPWS95(T=T, P=P * 1.0e-6).rho
+        # if Vsat < Vwat:
+        P *= 1.0e-5  # bar
+        o2 = (
+            0.00000020125
+            + 0.00000000329977 * exp(-4.31279 * log10(P))
+            - 0.000000117748 * log10(P)
+            + 0.0000000758009 * (log10(P)) ** 2
+        )
+        v = Vsat
+        V2 = mh2o / calc_rho_sat_water(T - 0.005)
+        T -= 273.15  # ℃
+        o1 = (v - V2) / 0.005 - 3 * o2 * T**2
+        o0 = v - o1 * T - o2 * T**3
+        V = o0 + (o2 * T**3) + (o1 * T)
+        P *= 1.0e5  # Pa
+    elif P * 1.0e-5 <= 350.0 and T >= 873.15:
+        # V + L coexistence surface
+        v = calc_X_VL_Liq(T, P)
+
+        def __Rh_Br_for_V_extr(xNaCl_frac, T_in_C, P_in_Bar) -> float:
+            mH2O = 18.015268
+            mNaCl = 58.4428
+            T = T_in_C
+            P = P_in_Bar
+            T_Star = calc_T_Star_V(T, P * 0.1, xNaCl_frac)
+            V_water = mH2O / iapws.IAPWS95(T=T_Star, P=P * 0.1).rho * 1000
+            return (mH2O * (1 - xNaCl_frac) + mNaCl * xNaCl_frac) / V_water * 1000
+
+        if round(Xnacl, 5) >= round(v, 5):
+            T -= 273.15  # ℃
+            P *= 1.0e-5  # bar
+            V1000 = (mh2o * (1.0 - Xnacl) + mnacl * Xnacl) / __Rh_Br_for_V_extr(
+                Xnacl, T, 1000
+            )
+            v = (mh2o * (1 - Xnacl) + mnacl * Xnacl) / __Rh_Br_for_V_extr(
+                Xnacl, T, 390.147
+            )
+            V2 = (mh2o * (1 - Xnacl) + mnacl * Xnacl) / __Rh_Br_for_V_extr(
+                Xnacl, T, 390.137
+            )
+
+            dVdP390 = (v - V2) / (0.01)
+
+            o4 = (v - V1000 + dVdP390 * 1609.853) / (
+                log(1390.147 / 2000.0) - 2390.147 / 1390.147
+            )
+            o3 = v - o4 * log(1390.147) - 390.147 * dVdP390 + 390.147 / 1390.147 * o4
+            o5 = dVdP390 - o4 / (1390.147)
+
+            V = o3 + o4 * log(P + 1000) + o5 * P
+            T += 273.15  # K
+            P *= 1.0e5  # Pa
+    else:
+        Tv = calc_T_Star_V(T, P, Xnacl)
+        # molar mass (kg/mol)
+        mh2o = 18.015e-3
+        mnacl = 58.443e-3
+
+        # calculate molar volume (m3/mol)
+        water = iapws.IAPWS95(T=Tv, P=P * 1.0e-6)
+        V = mh2o / water.rho
+
+    assert V is not None, V
+
+    # calculate molar mass (kg/mol)
+    m = Xnacl * mnacl + (1.0 - Xnacl) * mh2o
+
+    # calculate density (kg/m3)
+    return m / V
+
+
+def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
+    """Calculate T* (K) of eq.(13) in Driesner(2007).
+
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+        Xnacl (float): Molar fraction of NaCl
+
+    Returns:
+        float: T* (K)
+    """
 
     # convert K to ℃
     T -= 273.15
@@ -663,6 +760,7 @@ def calc_density(T: float, P: float, ion_props: Dict) -> float:
     P *= 1.0e-5
 
     # parameter to calculate eq.(9)
+    # Below parameters are based on Mao et al.(2015)
     n11 = -0.45146040e2 - 0.29812895e2 * exp(-0.13786998e-2 * P)
     # eq.(11)
     n10 = (
@@ -708,49 +806,391 @@ def calc_density(T: float, P: float, ion_props: Dict) -> float:
     Tv = n1 + n2 * T + D
     # calculate eq.(7)
     Tv += 273.15
-    P *= 1.0e-1
-    water = iapws.IAPWS95(T=Tv, P=P)
 
-    return water.rho
+    return Tv
 
 
-def _tmp(T, P, xNaCl):
-    xH2O = 1 - xNaCl
+def calc_Water_Boiling_Curve(T: float) -> float:
+    """Calculate pressure on boiling curve. This implementation is based
+    on "Water_Boiling_Curve" function in "Water_prop" module of Klyukin et al.(2020).
 
-    n11 = -54.2958 - 45.7623 * exp(-0.000944785 * P)
-    n21 = -2.6142 - 0.000239092 * P
-    n22 = 0.0356828 + 0.00000437235 * P + 0.0000000020566 * P ** 2
+    Args:
+        T (float): Absolute temperature (K)
 
-    n300 = 0.64988075e7 / ((P + 472.051) ** 2)
-    n301 = -50 - 86.1446 * exp(-0.000621128 * P)
-    n302 = 294.318 * exp(-0.00566735 * P)
-    n310 = -0.0732761 * exp(-0.0023772 * P) - 0.000052948 * P
-    n311 = -47.2747 + 24.3653 * exp(-0.00125533 * P)
-    n312 = -0.278529 - 0.00081381 * P
-    n30 = n300 * (exp(n301 * xNaCl) - 1) + n302 * xNaCl
-    n31 = n310 * exp(n311 * xNaCl) + n312 * xNaCl
+    Returns:
+        float: Boiling pressure (Pa)
+    """
+    T -= 273.15
+    if T >= 373.946:
+        T = 373.946
+    if isclose(T, 0.0, abs_tol=0.01):
+        T = 0.01
+    T += 273.15
+    T_inv = 1.0 - T / 647.096
 
-    n_oneNaCl = 330.47 + 0.942876 * P ** 0.5 + 0.0817193 * P - 0.0000000247556 * P ** 2 + 0.000000000345052 * P ** 3
-    n10 = n_oneNaCl
-    n12 = -n11 - n10
-    n20 = 1 - n21 * n22 ** 0.5
-    n_twoNaCl = -0.0370751 + 0.00237723 * P ** 0.5 + 0.0000542049 * P + 0.00000000584709 * P ** 2 - 5.99373E-13 * P ** 3
-    n23 = n_twoNaCl - n20 - n21 * (1 + n22) ** 0.5
-    n1 = n10 + n11 * xH2O + n12 * xH2O ** 2
-    n2 = n20 + n21 * (xNaCl + n22) ** 0.5 + n23 * xNaCl
-    d = n30 * exp(n31 * T)
+    c1 = -2.03150240
+    c2 = -2.6830294
+    c3 = -5.38626492
+    c4 = -17.2991605
+    c5 = -44.7586581
+    c6 = -63.9201063
+    RhoVapSat = (
+        exp(
+            c1 * T_inv ** (1.0 / 3.0)
+            + c2 * T_inv ** (2.0 / 3.0)
+            + c3 * T_inv ** (4.0 / 3.0)
+            + c4 * T_inv**3.0
+            + c5 * T_inv ** (37.0 / 6.0)
+            + c6 * T_inv ** (71.0 / 6.0)
+        )
+        * 322.0
+    )
 
-    T_Star_V = n1 + n2 * T + d
+    satvapor = iapws.IAPWS95(T=T, rho=RhoVapSat)
+
+    return satvapor.P * 1.0e6
+
+
+def calc_rho_sat_water(T: float) -> float:
+    """Calculate saturated water density. This implementation is based
+    on "Rho_Water_Liq_sat" function in "Water_prop" module of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        float: Density of saturated water (kg/m3)
+    """
+    T -= 273.15
+    if isclose(T, 0.0, abs_tol=0.01):
+        T = 0.01
+    T += 273.15
+    T_inv = 1.0 - T / 647.096
+
+    b1 = 1.99274064
+    b2 = 1.09965342
+    b3 = -0.510839303
+    b4 = -1.75493479
+    b5 = -45.5170352
+    b6 = -674694.45
+
+    Rho_Water_Liq_sat = (
+        1.0
+        + b1 * T_inv ** (1.0 / 3.0)
+        + b2 * T_inv ** (2.0 / 3.0)
+        + b3 * T_inv ** (5.0 / 3.0)
+        + b4 * T_inv ** (16.0 / 3.0)
+        + b5 * T_inv ** (43.0 / 3.0)
+        + b6 * T_inv ** (110.0 / 3.0)
+    ) * 322.0
+
+    return Rho_Water_Liq_sat
+
+
+def calc_X_L_Sat(T: float, P: float) -> float:
+    """Calculate Xnacl on halite liquidus. This implementation is
+    based on "X_L_Sat" function in "Driesner_eqs" module of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+
+    Returns:
+        float: Molar fraction of NaCl
+    """
+    T -= 273.15
+    P *= 1.0e-5
+
+    e0 = 0.0989944 + 0.00000330796 * P - 0.000000000471759 * P**2
+    e1 = 0.00947257 - 0.0000086646 * P + 0.00000000169417 * P**2
+    e2 = 0.610863 - 0.0000151716 * P + 0.000000011929 * P**2
+    e3 = -1.64994 + 0.000203441 * P - 0.0000000646015 * P**2
+    e4 = 3.36474 - 0.000154023 * P + 0.0000000817048 * P**2
+    e5 = 1.0 - e0 - e1 - e2 - e3 - e4
+
+    # calculate temperature on halite melting curve
+    a = 0.024726
+    T_tr_NaCl = 800.7
+    P_tr_NaCl = 0.0005
+    T_hm = T_tr_NaCl + a * (P - P_tr_NaCl)
+
+    TmpUnt = T / T_hm
+
+    X_L_Sat = 0.0
+    X_L_Sat += e0
+    X_L_Sat += e1 * TmpUnt
+    X_L_Sat += e2 * TmpUnt**2
+    X_L_Sat += e3 * TmpUnt**3
+    X_L_Sat += e4 * TmpUnt**4
+    X_L_Sat += e5 * TmpUnt**5
+
+    if X_L_Sat > 1.0:
+        X_L_Sat = 1.0
+
+    return X_L_Sat
+
+
+def calc_X_VL_Liq(T: float, P: float) -> float:
+    """Calculate molar fraction of NaCl on the V+L coexistance surface. This
+    implementation is based on "X_VL_Liq" function in "Driesner_eqs" of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+
+    Returns:
+        float: Molar fraction of NaCl
+    """
+    T -= 273.15  # ℃
+    P *= 1.0e-5  # bar
+
+    h1 = 0.00168486
+    h2 = 0.000219379
+    h3 = 438.58
+    h4 = 18.4508
+    h5 = -0.00000000056765
+    h6 = 0.00000673704
+    h7 = 0.000000144951
+    h8 = 384.904
+    h9 = 7.07477
+    h10 = 0.0000606896
+    h11 = 0.00762859
+
+    G1 = h2 + (h1 - h2) / (1.0 + exp((T - h3)) / h4) + h5 * T**2
+    G2 = h7 + (h6 - h7) / (1.0 + exp((T - h8) / h9)) + h10 * exp(-h11 * T)
+
+    XN_Crit, P_Crit = calc_X_and_P_crit(T + 273.15)
+
+    TmpUnit, TmpUnit2 = None, None
+    if T < 800.7:
+        TmpUnit = calc_P_VLH(T + 273.15) * 1.0e-5
+        TmpUnit2 = calc_X_L_Sat(T + 273.15, TmpUnit)
+    else:
+        TmpUnit = calc_P_Boil(T + 273.15) * 1.0e-5
+        TmpUnit2 = 1.0
+    assert None not in (TmpUnit, TmpUnit2), (TmpUnit, TmpUnit2)
+
+    TmpUnit3, X_VL_Liq = None, None
+    if T < 373.946:
+        TmpUnit3 = calc_P_H2O_Boiling_Curve(T + 273.15) * 1.0e-5
+        G0 = (
+            TmpUnit2
+            + G1 * (TmpUnit - TmpUnit3)
+            + G2 * ((P_Crit - TmpUnit3) ** 2 - (P_Crit - TmpUnit) ** 2)
+        ) / ((P_Crit - TmpUnit) ** 0.5 - (P_Crit - TmpUnit3) ** 0.5)
+        X_VL_Liq = (
+            G0 * (P_Crit - P) ** 0.5
+            - G0 * (P_Crit - TmpUnit3) ** 0.5
+            - G1 * (P_Crit - TmpUnit3)
+            - G2 * (P_Crit - TmpUnit3) ** 2
+            + G1 * (P_Crit - P)
+            + G2 * (P_Crit - P) ** 2
+        )
+    else:
+        G0 = (
+            TmpUnit2 - XN_Crit - G1 * (P_Crit - TmpUnit) - G2 * (P_Crit - TmpUnit) ** 2
+        ) / (P_Crit - TmpUnit) ** 0.5
+        X_VL_Liq = (
+            XN_Crit
+            + G0 * (P_Crit - P) ** 0.5
+            + G1 * (P_Crit - P)
+            + G2 * (P_Crit - P) ** 2
+        )
+    assert X_VL_Liq is not None, X_VL_Liq
+    return X_VL_Liq
+
+
+def calc_P_Boil(T: float) -> float:
+    """Calculate pressure on halite boiling curve. This implementation is
+    based on "P_Boil" in "Driesner_eqs" module of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        float: Pressure on halite boiling curve (Pa)
+    """
+    T -= 273.15
+    B_boil = 9418.12
+    T_Triple_NaCl = 800.7
+    P_Triple_NaCl = 0.0005
+    P_Boil = 10.0 ** (
+        log10(P_Triple_NaCl)
+        + B_boil * (1 / (T_Triple_NaCl + 273.15) - 1 / (T + 273.15))
+    )
+
+    return P_Boil * 1.0e5
+
+
+def calc_P_H2O_Boiling_Curve(T: float) -> float:
+    """Calculate pressure on boiling curve. This implementation is
+    based on "P_H2O_Boiling_Curve" in "Water_prop" module of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        float: Pressure on boiling curve (Pa)
+    """
+    T -= 273.15
+    if isclose(T, 0.0, abs_tol=0.01):
+        T = 0.01
+    T += 273.15
+    T_inv = 1.0 - T / 647.096
+
+    a1 = -7.85951783
+    a2 = 1.84408259
+    a3 = -11.7866497
+    a4 = 22.6807411
+    a5 = -15.9618719
+    a6 = 1.80122502
+
+    P_H2O_Boiling_Curve = (
+        exp(
+            647.096
+            / T
+            * (
+                a1 * T_inv
+                + a2 * T_inv**1.5
+                + a3 * T_inv**3
+                + a4 * T_inv**3.5
+                + a5 * T_inv**4
+                + a6 * T_inv**7.5
+            )
+        )
+        * 220.64
+    )
+
+    return P_H2O_Boiling_Curve * 1.0e5
+
+
+def calc_P_VLH(T: float) -> float:
+    """Calculate pressure on Vapor-Liquid-Halite coexistence curve.
+    This implementation is based on "P_VLH" in "Driesner_eqs" of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        float: Pressure on Vapor-Liquid-Halite coexistence curve (Pa).
+    """
+    T -= 273.15
+
+    T_tr_NaCl = 800.7
+    P_tr_NaCl = 0.0005
+
+    f = [
+        0.00464,
+        0.0000005,
+        16.9078,
+        -269.148,
+        7632.04,
+        -49563.6,
+        233119.0,
+        -513556.0,
+        549708.0,
+        -284628.0,
+        P_tr_NaCl,
+    ]
+    P_VLH = 0.0
+    for i, fi in enumerate(f):
+        if i != 10:
+            f[10] -= fi
+        P_VLH += f[i] * (T / T_tr_NaCl) ** i
+
+    return P_VLH * 1.0e5
+
+
+def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
+    """Calculate critical composition and pressure. This implementation is
+    based on "X_and_P_crit" function in "Driesner_eqs" of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        Tuple[float, float]: Critical composition and critical pressure (Pa)
+    """
+
+    T -= 273.15
+
+    PH2O_Crit = 220.64
+    TH2O_Crit = 373.946
+
+    C = [
+        -2.36,
+        0.128534,
+        -0.023707,
+        0.00320089,
+        -0.000138917,
+        0.000000102789,
+        -0.000000000048376,
+        2.36,
+        -0.0131417,
+        0.00298491,
+        -0.000130114,
+        None,
+        None,
+        -0.000488336,
+    ]
+    CA = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 1.0, 2.0, 2.5, 3.0]
+
+    Sum1 = 0.0
+    for i in range(7, 11):
+        Sum1 += C[i] * (500.0 - TH2O_Crit) ** CA[i]
+        C[12] += C[i] * CA[i] * (500.0 - TH2O_Crit) ** (CA[i] - 1.0)
+    C[11] = PH2O_Crit + Sum1
+
+    d = [
+        0.00008,
+        0.00001,
+        -0.000000137125,
+        0.000000000946822,
+        -3.50549e-12,
+        6.57369e-15,
+        -4.89423e-18,
+        0.0777761,
+        0.00027042,
+        -0.0000004244821,
+        2.580872e-10,
+    ]
+
+    Sum1 = 0.0
+    P_Crit = None
+    if T < TH2O_Crit:
+        # eq. 5a of Driesner (2007, part1)
+        for i in range(7):
+            Sum1 += C[i] * (TH2O_Crit - T) ** CA[i]
+        P_Crit = PH2O_Crit + Sum1
+    else:
+        if T >= TH2O_Crit and T <= 500.0:
+            # eq. 5b of Driesner (2007, part1)
+            for i in range(7, 11):
+                Sum1 += C[i] * (T - TH2O_Crit) ** CA[i]
+            P_Crit = PH2O_Crit + Sum1
+        else:
+            # eq. 5c of Driesner (2007, part1)
+            for i in range(11, 14):
+                Sum1 += C[i] * (T - 500.0) ** [i - 11]
+            P_Crit = Sum1
+
+    Sum1 = 0.0
+    x_crit = None
+    if T >= TH2O_Crit and T <= 600.0:
+        # eq. 7a of Driesner (2007, part1)
+        for i in range(7):
+            Sum1 += d[i] * (T - TH2O_Crit) ** (i + 1)
+        x_crit = Sum1
+    elif T > 600.0:
+        # eq. 7b of Driesner (2007, part1)
+        for i in range(7, 11):
+            Sum1 += d[i] * (T - 600.0) ** (i - 7)
+        x_crit = Sum1
+
+    assert None not in (x_crit, P_Crit), (x_crit, P_Crit)
+
+    return x_crit, P_Crit * 1.0e5
+
 
 if __name__ == "__main__":
-    ion_props_default = deepcopy(ion_props_default)
-    Xnacl = 0.1
-    T = 298.15
-    P = 1.0e5
-    ion_props_default[Species.Na.name][IonProp.MolFraction.name] = Xnacl
-    ion_props_default[Species.Cl.name][IonProp.MolFraction.name] = Xnacl
-    rho = calc_density(T, P, ion_props_default)
-    print(Xnacl, rho)
-
-    # _tmp(25., 1.0, 0.1)
     pass

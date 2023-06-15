@@ -1,6 +1,3 @@
-# TODO: sen and goodes molality
-# TODO: density calculation
-# TODO: viscosity calculation
 # TODO: molalityの入力も受け付ける仕様にする
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
@@ -23,6 +20,8 @@ from constants import (
     BOLTZMANN_CONST,
     DISSOSIATION_WATER,
     DIELECTRIC_VACUUM,
+    MNaCl,
+    MH2O,
 )
 from msa import calc_mobility
 
@@ -38,7 +37,7 @@ class NaCl(Fluid):
     def __init__(
         self,
         temperature: float = 298.15,
-        pressure: float = 2.0e6,
+        pressure: float = 5.0e6,
         cnacl: float = 0.001,
         ph: float = 7.0,
         conductivity: float = None,
@@ -56,7 +55,6 @@ class NaCl(Fluid):
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
             logger (Logger): Logger
         """
-        # TODO: molality, mol_fraction, activityを計算
         self.temperature = temperature
         self.pressure = pressure
         self.conductivity = conductivity
@@ -76,17 +74,19 @@ class NaCl(Fluid):
                 continue
             if _s == Species.H.name:
                 _c = 10.0 ** (-1.0 * ph)
+                # Assume proton activity coefficient is 1
+                # TODO: convert proton activity to concentration
                 _prop[IonProp.Molarity.name] = _c
                 _prop[IonProp.Activity.name] = _c
                 continue
             if _s == Species.OH.name:
+                # TODO: consider temperature dependence of DISSOSIATION_WATER
                 _c = DISSOSIATION_WATER / (10.0 ** (-1.0 * ph))
                 _prop[IonProp.Molarity.name] = _c
                 _prop[IonProp.Activity.name] = _c
                 continue
             # Na or Cl
             _prop[IonProp.Molarity.name] = cnacl
-            _prop[IonProp.Activity.name] = cnacl
 
         # get dielectric constant
         water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
@@ -118,21 +118,23 @@ class NaCl(Fluid):
             _prop[IonProp.MobilityStern.name] = _m
 
         # calculate density
-        mnacl = 58.443e-3
-        mh2o = 18.015e-3
         def __callback(__x):
             rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
-            nh20 = (rho - 1000. * cnacl * mnacl) / mh2o # mol/m3
+            nh20 = (rho - 1000.0 * cnacl * MNaCl) / MH2O  # mol/m3
             return __x - cnacl / (cnacl + nh20 * 1.0e-3)
 
-        xnacl = bisect(__callback, 0, 1)
+        xnacl = bisect(__callback, 0.0, 0.3)
         density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
         self.density = density
         ion_props[Species.Na.name][IonProp.MolFraction.name] = xnacl
         ion_props[Species.Cl.name][IonProp.MolFraction.name] = xnacl
 
+        # calculate molality(mol/kg)
+        _molality = 1000.0 * cnacl / (self.density - 1000.0 * cnacl * MNaCl)
+        ion_props[Species.Na.name][IonProp.Molality.name] = _molality
+        ion_props[Species.Cl.name][IonProp.Molality.name] = _molality
+
         # calculate activity
-        # TODO: fix molarity to molality
         ion_props = calc_nacl_activities(
             self.temperature, self.pressure, self.dielec_water, ion_props, "thereda"
         )
@@ -150,7 +152,7 @@ class NaCl(Fluid):
         """
         # convert Kelvin to Celsius
         temperature = self.temperature - 273.15
-        _m = self.ion_props[Species.Na.name]["Concentration"]
+        _m = self.ion_props[Species.Na.name][IonProp.Molality.name]
         left = (5.6 + 0.27 * temperature - 1.5 * 1.0e-4 * temperature**2) * _m
         right = (2.36 + 0.099 * temperature) / (1.0 + 0.214 * _m**0.5) * _m**1.5
         self.conductivity = left - right
@@ -370,27 +372,13 @@ def calc_nacl_activities(
     assert Species.Na.name in ion_props, ion_props
     assert Species.Cl.name in ion_props, ion_props
     assert (
-        ion_props[Species.Na.name][IonProp.Molarity.name]
-        == ion_props[Species.Cl.name][IonProp.Molarity.name]
+        ion_props[Species.Na.name][IonProp.Molality.name]
+        == ion_props[Species.Cl.name][IonProp.Molality.name]
     )
     method = method.lower()
     assert method in ("thereda", "simones")
 
-    # convert mol/l to mol/kg
-    water = iapws.IAPWS97(P=P * 1.0e-6, T=T)
-    density_water = water.rho
-    assert water.phase == "Liquid", f"water.phase: {water.phase}"
-    ion_props_tmp = deepcopy(ion_props)
-    for _s, _ in ion_props_tmp.items():
-        if _s not in (Species.Na.name, Species.Cl.name):
-            continue
-        conc = ion_props[_s][IonProp.Molarity.name]
-        _prop: Dict = ion_props_tmp.setdefault(_s, {})
-        # mol/l × l/kg
-        # TODO: fix
-        _prop.setdefault("mol_kg", conc * 1.0e3 / density_water)
-
-    zm = ion_props_tmp[Species.Na.name][IonProp.Valence.name]
+    zm = ion_props[Species.Na.name][IonProp.Valence.name]
 
     # calculate temperature dependence of Pitzer's parameters
     beta0, beta1, cphi = None, None, None
@@ -440,22 +428,22 @@ def calc_nacl_activities(
     assert None not in (beta0, beta1, cphi), (beta0, beta1, cphi)
 
     # calculate activity
-    ion_strength = __calc_ion_strength(ion_props_tmp)
+    ion_strength = __calc_ion_strength(ion_props)
     f = __calc_f(
         T,
-        density_water,
+        iapws.IAPWS97(T=T, P=P * 1.0e-6).rho,
         dielec_water,
         ion_strength,
-        ion_props_tmp,
+        ion_props,
         beta1,
     )
     b = __calc_b(ion_strength, beta0, beta1)
 
-    zx = ion_props_tmp[Species.Cl.name][IonProp.Valence.name]
+    zx = ion_props[Species.Cl.name][IonProp.Valence.name]
     cmx = cphi / (2.0 * sqrt(abs(zm * zx)))
 
-    mplus = ion_props_tmp[Species.Na.name]["mol_kg"]
-    mminus = ion_props_tmp[Species.Cl.name]["mol_kg"]
+    mplus = ion_props[Species.Na.name][IonProp.Molality.name]
+    mminus = ion_props[Species.Cl.name][IonProp.Molality.name]
 
     # γw+
     gamma_plus = exp(
@@ -472,14 +460,14 @@ def calc_nacl_activities(
     )
 
     # set activity
-    ion_props_tmp[Species.Na.name][IonProp.Activity.name] = (
-        gamma_plus * ion_props_tmp[Species.Na.name][IonProp.Molarity.name]
+    ion_props[Species.Na.name][IonProp.Activity.name] = (
+        gamma_plus * ion_props[Species.Na.name][IonProp.Molarity.name]
     )
-    ion_props_tmp[Species.Cl.name][IonProp.Activity.name] = (
-        gamma_minus * ion_props_tmp[Species.Cl.name][IonProp.Molarity.name]
+    ion_props[Species.Cl.name][IonProp.Activity.name] = (
+        gamma_minus * ion_props[Species.Cl.name][IonProp.Molarity.name]
     )
 
-    return ion_props_tmp
+    return ion_props
 
 
 def __calc_ion_strength(ion_props: Dict) -> float:
@@ -497,7 +485,7 @@ def __calc_ion_strength(ion_props: Dict) -> float:
         if _s not in (Species.Na.name, Species.Cl.name):
             continue
         zi = _prop[IonProp.Valence.name]
-        mi = _prop["mol_kg"]
+        mi = _prop[IonProp.Molality.name]
         _sum += zi**2 * mi
     return 0.5 * _sum
 
@@ -527,8 +515,8 @@ def __calc_f(
     """
     im_sqrt = sqrt(ion_strength)
     b = ConstPitzer.b
-    m_plus = ion_props[Species.Na.name]["mol_kg"]
-    m_minus = ion_props[Species.Cl.name]["mol_kg"]
+    m_plus = ion_props[Species.Na.name][IonProp.Molality.name]
+    m_minus = ion_props[Species.Cl.name][IonProp.Molality.name]
     bdash = __calc_bdash(ion_strength, beta1)
     aphi = __calc_aphi(T, rho, dielec_water)
     return (
@@ -1209,5 +1197,4 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
-    nacl = NaCl(cnacl=5.)
     pass

@@ -18,6 +18,8 @@ GAS_CONST = 8.31446262
 PRESSURE = 2.0 * 1.0e6
 DISSOSIATION_WATER = 1.0e-14
 PRESSURE_ATM = 101300.
+MNaCl = 58.443e-3 # kg/m3
+MH2O = 18.015e-3 # kg/m3
 
 # Equilibrium constants (at 25℃) & Capacitance (F/m)
 # Smectite & inf

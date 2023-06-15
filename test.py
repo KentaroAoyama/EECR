@@ -1185,8 +1185,8 @@ def test_sen_and_goode_1992():
     for cnacl in cnacl_ls:
         _tempe_dct: Dict = cnacl_tempe_dct.setdefault(cnacl, {})
         for tempe in tempe_ls:
-            ion_props["Na"]["Concentration"] = cnacl
-            ion_props["Cl"]["Concentration"] = cnacl
+            ion_props["Na"]["Molarity"] = cnacl
+            ion_props["Cl"]["Molarity"] = cnacl
             nacl = NaCl(temperature=tempe, cnacl=cnacl)
             _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992())
     fig, ax = plt.subplots()
@@ -1254,8 +1254,8 @@ def test_mobility():
     # _ls = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 2.0, 3.0]
     # ion_props: Dict = deepcopy(const.ion_props_default)
     # for i in _ls:
-    #     ion_props["Na"]["Concentration"] = i
-    #     ion_props["Cl"]["Concentration"] = i
+    #     ion_props["Na"]["Molarity"] = i
+    #     ion_props["Cl"]["Molarity"] = i
     #     _msa_props: Dict = calc_mobility(ion_props, 298.0)
     #     m_na = _msa_props["Na"]["mobility"]
     #     m_cl = _msa_props["Cl"]["mobility"]
@@ -1278,8 +1278,8 @@ def test_mobility():
     for i in tempe_ls:
         print("=======")
         print(f"Tempe: {i}")  #!
-        ion_props["Na"]["Concentration"] = _cna
-        ion_props["Cl"]["Concentration"] = _cna
+        ion_props["Na"]["Molarity"] = _cna
+        ion_props["Cl"]["Molarity"] = _cna
         _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
         nacl = NaCl(temperature=i + 273.15, cnacl=_cna, pressure=5.0e6)
         mu_na_revil_ls.append(nacl.ion_props["Na"]["MobilityTrunDiffuse"])
@@ -1299,8 +1299,8 @@ def test_mobility():
     for _cnacl in nacl_ls:
         print("=======")
         print(f"Cnacl: {_cnacl}")  #!
-        ion_props["Na"]["Concentration"] = _cnacl
-        ion_props["Cl"]["Concentration"] = _cnacl
+        ion_props["Na"]["Molarity"] = _cnacl
+        ion_props["Cl"]["Molarity"] = _cnacl
         _msa_props: Dict = calc_mobility(ion_props, 293.15)
         m_na = _msa_props["Na"]["mobility"]
         m_cl = _msa_props["Cl"]["mobility"]
@@ -2238,8 +2238,8 @@ def test_activity():
             print("==========")
             print(t, cnacl)
             ion_props = deepcopy(ion_props_default)
-            ion_props["Na"]["Concentration"] = cnacl
-            ion_props["Cl"]["Concentration"] = cnacl
+            ion_props["Na"]["Molarity"] = cnacl
+            ion_props["Cl"]["Molarity"] = cnacl
             props = calc_nacl_activities(
                 T=t, P=P, dielec_water=dielec_water, ion_props=ion_props, method="THEREDA"
             )
@@ -2339,6 +2339,26 @@ def test_nacl_density():
     fig, ax = plt.subplots()
     ax.plot(p_ls, r_ls)
     plt.show()
+
+def test_nacl_activity_and_molality():
+    cnacl_ls = np.logspace(-5, 0.7, num=20, base=10).tolist()
+    gamma_ls = []
+    molality_ls = []
+    for cnacl in cnacl_ls:
+        print(cnacl)
+        nacl = NaCl(cnacl=cnacl)
+        gamma_ls.append(nacl.ion_props[Species.Na.name][IonProp.Activity.name] / cnacl)
+        molality_ls.append(nacl.ion_props[Species.Na.name][IonProp.Molality.name])
+    
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, gamma_ls)
+    plt.show()
+    plt.clf()
+
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, molality_ls)
+    plt.show()
+
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()

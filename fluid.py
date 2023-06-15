@@ -11,6 +11,7 @@ from math import pi, sqrt, log, log10, exp, isclose
 
 import pickle
 import numpy as np
+from scipy.optimize import bisect
 import iapws
 
 from constants import (
@@ -116,7 +117,22 @@ class NaCl(Fluid):
                 ]
             _prop[IonProp.MobilityStern.name] = _m
 
+        # calculate density
+        mnacl = 58.443e-3
+        mh2o = 18.015e-3
+        def __callback(__x):
+            rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
+            nh20 = (rho - 1000. * cnacl * mnacl) / mh2o # mol/m3
+            return __x - cnacl / (cnacl + nh20 * 1.0e-3)
+
+        xnacl = bisect(__callback, 0, 1)
+        density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
+        self.density = density
+        ion_props[Species.Na.name][IonProp.MolFraction.name] = xnacl
+        ion_props[Species.Cl.name][IonProp.MolFraction.name] = xnacl
+
         # calculate activity
+        # TODO: fix molarity to molality
         ion_props = calc_nacl_activities(
             self.temperature, self.pressure, self.dielec_water, ion_props, "thereda"
         )
@@ -1193,4 +1209,5 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
+    nacl = NaCl(cnacl=5.)
     pass

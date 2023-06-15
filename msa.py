@@ -558,7 +558,7 @@ def calc_mobility(
         # charge
         _msa_prop["e"] = _basic_prop["Valence"] * _e
         # number density (number / m^3)
-        _msa_prop["n"] = _basic_prop["Concentration"] * 1000.0 * _na
+        _msa_prop["n"] = _basic_prop[const.IonProp.Molarity.name] * 1000.0 * _na
         # v0
         _msa_prop["v0"] = (
             _basic_prop["Valence"] * _e * _msa_prop["D0"] / (_kb * temperature)

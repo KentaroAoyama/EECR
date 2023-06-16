@@ -2296,49 +2296,24 @@ def investigate_temperature_dependence():
     Qv_sen_2830A = 0.99
 
 
-    pass
-
-
 def test_nacl_density():
     t_ls = np.linspace(298.15, 623.15, 100).tolist()
     p_ls = np.linspace(1.0e5, 180.0e5, 100).tolist()
-    x_ls = np.linspace(0.0, 1.0, 100).tolist()
-
-    # XNaCl dependence
+    cnacl_ls = np.logspace(-5, 0.7, num=20, base=10.0).tolist()
+    # Cnacl dependence
     r_ls = []
-    for x in x_ls:
-        Xnacl = x
+    for cnacl in cnacl_ls:
+        print("======")
+        print(cnacl)
         T = 298.15
-        P = 1.0e5
-        rho = calc_density(T, P, Xnacl)
-        r_ls.append(rho)
+        P = 5.0e6
+        nacl = NaCl(temperature=T, pressure=P, cnacl=cnacl)
+        r_ls.append(nacl.density)
+        print(nacl.density)
     fig, ax = plt.subplots()
-    ax.plot(x_ls, r_ls)
+    ax.plot(cnacl_ls, r_ls)
     plt.show()
 
-    # temperature dependence
-    r_ls = []
-    for t in t_ls:
-        Xnacl = 0.3
-        T = t
-        P = 1.0e5
-        rho = calc_density(T, P, Xnacl)
-        r_ls.append(rho)
-    fig, ax = plt.subplots()
-    ax.plot(t_ls, r_ls)
-    plt.show()
-
-    # pressure dependence
-    r_ls = []
-    for p in p_ls:
-        Xnacl = 0.09
-        T = 298.15
-        P = p
-        rho = calc_density(T, P, Xnacl)
-        r_ls.append(rho)
-    fig, ax = plt.subplots()
-    ax.plot(p_ls, r_ls)
-    plt.show()
 
 def test_nacl_activity_and_molality():
     cnacl_ls = np.logspace(-5, 0.7, num=20, base=10).tolist()
@@ -2347,8 +2322,8 @@ def test_nacl_activity_and_molality():
     for cnacl in cnacl_ls:
         print(cnacl)
         nacl = NaCl(cnacl=cnacl)
-        gamma_ls.append(nacl.ion_props[Species.Na.name][IonProp.Activity.name] / cnacl)
-        molality_ls.append(nacl.ion_props[Species.Na.name][IonProp.Molality.name])
+        gamma_ls.append(nacl.ion_props["Na"]["Activity"] / cnacl)
+        molality_ls.append(nacl.ion_props["Na"]["Molality"])
     
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, gamma_ls)
@@ -2357,6 +2332,7 @@ def test_nacl_activity_and_molality():
 
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, molality_ls)
+    ax.plot(cnacl_ls, cnacl_ls, linestyle="dashed")
     plt.show()
 
 
@@ -2383,7 +2359,7 @@ if __name__ == "__main__":
     # smectite_cond_inf()
     # potential_smectite_inf()
     # Revil_etal_fig2()
-    Revil_etal_fig2_by_bulk()
+    # Revil_etal_fig2_by_bulk()
     # Grieser_and_Healy()
     # compare_WS_shaly_1()
     # analysis_WS1_result()
@@ -2398,4 +2374,7 @@ if __name__ == "__main__":
 
     # compare_levi_et_al_2018()
     # test_cluster()
+
+    test_nacl_density()
+    # test_nacl_activity_and_molality()
     pass

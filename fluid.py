@@ -123,7 +123,8 @@ class NaCl(Fluid):
             nh20 = (rho - 1000.0 * cnacl * MNaCl) / MH2O  # mol/m3
             return __x - cnacl / (cnacl + nh20 * 1.0e-3)
 
-        xnacl = bisect(__callback, 0.0, 0.3)
+        # TODO: Extend to apply to supercritical conditions
+        xnacl = bisect(__callback, 0.0, calc_X_L_Sat(self.temperature, self.pressure))
         density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
         self.density = density
         ion_props[Species.Na.name][IonProp.MolFraction.name] = xnacl
@@ -843,7 +844,7 @@ def calc_Water_Boiling_Curve(T: float) -> float:
             c1 * T_inv ** (1.0 / 3.0)
             + c2 * T_inv ** (2.0 / 3.0)
             + c3 * T_inv ** (4.0 / 3.0)
-            + c4 * T_inv**3.0
+            + c4 * T_inv**3
             + c5 * T_inv ** (37.0 / 6.0)
             + c6 * T_inv ** (71.0 / 6.0)
         )
@@ -931,6 +932,9 @@ def calc_X_L_Sat(T: float, P: float) -> float:
     if X_L_Sat > 1.0:
         X_L_Sat = 1.0
 
+    if X_L_Sat < 0.0:
+        X_L_Sat = 0.0
+
     return X_L_Sat
 
 
@@ -948,6 +952,7 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
     T -= 273.15  # ℃
     P *= 1.0e-5  # bar
 
+    # parameters in Table 7 of Driesner & Heinrich (2007)
     h1 = 0.00168486
     h2 = 0.000219379
     h3 = 438.58
@@ -1001,6 +1006,8 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
             + G2 * (P_Crit - P) ** 2
         )
     assert X_VL_Liq is not None, X_VL_Liq
+    if X_VL_Liq < 0.0:
+        X_VL_Liq = 0.0
     return X_VL_Liq
 
 
@@ -1041,7 +1048,6 @@ def calc_P_H2O_Boiling_Curve(T: float) -> float:
         T = 0.01
     T += 273.15
     T_inv = 1.0 - T / 647.096
-
     a1 = -7.85951783
     a2 = 1.84408259
     a3 = -11.7866497
@@ -1062,10 +1068,9 @@ def calc_P_H2O_Boiling_Curve(T: float) -> float:
                 + a6 * T_inv**7.5
             )
         )
-        * 220.64
+        * 22.64e6
     )
-
-    return P_H2O_Boiling_Curve * 1.0e5
+    return P_H2O_Boiling_Curve
 
 
 def calc_P_VLH(T: float) -> float:
@@ -1115,11 +1120,11 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     Returns:
         Tuple[float, float]: Critical composition and critical pressure (Pa)
     """
-
+    # eqs 5 and 7 of Driesner & Heinrich (2007)
     T -= 273.15
 
     PH2O_Crit = 220.64
-    TH2O_Crit = 373.946
+    TH2O_Crit = 373.946  # Table 1 of Driesner & Heinrich (2007)
 
     C = [
         -2.36,
@@ -1134,7 +1139,7 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
         0.00298491,
         -0.000130114,
         None,
-        None,
+        0.0,
         -0.000488336,
     ]
     CA = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 1.0, 2.0, 2.5, 3.0]
@@ -1179,7 +1184,7 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
             P_Crit = Sum1
 
     Sum1 = 0.0
-    x_crit = None
+    x_crit = 0.0
     if T >= TH2O_Crit and T <= 600.0:
         # eq. 7a of Driesner (2007, part1)
         for i in range(7):
@@ -1197,4 +1202,6 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
+    xhl = calc_X_L_Sat(298.15, 1.0e5)
+    print(xhl) #!
     pass

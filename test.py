@@ -2335,6 +2335,21 @@ def test_nacl_activity_and_molality():
     ax.plot(cnacl_ls, cnacl_ls, linestyle="dashed")
     plt.show()
 
+def test_nacl_viscosity():
+    cnacl_ls = np.logspace(-5, 0.7, num=20, base=10.).tolist()
+    vis_ls = []
+    for cnacl in cnacl_ls:
+        T = 398.15
+        P = 5.0e6
+        nacl = NaCl(temperature=T, pressure=P, cnacl=cnacl)
+        print("=====")
+        print(T, P, cnacl)
+        vis_ls.append(nacl.viscosity * 1000.)
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, vis_ls)
+    ax.set_xscale("log")
+    plt.show()
+
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()
@@ -2375,6 +2390,7 @@ if __name__ == "__main__":
     # compare_levi_et_al_2018()
     # test_cluster()
 
-    test_nacl_density()
+    # test_nacl_density()
     # test_nacl_activity_and_molality()
+    test_nacl_viscosity()
     pass

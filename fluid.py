@@ -141,8 +141,10 @@ class NaCl(Fluid):
         )
         self.ion_props: Dict = ion_props
 
-        # TODO: consider salinity
-        self.viscosity: float = iapws._iapws._Viscosity(water.rho, self.temperature)
+        # calculate viscosity
+        Xnacl =  1000.0 * cnacl * MNaCl / self.density
+        self.viscosity = calc_viscosity(self.temperature, self.pressure, Xnacl)
+
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -611,24 +613,42 @@ def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
     return DIELECTRIC_VACUUM / _invert
 
 
-def calc_viscosity(T: float, P: float, cnacl: float) -> float:
+def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     """
     Reference:
-        A revised empirical model to calculate the dynamic viscosity of
-            H2OeNaCl fluids at elevated temperatures and pressures (≦1000℃,
-            ≦500 MPa, 0-100 wt % NaCl) http://dx.doi.org/10.1016/j.fluid.2016.11.002
+         Klyukin, A., R.P. Lowell, R.J. Bodnar, A revised empirical model to 
+            calculate the dynamic viscosity of H2OeNaCl fluids at elevated
+            temperatures and pressures (≦1000℃, ≦500 MPa, 0-100 wt % NaCl)
+            http://dx.doi.org/10.1016/j.fluid.2016.11.002
 
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
-        cnacl (float): Salinity of Nacl (M)
+        Xnacl (float): Weight fraction of Nacl (M)
 
     Returns:
         float: Viscosity (Pa s)
     """
-    # TODO: after density
-    e1 = -35.9858 * 1.0
-    pass
+    T -= 273.15
+    P *= 1.0e-6
+
+    # parameters in Table 2
+    a1 = -35.9858
+    a2 = 0.80017
+    b1 = 1.0e-6
+    b2 = -0.05239
+    b3 = 1.32936
+
+    # eqs (5) and (6)
+    e1 = a1 * Xnacl ** a2
+    e2 = 1.0 - b1 * T ** b2 - b3 * (Xnacl ** a2) * (T ** b2)
+
+    # eq.(4)
+    Tstar = e1 + e2 * T
+    Tstar += 273.15
+
+    water = iapws.IAPWS95(T=Tstar, P=P)
+    return iapws._iapws._Viscosity(water.rho, Tstar)
 
 
 def calc_density(T: float, P: float, Xnacl: float) -> float:
@@ -1202,6 +1222,4 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
-    xhl = calc_X_L_Sat(298.15, 1.0e5)
-    print(xhl) #!
     pass

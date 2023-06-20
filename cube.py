@@ -286,12 +286,14 @@ class FEM_Input_Cube:
                 for i in range(nx):
                     # Checks whether instance has an attribute for the electric double layer.
                     instance = instance_ls[k][j][i]
-                    get_cond_infdiffuse = getattr(instance, "get_cond_infdiffuse", None)
+                    # surface conductance (S/m)
+                    get_cond_surface = getattr(instance, "get_cond_surface", None)
+                    # debye length
                     get_double_layer_length = getattr(
                         instance, "get_double_layer_length", None
                     )
-                    if None not in [get_cond_infdiffuse, get_double_layer_length]:
-                        cond_infdiffuse: float = get_cond_infdiffuse()
+                    if None not in [get_cond_surface, get_double_layer_length]:
+                        cond_infdiffuse: float = get_cond_surface()
                         double_layer_length: float = get_double_layer_length()
                         # TODO: __sum_double_layer_condをdouble_layer_length >= edge_lengthに使えるように拡張して, 以下のassertionを消す
                         assert (

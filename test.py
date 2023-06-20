@@ -8,7 +8,7 @@
 # (TODO:) Leroy and Revil (2004)のFig.10 (スメクタイト & カオリナイトにおける, イオン濃度とSpecific conductivity, 間隙水の導電率とNormalized conductivityの関係)
 # (Done): Gonçalvès(2004)のFig.6 (pore sizeとゼータ電位の関係)
 # 1. ポテンシャル：
-#  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた, (specific conductivityは計算方法がよくわからないので, skip)
+#  Gonçalvès(2004)のFig.6, Leroy (2004)のFig.4はあっていた
 from typing import List, Dict, Tuple
 from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
@@ -457,7 +457,7 @@ def Revil_etal_fig2_by_bulk():
         _ls = r_result[_r]
         # get base
         base = _ls[1][np.square(np.array(_ls[0]) - nacl_ref.get_cond()).argmin()]
-        print(f"base: {base}") #!
+        print(f"base: {base}")  #!
         _vert = [i / base for i in _ls[1]]
         ax.plot(_ls[0], _vert, label=_r, color=cm.jet(float(i) / len(r_result)))
 
@@ -547,7 +547,9 @@ def qurtz_cond():
             nacl.sen_and_goode_1992()
             condnacl_ls.append(nacl.conductivity)
             q = Quartz(nacl)
-            conds_ls.append(q.cond_diffuse * q.get_double_layer_length())
+            conds_ls.append(
+                (q.get_cond_surface() - nacl.get_cond()) * q.get_double_layer_length()
+            )
         ax.plot(
             cnacl_ls, conds_ls, color=cm.jet(float(i) / n), label=int(_t - 273.15)
         )  # TODO: 四捨五入にする
@@ -578,6 +580,44 @@ def qurtz_cond():
         path.join(test_dir(), "RevilGlover1998.png"), dpi=200, bbox_inches="tight"
     )
 
+from scipy.optimize import least_squares
+from sys import float_info
+def fit_KNa():
+    # experimental data of Watillon and De Backer(1969)
+    ex_x = [
+        9.920551418059961e-7,
+        0.0000024345913127657108,
+        0.000004766608115031897,
+        0.000012067899547923802,
+        0.000024375136103655061,
+        0.00004866177189847022,
+        0.0001212953538235206,
+        0.00023887175067797536
+    ]
+    ex_y = [
+        2.5294794076201086e-9,
+        2.9033726835234344e-9,
+        3.3188096567493517e-9,
+        3.9959719231075983e-9,
+        4.49034192124644e-9,
+        5.375222674217645e-9,
+        6.455358804605033e-9,
+        8.449456276089439e-9
+    ]
+
+    def objective(params, x, y):
+        k = params[0]
+        m = params[1]
+        residual_ls = []
+        for cnacl, y_fit in zip(x, y):
+            nacl = NaCl(temperature=298.15, pressure=1.0e5, cnacl=cnacl)
+            nacl.sen_and_goode_1992()
+            quartz = Quartz(nacl=nacl, k_na=k, m=m)
+            residual_ls.append(y_fit - (quartz.get_cond_surface() - nacl.get_cond()))
+        return residual_ls
+    
+    k = least_squares(objective, [0.0016982436524617442, 0.51e-8], bounds=([10.0**(-3.0), 0.51e-8,], [10.0**(-2.5), 5.1e-8]), args=(ex_x, ex_y), verbose=2)
+    print(k)
 
 def smectite_cond_intra():
     print("smectite_cond_intra")
@@ -1174,12 +1214,14 @@ def test_single_condition():
 def test_sen_and_goode_1992():
     cnacl_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
     tempe_ls = [273.15 + i for i in range(20, 200, 1)]
-    experimental = {0.09: [0.92, 1.46, 2.11, 2.79, 3.38, 3.87, 4.33],
-                    0.26: [2.44, 3.80, 5.70, 7.36, 8.80, 10.16, 11.16],
-                    0.858: [7.10, 10.79, 15.31, 19.61, 23.56, 26.88, 29.13],
-                    1.76: [12.51, 20.31, 28.64, 36.84, 44.14, 50.12, 54.94],
-                    4.74: [22.42, 36.70, 51.77, 66.59, 79.77, 90.59, 99.29]}
-    t_exp = [22., 50., 80., 110., 140., 170., 200.]
+    experimental = {
+        0.09: [0.92, 1.46, 2.11, 2.79, 3.38, 3.87, 4.33],
+        0.26: [2.44, 3.80, 5.70, 7.36, 8.80, 10.16, 11.16],
+        0.858: [7.10, 10.79, 15.31, 19.61, 23.56, 26.88, 29.13],
+        1.76: [12.51, 20.31, 28.64, 36.84, 44.14, 50.12, 54.94],
+        4.74: [22.42, 36.70, 51.77, 66.59, 79.77, 90.59, 99.29],
+    }
+    t_exp = [22.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0]
     ion_props: Dict = const.ion_props_default.copy()
     cnacl_tempe_dct: Dict = {}
     for cnacl in cnacl_ls:
@@ -1235,6 +1277,7 @@ def test_quartz():
     cnacl_ls = [1, 0.1, 0.01, 0.001]
     ph_ls = np.arange(0.0, 12.0, 0.1).tolist()
     for _cnacl in cnacl_ls:
+        print(_cnacl)
         for _ph in ph_ls:
             nacl = NaCl(cnacl=_cnacl, ph=_ph, temperature=298.15)
             quartz = Quartz(nacl)
@@ -2223,6 +2266,7 @@ def tmp():
     ax.set_ylabel("Density (kg/m^3)")
     fig.savefig(path.join(test_dir(), "smec_density.png"), dpi=200)
 
+
 def test_activity():
     P = 5.0e6
     DIELECTRIC_VACUUM = const.DIELECTRIC_VACUUM
@@ -2241,7 +2285,11 @@ def test_activity():
             ion_props["Na"]["Molarity"] = cnacl
             ion_props["Cl"]["Molarity"] = cnacl
             props = calc_nacl_activities(
-                T=t, P=P, dielec_water=dielec_water, ion_props=ion_props, method="THEREDA"
+                T=t,
+                P=P,
+                dielec_water=dielec_water,
+                ion_props=ion_props,
+                method="THEREDA",
             )
             results_ls.append(props["Na"]["Activity"] / cnacl)
         ax.plot(cnacl_ls, results_ls, label=t, color=cm.jet(float(i) / len(t_ls)))
@@ -2260,6 +2308,7 @@ def test_activity():
     # fig, ax = plt.subplots()
     # ax.plot(t_ls, result_ls)
     # plt.show()
+
 
 def test_cluster():
     nacl = NaCl()
@@ -2285,6 +2334,7 @@ def test_cluster():
             ),
         )
         plot_instance(solver_input, f"./tmp/cluster{size}")
+
 
 def investigate_temperature_dependence():
     # Revil et al., 1998のFig.6を検証する
@@ -2324,7 +2374,7 @@ def test_nacl_activity_and_molality():
         nacl = NaCl(cnacl=cnacl)
         gamma_ls.append(nacl.ion_props["Na"]["Activity"] / cnacl)
         molality_ls.append(nacl.ion_props["Na"]["Molality"])
-    
+
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, gamma_ls)
     plt.show()
@@ -2335,8 +2385,9 @@ def test_nacl_activity_and_molality():
     ax.plot(cnacl_ls, cnacl_ls, linestyle="dashed")
     plt.show()
 
+
 def test_nacl_viscosity():
-    cnacl_ls = np.logspace(-5, 0.7, num=20, base=10.).tolist()
+    cnacl_ls = np.logspace(-5, 0.7, num=20, base=10.0).tolist()
     vis_ls = []
     for cnacl in cnacl_ls:
         T = 398.15
@@ -2344,7 +2395,7 @@ def test_nacl_viscosity():
         nacl = NaCl(temperature=T, pressure=P, cnacl=cnacl)
         print("=====")
         print(T, P, cnacl)
-        vis_ls.append(nacl.viscosity * 1000.)
+        vis_ls.append(nacl.viscosity * 1000.0)
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, vis_ls)
     ax.set_xscale("log")
@@ -2365,8 +2416,9 @@ if __name__ == "__main__":
     # goncalves_fig6()
     # test_sen_and_goode_1992()
     # test_mobility()
-    # test_quartz()
-    # qurtz_cond()
+    test_quartz()
+    qurtz_cond()
+    # fit_KNa()
     # smectite_cond_intra()
     # potential_smectite_intra()
     # test_dielec()
@@ -2392,5 +2444,5 @@ if __name__ == "__main__":
 
     # test_nacl_density()
     # test_nacl_activity_and_molality()
-    test_nacl_viscosity()
+    # test_nacl_viscosity()
     pass

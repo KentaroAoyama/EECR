@@ -129,7 +129,6 @@ class Phyllosilicate:
         # Parameters related to the external environment
         ####################################################
         self.temperature: float = nacl.get_temperature()
-        self.pressure: float = nacl.get_pressure()
         self.ion_props: Dict = nacl.get_ion_props()
         self.dielec_water: float = nacl.get_dielec_water()
         self.viscosity: float = nacl.get_viscosity()
@@ -1699,7 +1698,7 @@ class Phyllosilicate:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
-    def get_cond_infdiffuse(self) -> float or None:
+    def get_cond_surface(self) -> float or None:
         """Getter for the stern potential
 
         Returns:

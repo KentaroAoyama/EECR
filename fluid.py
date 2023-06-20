@@ -18,10 +18,11 @@ from constants import (
     AVOGADRO_CONST,
     ELEMENTARY_CHARGE,
     BOLTZMANN_CONST,
-    DISSOSIATION_WATER,
+    DG_H2O,
     DIELECTRIC_VACUUM,
     MNaCl,
     MH2O,
+    calc_equibilium_const
 )
 from msa import calc_mobility
 
@@ -63,6 +64,7 @@ class NaCl(Fluid):
 
         # Set ion_props and activities other than mobility
         ion_props: Dict = deepcopy(ion_props_default)
+        _ah = 10.0 ** (-1.0 * ph)
         for _s, _prop in ion_props.items():
             if _s not in (
                 Species.Na.name,
@@ -73,15 +75,13 @@ class NaCl(Fluid):
                 del ion_props[_s]
                 continue
             if _s == Species.H.name:
-                _c = 10.0 ** (-1.0 * ph)
                 # Assume proton activity coefficient is 1
                 # TODO: convert proton activity to concentration
-                _prop[IonProp.Molarity.name] = _c
-                _prop[IonProp.Activity.name] = _c
+                _prop[IonProp.Molarity.name] = _ah
+                _prop[IonProp.Activity.name] = _ah
                 continue
             if _s == Species.OH.name:
-                # TODO: consider temperature dependence of DISSOSIATION_WATER
-                _c = DISSOSIATION_WATER / (10.0 ** (-1.0 * ph))
+                _c = calc_equibilium_const(DG_H2O, self.temperature) / _ah
                 _prop[IonProp.Molarity.name] = _c
                 _prop[IonProp.Activity.name] = _c
                 continue
@@ -93,7 +93,7 @@ class NaCl(Fluid):
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
-        self.dielec_bulk = calc_dielec_nacl(cnacl, self.dielec_water)
+        self.dielec_fluid = calc_dielec_nacl(cnacl, self.dielec_water)
 
         # Calculate sodium ion mobility by MSA model and empirical findings of
         # Revil et al. (1998)
@@ -107,8 +107,8 @@ class NaCl(Fluid):
             # double layer is 1/10, and linear temperature depandence regardless of the species.
             # TODO: fix this
             _m = msa_props_tgiven[_s]["mobility"]
-            _m *= 0.1 * (1.0 + 0.037 * (temperature - tempe_ref))
-            # _m = 0.51e-8 * (1.0 + 0.037 * (temperature - tempe_ref)) # 実験データと合わなくなるのでコメントアウト
+            # _m *= 0.1 * (1.0 + 0.037 * (temperature - tempe_ref))
+            _m = 0.51e-8 * (1.0 + 0.037 * (temperature - tempe_ref))
             _prop[IonProp.MobilityInfDiffuse.name] = msa_props_tgiven[_s]["mobility"]
             _prop[IonProp.MobilityTrunDiffuse.name] = _m
             if _s == Species.H.name:
@@ -142,8 +142,11 @@ class NaCl(Fluid):
         self.ion_props: Dict = ion_props
 
         # calculate viscosity
-        Xnacl =  1000.0 * cnacl * MNaCl / self.density
+        Xnacl = 1000.0 * cnacl * MNaCl / self.density
         self.viscosity = calc_viscosity(self.temperature, self.pressure, Xnacl)
+
+        # pKw
+        self.kw = calc_equibilium_const(DG_H2O, self.temperature)
 
 
     def sen_and_goode_1992(self) -> float:
@@ -219,13 +222,31 @@ class NaCl(Fluid):
         """
         return self.dielec_water
 
+    def get_dielec_fluid(self) -> float:
+        """Getter for the permittivity of H2O-NaCl fluid
+        (not pure water)
+
+        Returns:
+            float: permittivity of H2O-NaCl fluid
+        """
+        return self.dielec_fluid
+
     def get_viscosity(self) -> float:
-        """Getter for the viscosity(Ps・s) of water
+        """Getter for the viscosity(Ps・s) of H2O-NaCl fluid
 
         Returns:
             float: viscosity of water
         """
         return self.viscosity
+
+    def get_kw(self) -> float:
+        """Getter for the dissociation constant of water (Kw)
+        (At 25℃, Kw~10^-14)
+
+        Returns:
+            float: Dissociation constant of water (Kw)
+        """
+        return self.kw
 
     def get_cond(self) -> float:
         """Getter for the electrical conductivity of fluid
@@ -616,7 +637,7 @@ def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
 def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     """
     Reference:
-         Klyukin, A., R.P. Lowell, R.J. Bodnar, A revised empirical model to 
+         Klyukin, A., R.P. Lowell, R.J. Bodnar, A revised empirical model to
             calculate the dynamic viscosity of H2OeNaCl fluids at elevated
             temperatures and pressures (≦1000℃, ≦500 MPa, 0-100 wt % NaCl)
             http://dx.doi.org/10.1016/j.fluid.2016.11.002
@@ -640,8 +661,8 @@ def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     b3 = 1.32936
 
     # eqs (5) and (6)
-    e1 = a1 * Xnacl ** a2
-    e2 = 1.0 - b1 * T ** b2 - b3 * (Xnacl ** a2) * (T ** b2)
+    e1 = a1 * Xnacl**a2
+    e2 = 1.0 - b1 * T**b2 - b3 * (Xnacl**a2) * (T**b2)
 
     # eq.(4)
     Tstar = e1 + e2 * T

@@ -16,7 +16,7 @@ BOLTZMANN_CONST = 1.380649e-23
 AVOGADRO_CONST = 6.0221408e23
 GAS_CONST = 8.31446262
 PRESSURE = 2.0 * 1.0e6
-DISSOSIATION_WATER = 1.0e-14
+DISSOSIATION_WATER = 9.888215487598867e-15 # at 25℃
 PRESSURE_ATM = 101300.
 MNaCl = 58.443e-3 # kg/m3
 MH2O = 18.015e-3 # kg/m3
@@ -65,6 +65,9 @@ dg_sioh_kaol = calc_standard_gibbs_energy(k_sioh_kaol)
 dg_xh_kaol = calc_standard_gibbs_energy(k_xh_kaol)
 dg_xna_kaol = calc_standard_gibbs_energy(k_xna_kaol)
 
+# standard Gibbs free energy
+# based on https://thermatdb.securesite.jp/Achievement/PropertiesDBtop.html
+DG_H2O = 79.885e3
 
 class Species(IntEnum):
     Na = auto()

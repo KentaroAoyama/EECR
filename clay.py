@@ -1,9 +1,8 @@
-# TODO: 温度依存性の計算方法を変える
 """Calculate electrical properties of phyllosilicate"""
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
-from typing import Dict, List, Tuple, Set, Callable
+from typing import Dict, List, Tuple, Set
 from logging import Logger
 from sys import float_info
 from os import path, PathLike
@@ -46,6 +45,90 @@ with open(smectite_trun_init_pth, "rb") as pkf:
     smectite_trun_init_params = pickle.load(pkf)
 
 
+class TLMParams:
+    """TLM parameters"""
+
+    def __init__(
+        self,
+        T: float = 298.15,
+        gamma_1i: float = 0.0,
+        gamma_2i: float = 5.5,
+        gamma_3i: float = 5.5,
+        qii: float = -1.5,
+        k1i: float = 1.0e-10,
+        k2i: float = 1.3e-6,
+        k3i: float = 1.0e-2,
+        k4i: float = 1.122,
+        c1i: float = 2.09,
+        c2i: float = 5.5,
+        gamma_1o: float = 0.0,
+        gamma_2o: float = 5.5,
+        gamma_3o: float = 5.5,
+        qio: float = -1.0,
+        k1o: float = 1.0e-10,
+        k2o: float = 1.3e-6,
+        k3o: float = 1.0e-2,
+        k4o: float = 0.95,
+        c1o: float = 2.1,
+        c2o: float = 0.55,
+    ) -> None:
+        """
+        Args:
+            T (float): Absolute temperature (K)
+            gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
+            gamma_2 (float): Surface site densities of sianol (unit: sites/nm2).
+            gamma_3 (float): Surface site densities of >Si-O-Al< (unit: sites/nm2).
+            qi (float): Layer charge density (charge/nm2).
+            k1 (float): Equilibrium constant of >AlOH2 ⇔ >AlOH + H+
+            k2 (float): Equilibrium constant of >SiOH ⇔ >SiO + H+
+            k3 (float): Equilibrium constant of >XH ⇔ >X + H+ (※)
+            k4 (float): Equilibrium constant of >XH ⇔ >X + Na+ (※)
+            c1 (float): Capacitance of stern layer (unit: F/m2).
+            c2 (float): Capacitance of diffuse layer (unit: F/m2).
+        ※ >X stands for surface site >Al-O-Si<
+        NOTE: "i" and "o" suffix denote innner and outer surface.
+        """
+        # Inner
+        self.gamma_1i = gamma_1i
+        self.gamma_2i = gamma_2i
+        self.gamma_3i = gamma_3i
+        self.qii = qii * 1.0e18 * const.ELEMENTARY_CHARGE
+        self.k1i = self.calc_K_T(k1i, T)
+        self.k2i = self.calc_K_T(k2i, T)
+        self.k3i = self.calc_K_T(k3i, T)
+        self.k4i = self.calc_K_T(k4i, T)
+        # TODO:
+        self.c1i = c1i
+        self.c2i = c2i
+
+        # Outer
+        self.gamma_1o = gamma_1o
+        self.gamma_2o = gamma_2o
+        self.gamma_3o = gamma_3o
+        self.qio = qio
+        self.k1o = self.calc_K_T(k1o, T)
+        self.k2o = self.calc_K_T(k2o, T)
+        self.k3o = self.calc_K_T(k3o, T)
+        self.k4o = self.calc_K_T(k4o, T)
+        # TODO:
+        self.c1o = c1o
+        self.c2o = c2o
+
+    def calc_K_T(self, K: float, T: float) -> float:
+        """Corrects the equilibrium constant for temperature.
+
+        Args:
+            K (float): Equilibrium constant at 25℃
+            T (float): Absolute temperature (K)
+
+        Returns:
+            float: Equilibrium constant at T (K)
+        """
+        return const.calc_equibilium_const(
+            const.calc_standard_gibbs_energy(K, 298.15), T
+        )
+
+
 class Phyllosilicate:
     """
     Phyllosilicate Class
@@ -77,17 +160,20 @@ class Phyllosilicate:
         self,
         nacl: NaCl,
         layer_width: float = 1.3e-9,
-        gamma_1: float = 0.0,
-        gamma_2: float = 5.5,
-        gamma_3: float = 5.5,
-        qi: float = -1.0,
-        potential_0: float = None,
-        potential_stern: float = None,
-        potential_zeta: float = None,
-        potential_r: float = None,
-        charge_0: float = None,
-        charge_stern: float = None,
-        charge_diffuse: float = None,
+        tlm_params: TLMParams = None,
+        potential_0_o: float = None,
+        potential_stern_o: float = None,
+        potential_zeta_o: float = None,
+        charge_0_o: float = None,
+        charge_stern_o: float = None,
+        charge_diffuse_o: float = None,
+        potential_0_i: float = None,
+        potential_stern_i: float = None,
+        potential_zeta_i: float = None,
+        potential_r_i: float = None,
+        charge_0_i: float = None,
+        charge_stern_i: float = None,
+        charge_diffuse_i: float = None,
         xd: float = None,
         cond_intra: float = None,
         cond_infdiffuse: float = None,
@@ -100,17 +186,20 @@ class Phyllosilicate:
             nacl (NaCl): Instance of NaCl class
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
-            gamma_2 (float): Surface site densities of sianol (unit: sites/nm2).
-            gamma_3 (float): Surface site densities of >Si-O-Al< (unit: sites/nm2).
-            qi (float): Layer charge density (charge/nm2).
-            potential_0 (float, optional): Surface potential (unit: V).
-            potential_stern (float, optional): Stern plane potential (unit: V).
-            potential_zeta (float, optional): Zeta plane potential (unit: V).
-            potential_r (float, optional): Potential at the position truncated inside the inter layer (unit: V).
-            charge_0 (float, optional): Charges in surface layer (unit: C/m3).
-            charge_stern (float, optional): Charges in stern layer (unit: C/m3).
-            charge_zeta (float, optional): Charges in zeta layer (unit: C/m3).
+            potential_0_o (float, optional): Surface potential (unit: V).
+            potential_stern_o (float, optional): Stern plane potential (unit: V).
+            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
+            charge_0_o (float, optional): Charges in surface layer (unit: C/m3).
+            charge_stern_o (float, optional): Charges in stern layer (unit: C/m3).
+            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m3).
+            potential_0_i (float, optional): Surface potential (unit: V).
+            potential_stern_i (float, optional): Stern plane potential (unit: V).
+            potential_zeta_i (float, optional): Zeta plane potential (unit: V).
+            potential_r_i (float, optional): Potential at the position truncated
+                inside the inter layer (unit: V).
+            charge_0_i (float, optional): Charges in surface layer (unit: C/m3).
+            charge_stern_i (float, optional): Charges in stern layer (unit: C/m3).
+            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
             cond_intra (float): Inter layer conductivity (unit: S/m).
             cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
@@ -130,35 +219,39 @@ class Phyllosilicate:
         ####################################################
         self.temperature: float = nacl.get_temperature()
         self.ion_props: Dict = nacl.get_ion_props()
-        self.dielec_water: float = nacl.get_dielec_water()
+        self.dielec_fluid: float = nacl.get_dielec_fluid()
         self.viscosity: float = nacl.get_viscosity()
         ####################################################
         # Specific parameters of phyllosilicate
         ####################################################
         self.layer_width: float = layer_width
-        self.gamma_1: float = gamma_1
-        self.gamma_2: float = gamma_2
-        self.gamma_3: float = gamma_3
-        self.qi: float = qi * 1.0e18 * const.ELEMENTARY_CHARGE
-        # k1 (float): equilibrium constant of eq.(12) in Gonçalvès et al. (2007).
-        # k2 (float): equilibrium constant of eq.(13) in Gonçalvès et al. (2007).
-        # k3 (float): equilibrium constant of eq.(14) in Gonçalvès et al. (2007).
-        # k4 (float): equilibrium constant of eq.(15) in Gonçalvès et al. (2007).
-        # c1 (float): capacitance of stern layer (unit: F/m2).
-        # c2 (float): capacitance of diffuse layer (unit: F/m2).
+        self.tlm_params: TLMParams = tlm_params
+        self.gamma_1: float = None
+        self.gamma_2: float = None
+        self.gamma_3: float = None
+        self.qi: float = None
         self.k1: float = None
         self.k2: float = None
         self.k3: float = None
         self.k4: float = None
         self.c1: float = None
         self.c2: float = None
-        self.potential_0: float = potential_0
-        self.potential_stern: float = potential_stern
-        self.potential_zeta: float = potential_zeta
-        self.potential_r: float = potential_r
-        self.charge_0: float = charge_0
-        self.charge_stern: float = charge_stern
-        self.charge_diffuse: float = charge_diffuse
+
+        # electrical properties at outer surface
+        self.potential_0_o: float = potential_0_o
+        self.potential_stern_o: float = potential_stern_o
+        self.potential_zeta_o: float = potential_zeta_o
+        self.charge_0_o: float = charge_0_o
+        self.charge_stern_o: float = charge_stern_o
+        self.charge_diffuse_o: float = charge_diffuse_o
+        # electrical properties at inner surface
+        self.potential_0_i: float = potential_0_i
+        self.potential_stern_i: float = potential_stern_i
+        self.potential_zeta_i: float = potential_zeta_i
+        self.potential_r_i: float = potential_r_i
+        self.charge_0_i: float = charge_0_i
+        self.charge_stern_i: float = charge_stern_i
+        self.charge_diffuse_i: float = charge_diffuse_i
         self.xd: float = xd
         self.cond_intra: float = cond_intra
         self.cond_infdiffuse: float = cond_infdiffuse
@@ -171,6 +264,10 @@ class Phyllosilicate:
         self.qs_coeff2_inf: float = None
         self.cond_tensor: np.ndarray = None
         self.double_layer_length: float = None
+
+        # osmotic properties
+        self.swelling_pressure: float = None
+        self.osmotic_coefficient: float = None
 
         ####################################################
         # DEBUG LOGGER
@@ -191,123 +288,31 @@ class Phyllosilicate:
         """Calculate constants and parameters commonly used when computing
         electrical parameters
         """
-        if self.qi < 0.0 and self.gamma_1 == 0.0:
-            self.__set_constant_for_smectite_truncated()
-        else:
-            self.__set_constant_for_kaolinite()
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
 
         # Ionic strength (based on Leroy & Revil, 2004)
-        # Note that the definition of ionic strength differs between Gonçalvès et al (2007)
         strength = 0.0
         for elem, props in self.ion_props.items():
             if elem in (Species.Na.name, Species.Cl.name):
-                strength += props[IonProp.Molarity.name]
-        strength += self.ion_props[Species.H.name][IonProp.Molarity.name]
+                strength += (
+                    props[IonProp.Molarity.name] * props[IonProp.Valence.name] ** 2
+                )
         self.ionic_strength = strength
 
-        # calculate kappa (eq.(11) of Gonçalvès et al., 2004)
+        # calculate kappa (eq.(11) of Gonçalvès et al., 2007)
         # Electrolyte concentration is assumed to be equal to Na+ concentration
         top = (
             2000.0
             * self.ion_props[Species.Na.name][IonProp.Molarity.name]
             * const.AVOGADRO_CONST
-            * _e ** 2
+            * _e**2
         )
-        bottom = self.dielec_water * _kb * self.temperature
+        bottom = self.dielec_fluid * _kb * self.temperature
         self.kappa = np.sqrt(top / bottom)
 
-    def __set_constant_for_kaolinite(self) -> None:
-        """Set the constants for the case of kaolinite and infinite diffuse layer"""
-        self.k1: float = const.calc_equibilium_const(
-            const.dg_aloh_kaol, self.temperature
-        )
-        self.k2: float = const.calc_equibilium_const(
-            const.dg_sioh_kaol, self.temperature
-        )
-        self.k3: float = const.calc_equibilium_const(const.dg_xh_kaol, self.temperature)
-        self.k4: float = const.calc_equibilium_const(
-            const.dg_xna_kaol, self.temperature
-        )
-        self.c1: float = const.c1_kaol
-        self.c2: float = const.c2_kaol
-
-    def __set_constant_for_smectite_inf(self) -> None:
-        """Set the constants for the case of smectite and infinite diffuse layer"""
-        self.qi = -1.8 * 1.0e18 * const.ELEMENTARY_CHARGE
-        self.k1: float = const.calc_equibilium_const(
-            const.dg_aloh_smec_inf, self.temperature
-        )
-        self.k2: float = const.calc_equibilium_const(
-            const.dg_sioh_smec_inf, self.temperature
-        )
-        self.k3: float = const.calc_equibilium_const(
-            const.dg_xh_smec_inf, self.temperature
-        )
-        self.k4: float = const.calc_equibilium_const(
-            const.dg_xna_smec_inf, self.temperature
-        )
-        self.c1: float = const.c1_smec_inf
-        self.c2: float = const.c2_smec_inf
-
-    def __set_constant_for_smectite_truncated(self) -> None:
-        """Set the constants for the case of smectite and midway truncation of the diffuse layer"""
-        self.qi = -1.0 * 1.0e18 * const.ELEMENTARY_CHARGE
-        self.k1: float = const.calc_equibilium_const(
-            const.dg_aloh_smec_trun, self.temperature
-        )
-        self.k2: float = const.calc_equibilium_const(
-            const.dg_sioh_smec_trun, self.temperature
-        )
-        self.k3: float = const.calc_equibilium_const(
-            const.dg_xh_smec_trun, self.temperature
-        )
-        self.k4: float = const.calc_equibilium_const(
-            const.dg_xna_smec_trun, self.temperature
-        )
-        self.c1: float = const.c1_smec_trun
-        self.c2: float = const.c2_smec_trun
-
-    def __check_constant_as_smectite_truncated(self) -> bool:
-        """Check if it is equal to the value in Table 1 of Gonçalvès et al., 2007.
-
-        Returns:
-            bool: Returns True if the above conditions are satisfied.
-        """
-        flag = True
-        if not math.isclose(
-            self.k1,
-            const.calc_equibilium_const(const.dg_aloh_smec_trun, self.temperature),
-            rel_tol=1.0e-10,
-        ):
-            flag = False
-        if not math.isclose(
-            self.k2,
-            const.calc_equibilium_const(const.dg_sioh_smec_trun, self.temperature),
-            rel_tol=1.0e-10,
-        ):
-            flag = False
-        if not math.isclose(
-            self.k3,
-            const.calc_equibilium_const(const.dg_xh_smec_trun, self.temperature),
-            rel_tol=1.0e-10,
-        ):
-            flag = False
-        if not math.isclose(
-            self.k4,
-            const.calc_equibilium_const(const.dg_xna_smec_trun, self.temperature),
-            rel_tol=1.0e-10,
-        ):
-            flag = False
-        if not math.isclose(self.c1, const.c1_smec_trun, rel_tol=1.0e-10):
-            flag = False
-        if not math.isclose(self.c2, const.c2_smec_trun, rel_tol=1.0e-10):
-            flag = False
-        return flag
-
     def __calc_f1(self, phi0: float, q0: float) -> float:
-        """Calculate eq.(16) of Gonçalvès et al. (2004)
+        """Calculate eq.(16) of Gonçalvès et al. (2007).
 
         Args:
             phi0 (float): surface plane potential
@@ -329,7 +334,7 @@ class Phyllosilicate:
         return f1
 
     def __calc_f2(self, phib: float, qb: float) -> float:
-        """Calculate eq.(17) of Gonçalvès et al. (2004)
+        """Calculate eq.(17) of Gonçalvès et al. (2007).
 
         Args:
             phib (float): stern plane potential
@@ -356,7 +361,7 @@ class Phyllosilicate:
         return f2
 
     def __calc_f3(self, q0: float, qb: float, qs: float) -> float:
-        """Calculate eq.(18) of Gonçalvès et al. (2004)
+        """Calculate eq.(18) of Gonçalvès et al. (2007).
 
         Args:
             q0 (float): surface layer charge
@@ -368,7 +373,7 @@ class Phyllosilicate:
         return q0 + qb + qs
 
     def __calc_f4(self, phi0: float, phib: float, q0: float) -> float:
-        """Calculate eq.(19) of Gonçalvès et al. (2004)
+        """Calculate eq.(19) of Gonçalvès et al. (2007).
 
         Args:
             phi0 (float): surface place potential
@@ -380,7 +385,7 @@ class Phyllosilicate:
         return phi0 - phib - q0 / self.c1
 
     def __calc_f5(self, phib: float, phid: float, qs: float) -> float:
-        """Calculate eq.(20) of Gonçalvès et al. (2004)
+        """Calculate eq.(20) of Gonçalvès et al. (2007).
 
         Args:
             phib (float): stern place potential
@@ -392,7 +397,7 @@ class Phyllosilicate:
         return phib - phid + qs / self.c2
 
     def __calc_f6(self, phid: float, qs: float) -> float:
-        """Calculate eq.(21) of Gonçalvès et al. (2004).
+        """Calculate eq.(21) of Gonçalvès et al. (2007).
         When pH is shifted from 7, we need to take
         into account the contribution of H+ and OH-.
 
@@ -405,7 +410,7 @@ class Phyllosilicate:
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
         kb = const.BOLTZMANN_CONST
-        dielec = self.dielec_water
+        dielec = self.dielec_fluid
         x = _e * phid / (2.0 * kb * self.temperature)
         coeff = np.sqrt(
             8.0e3 * _na * self.ionic_strength * dielec * kb * self.temperature
@@ -414,7 +419,7 @@ class Phyllosilicate:
         return f6
 
     def __calc_f6_truncated(self, phid: float, phir: float, qs: float) -> float:
-        """Calculate eq.(32) of Gonçalvès et al. (2004)
+        """Calculate eq.(32) of Gonçalvès et al. (2007).
         When pH is shifted from 7, we need to take
         into account the contribution of H+ and OH-.
 
@@ -425,7 +430,7 @@ class Phyllosilicate:
         Returns:
             float: left side of eq.(32) minus right side
         """
-        dielec = self.dielec_water
+        dielec = self.dielec_fluid
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
         cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
@@ -438,7 +443,7 @@ class Phyllosilicate:
         return qs - coeff * np.sqrt(right1 - right2)
 
     def __calc_f7_truncated(self, phid: float, phir: float) -> float:
-        """Calculate eq.(33) of Gonçalvès et al. (2004)
+        """Calculate eq.(34) of Gonçalvès et al. (2007).
         When pH is shifted from 7, we need to take
         into account the contribution of H+ and OH-.
 
@@ -447,13 +452,13 @@ class Phyllosilicate:
             phir (float): truncated plane potential
             qs (float): diffuse layer charge
         Returns:
-            float: left side of eq.(33) minus right side
+            float: left side of eq.(34) minus right side
         """
         # TODO: ６回微分まで実装する
         # electrolyte concentration assumed equal to cf
         cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
-        dielec = self.dielec_water
+        dielec = self.dielec_fluid
         _t = self.temperature
         _r = self.layer_width / 2.0
         kb = const.BOLTZMANN_CONST
@@ -463,7 +468,7 @@ class Phyllosilicate:
         right2_1 = _e * _na * cf / dielec
         right2_2 = np.sinh(c * phir) * (xd - _r) ** 2
         right2 = right2_1 * right2_2
-        right3_1 = _e ** 3 * _na ** 2 * cf ** 2 / (12.0 * dielec ** 2 * kb * _t)
+        right3_1 = _e**3 * _na**2 * cf**2 / (12.0 * dielec**2 * kb * _t)
         right3_2 = np.sinh(2.0 * c * phir) * (xd - _r) ** 4
         right3 = right3_1 * right3_2
         return phid - phir - right2 - right3
@@ -579,7 +584,7 @@ class Phyllosilicate:
         top1_2 = 2.0 * d * e * np.exp(x)
         top1 = b * (top1_1 + top1_2)
         top2 = d * e * np.exp(2.0 * x)
-        top3 = b ** 2 * d * e
+        top3 = b**2 * d * e
         top = top1 + top2 + top3
         bottom1 = 1.0 + b / np.exp(x)
         bottom2 = np.exp(x) + b
@@ -624,7 +629,7 @@ class Phyllosilicate:
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
         kb = const.BOLTZMANN_CONST
-        _dielec = self.dielec_water
+        _dielec = self.dielec_fluid
         _t = self.temperature
         _i = self.ionic_strength
         a = _e / (2.0 * kb * _t)
@@ -644,7 +649,7 @@ class Phyllosilicate:
         """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29-b*Sqrt%5Bcosh%5C%2840%29c*x%5C%2841%29-cosh%5C%2840%29c*y%5C%2841%29%5D%5C%2841%29%2Cx%5D&lang=ja
         # x: phir, y: phid
-        dielec = self.dielec_water
+        dielec = self.dielec_fluid
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
         _e = const.ELEMENTARY_CHARGE
@@ -670,7 +675,7 @@ class Phyllosilicate:
             float: ∂f6/∂phir
         """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29-b*Sqrt%5Bcosh%5C%2840%29c*x%5C%2841%29-cosh%5C%2840%29c*y%5C%2841%29%5D%5C%2841%29%2Cy%5D&lang=ja
-        dielec = self.dielec_water
+        dielec = self.dielec_fluid
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
         # electrolyte concentration is assumed to be equal to Na+ concentration
@@ -701,18 +706,18 @@ class Phyllosilicate:
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
         _r = self.layer_width * 0.5
-        dielec = self.dielec_water
+        dielec = self.dielec_fluid
         _na = const.AVOGADRO_CONST
         xd = self.xd
         b = _e * _na * cf / dielec
         c = _e / (kb * _t)
-        d = _e ** 3 * _na ** 2 * cf ** 2 / (12.0 * dielec ** 2 * kb * _t)
+        d = _e**3 * _na**2 * cf**2 / (12.0 * dielec**2 * kb * _t)
         _1 = -c * b * np.cosh(c * phir) * (xd - _r) ** 2
         _2 = -2.0 * c * d * np.cosh(2.0 * c * phir) * (xd - _r) ** 4
         return -1.0 + _1 + _2
 
     def __calc_A(self, phi0: float) -> float:
-        """Calculate eq.(22) of Gonçalvès et al. (2004)
+        """Calculate eq.(22) of Gonçalvès et al. (2007)
 
         Args:
             phi0 (float): surface layer potential
@@ -728,7 +733,7 @@ class Phyllosilicate:
         return 1.0 + ch / k1 * np.exp(-_e * phi0 / (kb * t))
 
     def __calc_B(self, phi0: float) -> float:
-        """Calculate eq.(23) of Gonçalvès et al. (2004)
+        """Calculate eq.(23) of Gonçalvès et al. (2007)
 
         Args:
             phi0 (float): surface plane potential
@@ -744,7 +749,7 @@ class Phyllosilicate:
         return 1.0 + ch / k2 * np.exp(-_e * phi0 / (kb * t))
 
     def __calc_C(self, phib: float) -> float:
-        """Calculate eq.(24) of Gonçalvès et al. (2004)
+        """Calculate eq.(24) of Gonçalvès et al. (2007)
 
         Args:
             phib (float): stern plane potential
@@ -844,7 +849,7 @@ class Phyllosilicate:
             * self.ion_props[Species.Na.name][IonProp.Molarity.name]
         )
         self.qs_coeff2_inf = (
-            -_e * self.potential_zeta / (const.BOLTZMANN_CONST * self.temperature)
+            -_e * self.potential_zeta_o / (const.BOLTZMANN_CONST * self.temperature)
         )
 
     def __check_if_calculated_qs_coeff(self) -> bool:
@@ -868,13 +873,26 @@ class Phyllosilicate:
         Returns:
             Tuple[float]: xd, integral error
         """
+        # TODO: fix (use Zhang et al. MD result)
         assert self._check_if_calculated_electrical_params_inf(), (
             "Before calculating xd, we should obtain electrical"
             "arameters for infinite diffuse layer case"
         )
+        # set params
+        self.gamma_1 = self.tlm_params.gamma_1o
+        self.gamma_2 = self.tlm_params.gamma_2o
+        self.gamma_3 = self.tlm_params.gamma_3o
+        self.qi = self.tlm_params.qio
+        self.k1 = self.tlm_params.k1o
+        self.k2 = self.tlm_params.k2o
+        self.k3 = self.tlm_params.k3o
+        self.k4 = self.tlm_params.k4o
+        self.c1 = self.tlm_params.c1o
+        self.c2 = self.tlm_params.c2o
+
         if not self.__check_if_calculated_qs_coeff():
             self.__calc_qs_coeff_inf()
-        _qs = self.charge_diffuse
+        _qs = self.charge_diffuse_o
         xd_ls: List = np.logspace(
             -15, np.log10(self.layer_width * 0.5), 1000, base=10.0
         ).tolist()
@@ -893,7 +911,6 @@ class Phyllosilicate:
             _xd = self.layer_width * 0.5
         self.xd = _xd
         _err = err_ls[_idx]
-        # assert _err < abs(_qs), "Integral error exceeds the value of qs"
         return self.xd, _err
 
     def calc_potentials_and_charges_inf(
@@ -931,17 +948,30 @@ class Phyllosilicate:
         """
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
-        # TODO: May need to consider other cases (e.g., illite, etc.)
-        if self.qi < 0.0 and self.gamma_1 == 0.0:
-            self.__set_constant_for_smectite_inf()
-        else:
-            self.__set_constant_for_kaolinite()
+
+        # set params
+        self.gamma_1 = self.tlm_params.gamma_1o
+        self.gamma_2 = self.tlm_params.gamma_2o
+        self.gamma_3 = self.tlm_params.gamma_3o
+        self.qi = self.tlm_params.qio
+        self.k1 = self.tlm_params.k1o
+        self.k2 = self.tlm_params.k2o
+        self.k3 = self.tlm_params.k3o
+        self.k4 = self.tlm_params.k4o
+        self.c1 = self.tlm_params.c1o
+        self.c2 = self.tlm_params.c2o
+
+        # # TODO: May need to consider other cases (e.g., illite, etc.)
+        # if self.qi < 0.0 and self.gamma_1 == 0.0:
+        #     self.__set_constant_for_smectite_inf()
+        # else:
+        #     self.__set_constant_for_kaolinite()
         if x_init is None:
             # Set initial electrical parameters
-            if self.qi < 0 and self.gamma_1 == 0.0:
+            if self.qi < 0.0 and self.gamma_1 == 0.0:
                 # for smectite case
                 params = smectite_inf_init_params
-            elif self.qi == 0 and self.gamma_1 > 0.0:
+            elif self.qi == 0.0 and self.gamma_1 > 0.0:
                 # for kaolinite case
                 params = kaolinite_init_params
             else:
@@ -957,6 +987,7 @@ class Phyllosilicate:
                 np.square(np.array(cna_ls, dtype=np.float64) - cna)
             )
             x_init = cna_dct[cna_ls[_idx_cna]]
+
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_inf(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
@@ -977,7 +1008,7 @@ class Phyllosilicate:
             # At least once, enter the following loop
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = 1.0 / (lamda ** _cou_damp)
+                _mu = 1.0 / (lamda**_cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_inf(xn_tmp)
@@ -1001,24 +1032,25 @@ class Phyllosilicate:
                 else:
                     break
         xn = xn.T.tolist()[0]
-        self.potential_0 = xn[0]
-        self.potential_stern = xn[1]
-        self.potential_zeta = xn[2]
-        self.charge_0 = xn[3]
-        self.charge_stern = xn[4]
-        self.charge_diffuse = xn[5]
+        self.potential_0_o = xn[0]
+        self.potential_stern_o = xn[1]
+        self.potential_zeta_o = xn[2]
+        self.charge_0_o = xn[3]
+        self.charge_stern_o = xn[4]
+        self.charge_diffuse_o = xn[5]
         # DEBUG
         if self.logger is not None:
             self.logger.info(
                 "Finished the calculation of electrical "
                 "properties for an infinite diffusion layer"
             )
-            self.logger.debug(f"m_potential_0: {self.potential_0}")
-            self.logger.debug(f"m_potential_stern: {self.potential_stern}")
-            self.logger.debug(f"m_potential_zeta: {self.potential_zeta}")
-            self.logger.debug(f"m_charge_0: {self.charge_0}")
-            self.logger.debug(f"m_charge_stern: {self.charge_stern}")
-            self.logger.debug(f"m_charge_diffuse: {self.charge_diffuse}")
+            self.logger.debug(f"m_potential_0_o: {self.potential_0_o}")
+            self.logger.debug(f"m_potential_stern_o: {self.potential_stern_o}")
+            self.logger.debug(f"m_potential_zeta_o: {self.potential_zeta_o}")
+            self.logger.debug(f"m_charge_0_o: {self.charge_0_o}")
+            self.logger.debug(f"m_charge_stern_o: {self.charge_stern_o}")
+            self.logger.debug(f"m_charge_diffuse_o: {self.charge_diffuse_o}")
+
         # calc length to the zeta plane
         self.calc_xd()
         return xn
@@ -1035,7 +1067,7 @@ class Phyllosilicate:
     ) -> List:
         """Calculate the potential and charge of each layer
         in the case of truncated diffuse layer development.
-        eq.(16)~(20), (32), (33) of Gonçalvès et al. (2007) is used.
+        eq.(16)~(20), (32), (34) of Gonçalvès et al. (2007) is used.
         Damped Newton-Raphson method is applied.
 
         x_init (List): Initial electrical parameters (length is 7)
@@ -1068,11 +1100,6 @@ class Phyllosilicate:
         # phi0, phib, phid, phir, q0, qb, qs
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
-        # TODO: Currently, it is assumed that this function is called only in the case of
-        # smectite. If we want to calculate the electrochemical properties of another clay
-        # mineral, such as vermiculite, we should modify this function.
-        if not self.__check_constant_as_smectite_truncated():
-            self.__set_constant_for_smectite_truncated()
         if self.xd is None:
             self.calc_xd()
         if x_init is None:
@@ -1095,6 +1122,19 @@ class Phyllosilicate:
                 np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
             )
             x_init = cna_dct[cna_ls[_idx]]
+
+        # set params
+        self.gamma_1 = self.tlm_params.gamma_1i
+        self.gamma_2 = self.tlm_params.gamma_2i
+        self.gamma_3 = self.tlm_params.gamma_3i
+        self.qi = self.tlm_params.qii
+        self.k1 = self.tlm_params.k1i
+        self.k2 = self.tlm_params.k2i
+        self.k3 = self.tlm_params.k3i
+        self.k4 = self.tlm_params.k4i
+        self.c1 = self.tlm_params.c1i
+        self.c2 = self.tlm_params.c2i
+
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
@@ -1118,7 +1158,7 @@ class Phyllosilicate:
             # At least once, enter the following loop
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = 1.0 / (lamda ** _cou_damp)
+                _mu = 1.0 / (lamda**_cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_truncated(xn_tmp)
@@ -1154,25 +1194,25 @@ class Phyllosilicate:
         xn = xn.T.tolist()[0]
 
         # assign member variables
-        self.potential_0 = xn[0]
-        self.potential_stern = xn[1]
-        self.potential_zeta = xn[2]
-        self.potential_r = xn[3]
-        self.charge_0 = xn[4]
-        self.charge_stern = xn[5]
-        self.charge_diffuse = xn[6]
+        self.potential_0_i = xn[0]
+        self.potential_stern_i = xn[1]
+        self.potential_zeta_i = xn[2]
+        self.potential_r_i = xn[3]
+        self.charge_0_i = xn[4]
+        self.charge_stern_i = xn[5]
+        self.charge_diffuse_i = xn[6]
 
         # fix minor error
         # zeta potential
-        if math.isclose(self.potential_zeta, self.potential_r):
-            self.potential_r = self.potential_zeta
+        if math.isclose(self.potential_zeta_i, self.potential_r_i):
+            self.potential_r_i = self.potential_zeta_i
         # Align zeta potential and truncated plane potential to the same sign
-        elif self.potential_zeta <= 0.0:
-            if self.potential_r > 0.0:
-                self.potential_r -= 2.0 * self.potential_r
-        elif self.potential_zeta > 0.0:
-            if self.potential_r < 0.0:
-                self.potential_r -= 2.0 * self.potential_r
+        elif self.potential_zeta_i <= 0.0:
+            if self.potential_r_i > 0.0:
+                self.potential_r_i -= 2.0 * self.potential_r_i
+        elif self.potential_zeta_i > 0.0:
+            if self.potential_r_i < 0.0:
+                self.potential_r_i -= 2.0 * self.potential_r_i
 
         # DEBUG
         if self.logger is not None:
@@ -1180,13 +1220,14 @@ class Phyllosilicate:
                 "Finished the calculation of electrical "
                 "properties for an truncated diffusion layer"
             )
-            self.logger.debug(f"m_potential_0: {self.potential_0}")
-            self.logger.debug(f"m_potential_stern: {self.potential_stern}")
-            self.logger.debug(f"m_potential_zeta: {self.potential_zeta}")
-            self.logger.debug(f"m_potential_r: {self.potential_r}")
-            self.logger.debug(f"m_charge_0: {self.charge_0}")
-            self.logger.debug(f"m_charge_stern: {self.charge_stern}")
-            self.logger.debug(f"m_charge_diffuse: {self.charge_diffuse}")
+            self.logger.debug(f"m_potential_0_i: {self.potential_0_i}")
+            self.logger.debug(f"m_potential_stern: {self.potential_stern_i}")
+            self.logger.debug(f"m_potential_zeta: {self.potential_zeta_i}")
+            self.logger.debug(f"m_potential_r: {self.potential_r_i}")
+            self.logger.debug(f"m_charge_0: {self.charge_0_i}")
+            self.logger.debug(f"m_charge_stern: {self.charge_stern_i}")
+            self.logger.debug(f"m_charge_diffuse: {self.charge_diffuse_i}")
+
         return xn, is_norm_converged
 
     def calc_potentials_and_charges_truncated_by_ga(
@@ -1205,11 +1246,6 @@ class Phyllosilicate:
         # phi0, phib, phid, phir, q0, qb, qs
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
-        # TODO: Currently, it is assumed that this function is called only in the case of
-        # smectite. If we want to calculate the electrochemical properties of another clay
-        # mineral, such as vermiculite, we should modify this function.
-        if not self.__check_constant_as_smectite_truncated():
-            self.__set_constant_for_smectite_truncated()
         if self.xd is None:
             self.calc_xd()
         if x_init is None:
@@ -1232,6 +1268,19 @@ class Phyllosilicate:
                 np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
             )
             x_init = cna_dct[cna_ls[_idx]]
+
+        # set params
+        self.gamma_1 = self.tlm_params.gamma_1i
+        self.gamma_2 = self.tlm_params.gamma_2i
+        self.gamma_3 = self.tlm_params.gamma_3i
+        self.qi = self.tlm_params.qii
+        self.k1 = self.tlm_params.k1i
+        self.k2 = self.tlm_params.k2i
+        self.k3 = self.tlm_params.k3i
+        self.k4 = self.tlm_params.k4i
+        self.c1 = self.tlm_params.c1i
+        self.c2 = self.tlm_params.c2i
+
         num = len(x_init)
         random.seed(seed)
         np.random.seed(seed)
@@ -1247,7 +1296,11 @@ class Phyllosilicate:
         toolbox = base.Toolbox()
         toolbox.register("attr_gene", lambda: random.random() - 1.0)
         toolbox.register(
-            "individual", tools.initRepeat, creator.Individual, toolbox.attr_gene, num,
+            "individual",
+            tools.initRepeat,
+            creator.Individual,
+            toolbox.attr_gene,
+            num,
         )
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
         # evaluation function
@@ -1255,12 +1308,13 @@ class Phyllosilicate:
             fn = self.__calc_functions_truncated(np.array(xn).reshape(-1, 1))
             cost = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
             if np.isnan(cost):
-                return (float_info.max, )
+                return (float_info.max,)
             if not (fn[0][0] <= fn[1][0] <= fn[2][0] <= fn[3][0]):
-                return (float_info.max, )
-            if fn[0][0] > 0. or fn[1][0] > 0. or fn[2][0] > 0. or fn[3][0] > 0.:
-                return (float_info.max, )
-            return (cost, )
+                return (float_info.max,)
+            if fn[0][0] > 0.0 or fn[1][0] > 0.0 or fn[2][0] > 0.0 or fn[3][0] > 0.0:
+                return (float_info.max,)
+            return (cost,)
+
         toolbox.register("evaluate", __callback)
         toolbox.register("mate", tools.cxBlend, alpha=0.4)
         toolbox.register("mutate", tools.mutShuffleIndexes, indpb=0.2)
@@ -1268,7 +1322,7 @@ class Phyllosilicate:
         cou: int = 0
         pop = toolbox.population(n=pop_size)
         # Set initial values for no dupulicates
-        _mu, _std = np.array(x_init), np.abs(np.array(x_init)) * 10.
+        _mu, _std = np.array(x_init), np.abs(np.array(x_init)) * 10.0
         for i, ind in enumerate(pop):
             ind.clear()
             if i == 0:
@@ -1280,7 +1334,7 @@ class Phyllosilicate:
         flag_converged = True
         flag_approriate = False
         _f = float_info.max
-        best_ind_ls = [__callback(x_init)[0], x_init] # norm, gene
+        best_ind_ls = [__callback(x_init)[0], x_init]  # norm, gene
         while _f > convergence_tol:
             cou += 1
             offspring = toolbox.select(pop, len(pop))
@@ -1304,8 +1358,8 @@ class Phyllosilicate:
             _f = min(fits)
             best_ind = tools.selBest(pop, 1)[0]
             if cou % 500 == 0:
-               print(best_ind_ls)
-               for i, ind in enumerate(pop):
+                print(best_ind_ls)
+                for i, ind in enumerate(pop):
                     if i > int(pop_size / 4):
                         ind.clear()
                         ind.extend(np.random.normal(_mu, _std).tolist())
@@ -1314,7 +1368,7 @@ class Phyllosilicate:
             elif _f < best_ind_ls[0]:
                 best_ind_ls[0] = _f
                 best_ind_ls[1] = best_ind
-            if not flag_approriate and best_ind_ls[0] < 1.:
+            if not flag_approriate and best_ind_ls[0] < 1.0:
                 cou = 0
             if g_gen > cou:
                 flag_converged = False
@@ -1322,7 +1376,7 @@ class Phyllosilicate:
         if not flag_converged:
             return best_ind_ls[1], flag_converged
         return best_ind_ls[1], flag_converged
-    
+
     def calc_potentials_and_charges_truncated_by_bayse(
         self,
         x_init: List = None,
@@ -1333,11 +1387,6 @@ class Phyllosilicate:
         # phi0, phib, phid, phir, q0, qb, qs
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
-        # TODO: Currently, it is assumed that this function is called only in the case of
-        # smectite. If we want to calculate the electrochemical properties of another clay
-        # mineral, such as vermiculite, we should modify this function.
-        if not self.__check_constant_as_smectite_truncated():
-            self.__set_constant_for_smectite_truncated()
         if self.xd is None:
             self.calc_xd()
         if x_init is None:
@@ -1360,30 +1409,73 @@ class Phyllosilicate:
                 np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
             )
             x_init = cna_dct[cna_ls[_idx]]
-        
-        def objective(trial):
-            x1 = trial.suggest_float("x1", -1., 0.,)
-            x2 = trial.suggest_float("x2", -1., 0.,)
-            x3 = trial.suggest_float("x3", -1., 0.,)
-            x4 = trial.suggest_float("x4", -1., 0.,)
-            x5 = trial.suggest_float("x5", -1., 1.,)
-            x6 = trial.suggest_float("x6", -1., 1.,)
-            x7 = trial.suggest_float("x7", -1., 1.,)
 
-            obj = np.sum(np.sqrt(np.square(np.array([x1, x2, x3, x4, x5, x6, x7]).reshape(-1, 1))), axis=0)[0]
+        # set params
+        self.gamma_1 = self.tlm_params.gamma_1i
+        self.gamma_2 = self.tlm_params.gamma_2i
+        self.gamma_3 = self.tlm_params.gamma_3i
+        self.qi = self.tlm_params.qii
+        self.k1 = self.tlm_params.k1i
+        self.k2 = self.tlm_params.k2i
+        self.k3 = self.tlm_params.k3i
+        self.k4 = self.tlm_params.k4i
+        self.c1 = self.tlm_params.c1i
+        self.c2 = self.tlm_params.c2i
+
+        def objective(trial):
+            x1 = trial.suggest_float(
+                "x1",
+                -1.0,
+                0.0,
+            )
+            x2 = trial.suggest_float(
+                "x2",
+                -1.0,
+                0.0,
+            )
+            x3 = trial.suggest_float(
+                "x3",
+                -1.0,
+                0.0,
+            )
+            x4 = trial.suggest_float(
+                "x4",
+                -1.0,
+                0.0,
+            )
+            x5 = trial.suggest_float(
+                "x5",
+                -1.0,
+                1.0,
+            )
+            x6 = trial.suggest_float(
+                "x6",
+                -1.0,
+                1.0,
+            )
+            x7 = trial.suggest_float(
+                "x7",
+                -1.0,
+                1.0,
+            )
+
+            obj = np.sum(
+                np.sqrt(
+                    np.square(np.array([x1, x2, x3, x4, x5, x6, x7]).reshape(-1, 1))
+                ),
+                axis=0,
+            )[0]
             if np.isnan(obj):
                 return float_info.max
             return obj
 
         # We use the multivariate TPE sampler.
         sampler = optuna.samplers.TPESampler(multivariate=True)
-        
+
         study = optuna.create_study(sampler=sampler)
         study.optimize(objective, n_trials=10000)
 
         print(study.best_params)
-
-
 
     def _check_if_calculated_electrical_params_inf(self) -> bool:
         """Check if the electrical properties for infinite diffuse layer
@@ -1393,17 +1485,17 @@ class Phyllosilicate:
             bool: if already calculated, return True
         """
         flag = True
-        if self.potential_0 is None:
+        if self.potential_0_o is None:
             flag = False
-        if self.potential_stern is None:
+        if self.potential_stern_o is None:
             flag = False
-        if self.potential_zeta is None:
+        if self.potential_zeta_o is None:
             flag = False
-        if self.charge_0 is None:
+        if self.charge_0_o is None:
             flag = False
-        if self.charge_stern is None:
+        if self.charge_stern_o is None:
             flag = False
-        if self.charge_diffuse is None:
+        if self.charge_diffuse_o is None:
             flag = False
         return flag
 
@@ -1415,19 +1507,19 @@ class Phyllosilicate:
             bool: if already calculated, return True
         """
         flag = True
-        if self.potential_0 is None:
+        if self.potential_0_i is None:
             flag = False
-        if self.potential_stern is None:
+        if self.potential_stern_i is None:
             flag = False
-        if self.potential_zeta is None:
+        if self.potential_zeta_i is None:
             flag = False
-        if self.potential_r is None:
+        if self.potential_r_i is None:
             flag = False
-        if self.charge_0 is None:
+        if self.charge_0_i is None:
             flag = False
-        if self.charge_stern is None:
+        if self.charge_stern_i is None:
             flag = False
-        if self.charge_diffuse is None:
+        if self.charge_diffuse_i is None:
             flag = False
         if self.xd is None:
             flag = False
@@ -1435,13 +1527,15 @@ class Phyllosilicate:
 
     def __calc_kappa_truncated(self) -> None:
         """Calculate the kappa of the potential (instead of Eq. 11
-        of Gonçalvès et al., 2004) when the diffuse layer is truncated
+        of Gonçalvès et al., 2007) when the diffuse layer is truncated
         """
         _r = self.layer_width * 0.5
-        self.kappa_truncated = 1.0 / _r * np.log(self.potential_zeta / self.potential_r)
+        self.kappa_truncated = (
+            1.0 / _r * np.log(self.potential_zeta_i / self.potential_r_i)
+        )
 
     def __calc_cond_diffuse_inf(self, x: float, s: str, coeff: float) -> float:
-        """Calculate Na+ number density in diffuse layer
+        """Calculate conductivity in diffuse layer
 
         Args:
             x (float): Distance from zeta plane (m)
@@ -1450,15 +1544,15 @@ class Phyllosilicate:
                 (eq.26 in Leroy et al., 2015)
 
         Returns:
-            float: Number density of Na+ (-/m^3)
+            float: Conductivity of diffuse layer (S/m)
         """
         # calc number density
-        potential: float = self.potential_zeta * np.exp((-1.0) * self.kappa * x)
+        potential: float = self.potential_zeta_o * np.exp((-1.0) * self.kappa * x)
         _props: Dict = self.ion_props[s]
         v = _props[IonProp.Valence.name]
         # mobility at position x
         bx = _props[IonProp.MobilityInfDiffuse.name] + (v / abs(v)) * coeff * (
-            potential - self.potential_zeta
+            potential - self.potential_zeta_o
         )
         n = (
             np.exp(
@@ -1484,7 +1578,7 @@ class Phyllosilicate:
             float: Number density of Na+ (-/m^3)
         """
         # calc number density
-        potential: float = self.potential_zeta * np.exp(
+        potential: float = self.potential_zeta_i * np.exp(
             (-1.0) * self.kappa_truncated * x
         )
         na_props: Dict = self.ion_props[Species.Na.name]
@@ -1503,25 +1597,32 @@ class Phyllosilicate:
         )
         return n
 
-    def __calc_n_stern(self) -> float:
+    def __calc_n_stern(self, orientation: str) -> float:
         """Calculate Na+ number density in stern layer
         by eq.(12) of Leroy & Revil (2004)
 
         Args:
-            x (float): Distance from surface (m)
+            orientation (str): Flag indicating which direction the stern
+                layer extends ("outer" or "inner")
 
         Returns:
             float: Number density of Na+ (-/m^2)
         """
+        phib = None
+        if orientation == "outer":
+            phib = self.potential_stern_o
+        elif orientation == "inner":
+            phib = self.potential_stern_i
+        assert phib is not None, phib
         n: float = (
             self.gamma_3
             * 1.0e18
-            / self.__calc_C(self.potential_stern)
-            * (self.ion_props[Species.Na.name][IonProp.Molarity.name])
+            / self.__calc_C(phib)
+            * (self.ion_props[Species.Na.name][IonProp.Activity.name])
             / self.k4
             * np.exp(
                 -const.ELEMENTARY_CHARGE
-                * self.potential_stern
+                * phib
                 / (const.BOLTZMANN_CONST * self.temperature)
             )
         )
@@ -1540,18 +1641,13 @@ class Phyllosilicate:
             "Before calculating the conductivity of interlayer, we should "
             "obtain electrical parameters for truncated diffuse layer case"
         )
-        # TODO: Currently, it is assumed that this function is called only in the case of
-        # smectite. If we want to calculate the electrochemical properties of another clay
-        # mineral, such as vermiculite, we should modify this function.
-        if not self.__check_constant_as_smectite_truncated():
-            self.__set_constant_for_smectite_truncated()
         if self.xd is None:
             self.calc_xd()
         if self.kappa_truncated is None:
             self.__calc_kappa_truncated()
 
         # Na+ number (n/m^2) in stern layer
-        gamma_stern = self.__calc_n_stern()
+        gamma_stern = self.__calc_n_stern("inner")
         _xdl = self.layer_width * 0.5
         # Na+ number (n/m^2) in diffuse layer
         gamma_diffuse = 0.0
@@ -1581,23 +1677,23 @@ class Phyllosilicate:
         Returns:
             Tuple[float]: conductivity, integral error
         """
-        if self.qi < 0.0 and self.gamma_1 == 0.0:
-            self.__set_constant_for_smectite_inf()
-        else:
-            self.__set_constant_for_kaolinite()
+        # if self.qi < 0.0 and self.gamma_1 == 0.0:
+        #     self.__set_constant_for_smectite_inf()
+        # else:
+        #     self.__set_constant_for_kaolinite()
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
         if self.xd is None:
             self.calc_xd()
 
         # Na+ number (n/m^2) at stern layer
-        gamma_stern = self.__calc_n_stern()
+        gamma_stern = self.__calc_n_stern("outer")
         # Na+ number (n/m^2) at diffuse layer
         xdl = self.xd + 1.0 / self.kappa
         __callback = partial(
             self.__calc_cond_diffuse_inf,
             s=Species.Na.name,
-            coeff=self.dielec_water / self.viscosity,
+            coeff=self.dielec_fluid / self.viscosity,
         )
         cond_na_diffuse, _ = quad(__callback, self.xd, xdl)
 
@@ -1737,13 +1833,20 @@ class Smectite(Phyllosilicate):
         self,
         nacl: NaCl,
         layer_width: float = 1.3e-9,
-        potential_0: float = None,
-        potential_stern: float = None,
-        potential_zeta: float = None,
-        potential_r: float = None,
-        charge_0: float = None,
-        charge_stern: float = None,
-        charge_diffuse: float = None,
+        tlm_params: TLMParams = None,
+        potential_0_o: float = None,
+        potential_stern_o: float = None,
+        potential_zeta_o: float = None,
+        charge_0_o: float = None,
+        charge_stern_o: float = None,
+        charge_diffuse_o: float = None,
+        potential_0_i: float = None,
+        potential_stern_i: float = None,
+        potential_zeta_i: float = None,
+        potential_r_i: float = None,
+        charge_0_i: float = None,
+        charge_stern_i: float = None,
+        charge_diffuse_i: float = None,
         xd: float = None,
         cond_intra: float = None,
         cond_infdiffuse: float = None,
@@ -1757,33 +1860,69 @@ class Smectite(Phyllosilicate):
             nacl (NaCl): Instance of NaCl class
             layer_width (float): Distance between sheets of phyllosilicate minerals
                 (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            potential_0 (float, optional): surface potential (unit: V).
-            potential_stern (float, optional): stern plane potential (unit: V).
-            potential_zeta (float, optional): zeta plane potential (unit: V).
-            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
-            charge_0 (float, optional): charges in surface layer (unit: C/m3).
-            charge_stern (float, optional): charges in stern layer (unit: C/m3).
-            charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
+            tlm_params (TLMParams): TLM parameter.
+            potential_0_o (float, optional): Surface potential (unit: V).
+            potential_stern_o (float, optional): Stern plane potential (unit: V).
+            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
+            charge_0_o (float, optional): Charges in surface layer (unit: C/m3).
+            charge_stern_o (float, optional): Charges in stern layer (unit: C/m3).
+            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m3).
+            potential_0_i (float, optional): Surface potential (unit: V).
+            potential_stern_i (float, optional): Stern plane potential (unit: V).
+            potential_zeta_i (float, optional): Zeta plane potential (unit: V).
+            potential_r_i (float, optional): Potential at the position truncated
+                inside the inter layer (unit: V).
+            charge_0_i (float, optional): Charges in surface layer (unit: C/m3).
+            charge_stern_i (float, optional): Charges in stern layer (unit: C/m3).
+            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m3).
             xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
             cond_intra (float, optional): Inter layer conductivity (unit: S/m).
             cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
             flag_truncated (bool): True if truncated parameters will be calculate.
         """
+
+        if tlm_params is None:
+            tlm_params = TLMParams(
+                T=nacl.get_temperature(),
+                gamma_1i=0.0,
+                gamma_2i=5.5,
+                gamma_3i=5.5,
+                qii=-1.0,
+                k1i=1.0e-10,
+                k2i=1.3e-6,
+                k3i=1.0e-2,
+                k4i=0.95,
+                c1i=2.1,
+                c2i=0.55,
+                gamma_1o=0.0,
+                gamma_2o=5.5,
+                gamma_3o=5.5,
+                qio=-0.44016148,
+                k1o=1.0e-10,
+                k2o=1.3e-6,
+                k3o=1.0e-2,
+                k4o=0.49829061,
+                c1o=0.93188509,
+                c2o=2.56335737,
+            )
         super().__init__(
             nacl=nacl,
             layer_width=layer_width,
-            gamma_1=0.0,
-            gamma_2=5.5,
-            gamma_3=5.5,
-            qi=-1.0,
-            potential_0=potential_0,
-            potential_stern=potential_stern,
-            potential_zeta=potential_zeta,
-            potential_r=potential_r,
-            charge_0=charge_0,
-            charge_stern=charge_stern,
-            charge_diffuse=charge_diffuse,
+            tlm_params=tlm_params,
+            potential_0_o=potential_0_o,
+            potential_stern_o=potential_stern_o,
+            potential_zeta_o=potential_zeta_o,
+            charge_0_o=charge_0_o,
+            charge_stern_o=charge_stern_o,
+            charge_diffuse_o=charge_diffuse_o,
+            potential_0_i=potential_0_i,
+            potential_stern_i=potential_stern_i,
+            potential_zeta_i=potential_zeta_i,
+            potential_r_i=potential_r_i,
+            charge_0_i=charge_0_i,
+            charge_stern_i=charge_stern_i,
+            charge_diffuse_i=charge_diffuse_i,
             xd=xd,
             cond_intra=cond_intra,
             cond_infdiffuse=cond_infdiffuse,
@@ -1803,16 +1942,13 @@ class Kaolinite(Phyllosilicate):
     def __init__(
         self,
         nacl: NaCl,
-        layer_width: float = 1.0e-10,
-        potential_0: float = None,
-        potential_stern: float = None,
-        potential_zeta: float = None,
-        potential_r: float = None,
-        charge_0: float = None,
-        charge_stern: float = None,
-        charge_diffuse: float = None,
-        xd: float = None,
-        cond_intra: float = None,
+        tlm_params: TLMParams = None,
+        potential_0_o: float = None,
+        potential_stern_o: float = None,
+        potential_zeta_o: float = None,
+        charge_0_o: float = None,
+        charge_stern_o: float = None,
+        charge_diffuse_o: float = None,
         cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
@@ -1822,36 +1958,52 @@ class Kaolinite(Phyllosilicate):
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
-                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            potential_0 (float, optional): surface potential (unit: V).
-            potential_stern (float, optional): stern plane potential (unit: V).
-            potential_zeta (float, optional): zeta plane potential (unit: V).
-            potential_r (float, optional): potential at the position truncated inside the inter layer (unit: V).
-            charge_0 (float, optional): charges in surface layer (unit: C/m3).
-            charge_stern (float, optional): charges in stern layer (unit: C/m3).
-            charge_zeta (float, optional): charges in zeta layer (unit: C/m3).
-            xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
-            cond_intra (float, optional): Inter layer conductivity (unit: S/m).
+            tlm_params (TLMParams): TLM parameter
+            potential_0_o (float, optional): Surface potential (unit: V).
+            potential_stern_o (float, optional): Stern plane potential (unit: V).
+            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
+            charge_0_o (float, optional): Charges in surface layer (unit: C/m3).
+            charge_stern_o (float, optional): Charges in stern layer (unit: C/m3).
+            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m3).
             cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
         """
+
+        if tlm_params is None:
+            # Set parameters are based on Leroy & Revil (2004)
+            tlm_params = TLMParams(
+                T=nacl.get_temperature(),
+                gamma_1i=None,
+                gamma_2i=None,
+                gamma_3i=None,
+                qii=None,
+                k1i=None,
+                k2i=None,
+                k3i=None,
+                k4i=None,
+                c1i=None,
+                c2i=None,
+                gamma_1o=5.5,
+                gamma_2o=5.5,
+                gamma_3o=5.5,
+                qio=0.0,
+                k1o=1.0e-10,
+                k2o=4.95e-6,
+                k3o=1.0e-2,
+                k4o=5.04e-2,
+                c1o=1.49,
+                c2o=0.2,
+            )
         super().__init__(
             nacl=nacl,
-            layer_width=layer_width,
-            gamma_1=5.5,
-            gamma_2=5.5,
-            gamma_3=5.5,
-            qi=0.0,
-            potential_0=potential_0,
-            potential_stern=potential_stern,
-            potential_zeta=potential_zeta,
-            potential_r=potential_r,
-            charge_0=charge_0,
-            charge_stern=charge_stern,
-            charge_diffuse=charge_diffuse,
-            xd=xd,
-            cond_intra=cond_intra,
+            layer_width=1.0e-10,
+            tlm_params=tlm_params,
+            potential_0_o=potential_0_o,
+            potential_stern_o=potential_stern_o,
+            potential_zeta_o=potential_zeta_o,
+            charge_0_o=charge_0_o,
+            charge_stern_o=charge_stern_o,
+            charge_diffuse_o=charge_diffuse_o,
             cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )

@@ -1,7 +1,7 @@
 # TODO: molalityの入力も受け付ける仕様にする
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict, Tuple
+from typing import Dict, Tuple, OrderedDict
 from copy import deepcopy
 from logging import Logger
 from math import pi, sqrt, log, log10, exp, isclose
@@ -96,19 +96,13 @@ class NaCl(Fluid):
         self.dielec_fluid = calc_dielec_nacl(cnacl, self.dielec_water)
 
         # Calculate sodium ion mobility by MSA model and empirical findings of
-        # Revil et al. (1998)
-        tempe_ref: float = 298.15
-        msa_props_tref = calc_mobility(ion_props, tempe_ref, self.pressure)
-        msa_props_tgiven = calc_mobility(ion_props, self.temperature, self.pressure)
+        # Revil et al. (1998).
+        msa_props_tgiven: OrderedDict = calc_mobility(ion_props, self.temperature, self.pressure)
         for _s, _prop in ion_props.items():
-            if _s not in msa_props_tref:
+            if _s in (Species.H.name, Species.OH.name):
                 continue
-            # Under a wide range of NaCl concentrations, the mobility of ions in the electric
-            # double layer is 1/10, and linear temperature depandence regardless of the species.
-            # TODO: fix this
-            _m = msa_props_tgiven[_s]["mobility"]
-            # _m *= 0.1 * (1.0 + 0.037 * (temperature - tempe_ref))
-            _m = 0.51e-8 * (1.0 + 0.037 * (temperature - tempe_ref))
+            # Based on Revil et al.(1998)
+            _m = 0.51e-8 * (1.0 + 0.037 * (temperature - 298.15))
             _prop[IonProp.MobilityInfDiffuse.name] = msa_props_tgiven[_s]["mobility"]
             _prop[IonProp.MobilityTrunDiffuse.name] = _m
             if _s == Species.H.name:
@@ -147,6 +141,8 @@ class NaCl(Fluid):
 
         # pKw
         self.kw = calc_equibilium_const(DG_H2O, self.temperature)
+
+        # TODO: 温度が200℃未満でsen_and_goode_1992を自動的に実効する仕様に変更する
 
 
     def sen_and_goode_1992(self) -> float:
@@ -365,20 +361,20 @@ def calc_nacl_activities(
 ) -> Dict:
     """Calculate Na+ and Cl- activity by Pizer equation
     Reference:
-    Pitzer K.S, Activity coefficients in electrolyte solutions,
-        https://doi.org/10.1201/9781351069472
-    Leroy P., C. Tournassat, O. Bernard, N. Devau, M. Azaroual,
-        The electrophoretic mobility of montmorillonite. Zeta potential
-        and surface conductivity effects, http://dx.doi.org/10.1016/j.jcis.2015.03.047
-    Harvie C.E., J.H. Weare, The prediction of mineral solubilities in natural
-        waters: the Na K Mg Ca Cl SO4 H2O system from zero to high concentration
-        at 25℃, https://doi.org/10.1016/0016-7037(80)90287-2
-    Simoes M.C., K.J. Hughes, D.B. Ingham, L. Ma, M. Pourkashanian, Temperature
-        Dependence of the Parameters in the Pitzer Equations,
-        https://doi.org/10.1021/acs.jced.7b00022
-    Voigt W. Hexary System of Oceanic Salts - Polythermal Pitzer Datase
-        (numerical supplement), 2020
-    Voigt W. Temperature extension of NaCl Pitzer coefficients and ∆RG°(NaCl), 2020
+        Pitzer K.S, Activity coefficients in electrolyte solutions,
+            https://doi.org/10.1201/9781351069472
+        Leroy P., C. Tournassat, O. Bernard, N. Devau, M. Azaroual,
+            The electrophoretic mobility of montmorillonite. Zeta potential
+            and surface conductivity effects, http://dx.doi.org/10.1016/j.jcis.2015.03.047
+        Harvie C.E., J.H. Weare, The prediction of mineral solubilities in natural
+            waters: the Na K Mg Ca Cl SO4 H2O system from zero to high concentration
+            at 25℃, https://doi.org/10.1016/0016-7037(80)90287-2
+        Simoes M.C., K.J. Hughes, D.B. Ingham, L. Ma, M. Pourkashanian, Temperature
+            Dependence of the Parameters in the Pitzer Equations,
+            https://doi.org/10.1021/acs.jced.7b00022
+        Voigt W. Hexary System of Oceanic Salts - Polythermal Pitzer Datase
+            (numerical supplement), 2020
+        Voigt W. Temperature extension of NaCl Pitzer coefficients and ∆RG°(NaCl), 2020
 
     Args:
         T (float): Absolute temperature (K)

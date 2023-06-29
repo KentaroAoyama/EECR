@@ -119,7 +119,7 @@ def Leroy_Revil_2004_fig4():
         )
         kaolinite.calc_potentials_and_charges_inf()
         # cpnvert V → mV
-        potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
+        potential_zeta_ls.append(kaolinite.potential_zeta_o * 1000.0)
     # plot
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, potential_zeta_ls, label="pH=8")
@@ -142,7 +142,7 @@ def Leroy_Revil_2004_fig5_a():
         nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
         kaolinite = Kaolinite(nacl=nacl)
         kaolinite.calc_potentials_and_charges_inf()
-        potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
+        potential_zeta_ls.append(kaolinite.potential_zeta_o * 1000.0)
     ex_x = [
         3.5,
         3.770353303,
@@ -225,7 +225,7 @@ def Leroy_Revil_2004_fig8():
             nacl=nacl,
         )
         smectite.calc_potentials_and_charges_inf()
-        potential_zeta_ls.append(smectite.potential_zeta * 1000.0)
+        potential_zeta_ls.append(smectite.potential_zeta_o * 1000.0)
     # plot
     fig, ax = plt.subplots()
     ax.plot(pH_ls, potential_zeta_ls)
@@ -261,7 +261,7 @@ def Leroy_Revil_2004_fig9():
             nacl=nacl,
         )
         kaolinite.calc_potentials_and_charges_inf()
-        potential_zeta_ls.append(kaolinite.potential_zeta * 1000.0)
+        potential_zeta_ls.append(kaolinite.potential_zeta_o * 1000.0)
         kaolinite.calc_cond_infdiffuse()
         specific_cond_ls.append(
             kaolinite.cond_infdiffuse * kaolinite.get_double_layer_length()
@@ -336,6 +336,8 @@ def Revil_etal_fig2():
     r_ls = [1.0e-9, 3.0e-9, 5.0e-9, 7.0e-9, 9.0e-9, 11.0e-9, 13.0e-9]
     r_result: Dict = {}
     for _r in r_ls:
+        print("======")
+        print(f"_r: {_r}")
         smectite = Smectite(nacl=nacl_ref, layer_width=_r)
         smectite.calc_potentials_and_charges_truncated()
         base, _ = smectite.calc_cond_interlayer()
@@ -513,7 +515,7 @@ def goncalves_fig6():
             print(f"_r: {_r}")  #!
             smectite = Smectite(nacl=nacl, layer_width=_r)
             smectite.calc_potentials_and_charges_truncated()
-            _dct.setdefault(_r, smectite.potential_zeta)
+            _dct.setdefault(_r, smectite.potential_zeta_i)
 
     # plot
     fig, ax = plt.subplots()
@@ -619,6 +621,27 @@ def fit_KNa():
     k = least_squares(objective, [0.0016982436524617442, 0.51e-8], bounds=([10.0**(-3.0), 0.51e-8,], [10.0**(-2.5), 5.1e-8]), args=(ex_x, ex_y), verbose=2)
     print(k)
 
+from clay import TLMParams
+def fit_TLM_params_smec_inf():
+    # optimize C1, C2 and KNa
+    # experimental data of Watillon and De Backer(1969)
+    ex_x = [0.002483266, 0.005355863, 0.007630982, 0.017786185]
+    ex_y = [-0.1496710526, -0.1475585303, -0.1312719129, -0.1075822876]
+    T = 298.15
+    def objective(params, x, y):
+        tlm_params = TLMParams(T=T, qio=params[0], k4o=params[1], c1o=params[2], c2o=params[3])
+        residual_ls = []
+        for cnacl, y_fit in zip(x, y):
+            nacl = NaCl(temperature=T, pressure=1.0e5, cnacl=cnacl)
+            smectite = Smectite(nacl=nacl, tlm_params=tlm_params)
+            smectite.calc_potentials_and_charges_inf()
+            residual_ls.append(y_fit - smectite.potential_zeta_o)
+        return residual_ls
+    
+    k = least_squares(objective, [-1.0, 1.122, 1.0, 5.5], bounds=([-1.5, float_info.min, 0.2, 0.2], [-float_info.min, float_info.max, float_info.max, float_info.max]), args=(ex_x, ex_y), verbose=2)
+    print(k)
+
+
 def smectite_cond_intra():
     print("smectite_cond_intra")
     cnacl_ls = np.logspace(-3, 0.7, 10, base=10)
@@ -685,7 +708,7 @@ def smectite_cond_inf():
     condnacl_ls = []
     conds_ls = []
     fig, ax = plt.subplots()
-    n = 10
+    n = 1
     for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
         print("========")  #!
         print(f"tempe: {_t}")  #!
@@ -696,7 +719,13 @@ def smectite_cond_inf():
             nacl = NaCl(temperature=_t, cnacl=cnacl, pressure=5.0e6)
             nacl.sen_and_goode_1992()
             condnacl_ls.append(nacl.conductivity)
-            smectite = Smectite(nacl)
+            smectite = Smectite(nacl,
+                                k1=1.0e-10,
+                                k2=1.3e-6,
+                                k3=1.0e-2,
+                                k4=1.122,
+                                c1=2.09,
+                                c2=5.5)
             smectite.calc_potentials_and_charges_inf()
             smectite.calc_cond_infdiffuse()
             conds_ls.append(smectite.cond_infdiffuse)
@@ -727,8 +756,8 @@ def potential_smectite_intra():
             smectite = Smectite(nacl)
             smectite.calc_potentials_and_charges_truncated()
             smectite.calc_cond_interlayer()
-            pstern_ls.append(smectite.potential_stern)
-            pzeta_ls.append(smectite.potential_zeta)
+            pstern_ls.append(smectite.potential_stern_i)
+            pzeta_ls.append(smectite.potential_zeta_i)
         print(cnacl_ls)
         print(pstern_ls)
         ax.plot(
@@ -748,7 +777,7 @@ def potential_smectite_inf():
     condnacl_ls = []
     fig, ax = plt.subplots()
     n = 10
-    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+    for i, _t in enumerate(np.linspace(298.15, 493.15, n).tolist()):
         print("========")  #!
         print(f"tempe: {_t}")  #!
         condnacl_ls = []
@@ -761,8 +790,8 @@ def potential_smectite_inf():
             condnacl_ls.append(nacl.conductivity)
             smectite = Smectite(nacl)
             smectite.calc_potentials_and_charges_inf()
-            pstern_ls.append(smectite.potential_stern)
-            pzeta_ls.append(smectite.potential_zeta)
+            pstern_ls.append(smectite.potential_stern_o)
+            pzeta_ls.append(smectite.potential_zeta_o)
         ax.plot(
             cnacl_ls, pstern_ls, color=cm.jet(float(i) / n), label=_t, linestyle="solid"
         )
@@ -2362,44 +2391,70 @@ def test_nacl_density():
         print(nacl.density)
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, r_ls)
-    plt.show()
+    fig.savefig(path.join(test_dir(), "nacl_density.png"), dpi=200)
 
 
 def test_nacl_activity_and_molality():
     cnacl_ls = np.logspace(-5, 0.7, num=20, base=10).tolist()
-    gamma_ls = []
-    molality_ls = []
-    for cnacl in cnacl_ls:
-        print(cnacl)
-        nacl = NaCl(cnacl=cnacl)
-        gamma_ls.append(nacl.ion_props["Na"]["Activity"] / cnacl)
-        molality_ls.append(nacl.ion_props["Na"]["Molality"])
-
+    temperature_ls = np.linspace(298.15, 473.15, 5).tolist()
     fig, ax = plt.subplots()
-    ax.plot(cnacl_ls, gamma_ls)
-    plt.show()
+    for _t in temperature_ls:
+        print(_t)
+        gamma_ls = []
+        molality_ls = [] #!
+        for cnacl in cnacl_ls:
+            print(cnacl)
+            nacl = NaCl(cnacl=cnacl, temperature=_t)
+            gamma_ls.append(nacl.ion_props["Na"]["Activity"] / cnacl)
+            molality_ls.append(nacl.ion_props["Na"]["Molality"])
+        ax.plot(cnacl_ls, gamma_ls, label=_t-273.15)
+    ax.legend()
+    fig.savefig(path.join(test_dir(), "nacl_gamma.png"), dpi=200)
     plt.clf()
+    plt.close()
 
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, molality_ls)
     ax.plot(cnacl_ls, cnacl_ls, linestyle="dashed")
-    plt.show()
+    fig.savefig(path.join(test_dir(), "nacl_molality.png"), dpi=200)
 
+def test_nacl_dielec():
+    cnacl_ls = np.logspace(-5, 0.7, num=20, base=10.0).tolist()
+    dielec_ls = []
+    for cnacl in cnacl_ls:
+        T = 298.15
+        P = 1.0e5
+        nacl = NaCl(temperature=T, pressure=P, cnacl=cnacl)
+        print("=====")
+        print(T, P, cnacl)
+        dielec_ls.append(nacl.get_dielec_fluid() / const.DIELECTRIC_VACUUM)
+    # calculated value in Leroy rt al.(2015)
+    leloy_cnacl = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0]
+    leloy_dielec = [78.4, 78.4, 78.39, 78.35, 77.86, 73.32]
+    fig, ax = plt.subplots()
+    ax.plot(cnacl_ls, dielec_ls)
+    ax.scatter(leloy_cnacl, leloy_dielec)
+    ax.set_xscale("log")
+    fig.savefig(path.join(test_dir(), "nacl_dielec.png"), dpi=200)
 
 def test_nacl_viscosity():
     cnacl_ls = np.logspace(-5, 0.7, num=20, base=10.0).tolist()
     vis_ls = []
     for cnacl in cnacl_ls:
-        T = 398.15
-        P = 5.0e6
+        T = 298.15
+        P = 1.0e5
         nacl = NaCl(temperature=T, pressure=P, cnacl=cnacl)
         print("=====")
         print(T, P, cnacl)
         vis_ls.append(nacl.viscosity * 1000.0)
+    # calculated value in Leroy rt al.(2015)
+    leloy_cnacl = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0]
+    leloy_vis = [0.890, 0.890, 0.891, 0.892, 0.899, 0.981]
     fig, ax = plt.subplots()
     ax.plot(cnacl_ls, vis_ls)
+    ax.scatter(leloy_cnacl, leloy_vis)
     ax.set_xscale("log")
-    plt.show()
+    fig.savefig(path.join(test_dir(), "nacl_viscosity.png"), dpi=200)
 
 
 if __name__ == "__main__":
@@ -2416,14 +2471,15 @@ if __name__ == "__main__":
     # goncalves_fig6()
     # test_sen_and_goode_1992()
     # test_mobility()
-    test_quartz()
-    qurtz_cond()
+    # test_quartz()
+    # qurtz_cond()
     # fit_KNa()
     # smectite_cond_intra()
     # potential_smectite_intra()
     # test_dielec()
     # smec_cond_intra_r_dependence()
     # smectite_cond_inf()
+    # fit_TLM_params_smec_inf()
     # potential_smectite_inf()
     # Revil_etal_fig2()
     # Revil_etal_fig2_by_bulk()
@@ -2442,7 +2498,9 @@ if __name__ == "__main__":
     # compare_levi_et_al_2018()
     # test_cluster()
 
+
     # test_nacl_density()
-    # test_nacl_activity_and_molality()
+    test_nacl_activity_and_molality()
+    # test_nacl_dielec()
     # test_nacl_viscosity()
     pass

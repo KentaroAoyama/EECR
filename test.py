@@ -19,6 +19,7 @@ from concurrent import futures
 from collections import OrderedDict
 from statistics import mean, stdev
 from math import log10
+from sys import float_info
 
 from matplotlib import pyplot as plt
 import matplotlib.ticker as ticker
@@ -26,6 +27,7 @@ import matplotlib.cm as cm
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
+from scipy.optimize import least_squares
 
 from clay import Smectite, Kaolinite
 from mineral import Quartz
@@ -582,8 +584,6 @@ def qurtz_cond():
         path.join(test_dir(), "RevilGlover1998.png"), dpi=200, bbox_inches="tight"
     )
 
-from scipy.optimize import least_squares
-from sys import float_info
 def fit_KNa():
     # experimental data of Watillon and De Backer(1969)
     ex_x = [
@@ -1320,6 +1320,22 @@ def test_quartz():
     ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     fig.savefig(path.join(test_dir(), "quartz_stern.png"), dpi=200)
 
+def calc_quartz_mobility():
+    cnacl_ls = [0.55, 0.3, 0.0000001]
+    mobility_zhang_ls = [5.474820923831422e-09, 6.7903929391458455e-09, 5.2868390444305864e-08]
+    # normalized mobility
+    mn_ls = []
+    for cnacl, mtmp in zip(cnacl_ls, mobility_zhang_ls):
+        ion_props_tmp = deepcopy(const.ion_props_default)
+        ion_props_tmp["Na"]["Molarity"] = cnacl
+        ion_props_tmp["Cl"]["Molarity"] = cnacl
+        mn_ls.append(mtmp / calc_mobility(ion_props_tmp, 298.15)["Na"]["mobility"])
+    def __fit_exp(params, x, y):
+        return np.array(y) - (params[0] + np.exp(-params[1] * x))
+    result = least_squares(__fit_exp, [1.0, 0.3], bounds=([0.0, -np.inf], [1.0, np.inf]),  args=(np.array(cnacl_ls), np.array(mn_ls)))
+    print(mn_ls)
+    print(result)
+
 
 def test_mobility():
     # TODO:
@@ -2048,6 +2064,15 @@ def test_dielec():
     ax.legend()
     fig.savefig(path.join(test_dir(), "dielec.png"), dpi=200)
 
+def test_dielec_nacl():
+    fig, ax = plt.subplots()
+    cnacl_ls = np.logspace(-5, 0.7, 20, base=10.0).tolist()
+    for i, t in enumerate(np.linspace(298.15, 498.15, 5).tolist()):
+        dielec_ls = []
+        for cnacl in cnacl_ls:
+            dielec_ls.append(NaCl(cnacl=cnacl, temperature=t).get_dielec_fluid())
+        ax.plot(cnacl_ls, dielec_ls, label=t, color=cm.jet(float(i) / 5))
+    plt.show()
 
 def calc_tot_density():
     m_al = 26.981539
@@ -2472,6 +2497,7 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992()
     # test_mobility()
     # test_quartz()
+    # calc_quartz_mobility()
     # qurtz_cond()
     # fit_KNa()
     # smectite_cond_intra()
@@ -2500,7 +2526,8 @@ if __name__ == "__main__":
 
 
     # test_nacl_density()
-    test_nacl_activity_and_molality()
+    # test_nacl_activity_and_molality()
+    test_dielec_nacl()
     # test_nacl_dielec()
     # test_nacl_viscosity()
     pass

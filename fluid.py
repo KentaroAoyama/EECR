@@ -102,14 +102,14 @@ class NaCl(Fluid):
             if _s in (Species.H.name, Species.OH.name):
                 continue
             # Based on Revil et al.(1998)
-            _m = 0.51e-8 * (1.0 + 0.037 * (temperature - 298.15))
-            _prop[IonProp.MobilityInfDiffuse.name] = msa_props_tgiven[_s]["mobility"]
-            _prop[IonProp.MobilityTrunDiffuse.name] = _m
-            if _s == Species.H.name:
-                _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
-                    IonProp.MobilityTrunDiffuse.name
-                ]
-            _prop[IonProp.MobilityStern.name] = _m
+            # _m = 0.51e-8 * (1.0 + 0.037 * (temperature - 298.15))
+            _prop[IonProp.Mobility.name] = msa_props_tgiven[_s]["mobility"]
+            # _prop[IonProp.MobilityTrunDiffuse.name] = _m
+            # if _s == Species.H.name:
+            #     _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
+            #         IonProp.MobilityTrunDiffuse.name
+            #     ]
+            # _prop[IonProp.MobilityStern.name] = _m
 
         # calculate density
         def __callback(__x):
@@ -609,13 +609,16 @@ def __calc_b(ion_strength: float, beta0: float, beta1: float) -> float:
     return beta0 + 2.0 * beta1 / ki1**2 * (1.0 - (1.0 + ki1) * exp(-ki1))
 
 
-def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
+def calc_dielec_nacl(Cs: float, dielec_water: float, method="simonin1996") -> float:
     """Calculate dielectric permittivity of H2O-NaCl liquid.
 
     Reference:
         Simonin J.P, Real Ionic Solutions in the Mean Spherical Approximation.
             2. Pure Strong Electrolytes up to Very High Concentrations,
-            and Mixtures, in the Primitive Model, https://doi.org/10.1021/jp970102k
+            and Mixtures, in the Primitive Model, 1996,  https://doi.org/10.1021/jp970102k
+        The effect of concentration- and temperature-dependent dielectric constant on the
+            activity coefficient of NaCl electrolyte solutions, 2016,
+            https://doi.org/10.1063/1.4883742
 
     Args:
         Cs (float): NaCl concenttation (mol/l)
@@ -624,10 +627,18 @@ def calc_dielec_nacl(Cs: float, dielec_water: float) -> float:
     Returns:
         float: Dielectric permittivity of H2O-NaCl liquid (F/m)
     """
-    alpha = 6.930e-2
-    r_dielec_w = dielec_water / DIELECTRIC_VACUUM
-    _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
-    return DIELECTRIC_VACUUM / _invert
+    method = method.lower()
+    assert method in ("simonin1996", "gavish2016"), method
+    dielec: float = None
+    if method == "simonin1996":
+        alpha = 6.930e-2
+        r_dielec_w = dielec_water / DIELECTRIC_VACUUM
+        _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
+        dielec = DIELECTRIC_VACUUM / _invert
+    elif method == "gavish2016":
+        # TODO:
+        pass
+    return dielec
 
 
 def calc_viscosity(T: float, P: float, Xnacl: float) -> float:

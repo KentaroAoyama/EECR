@@ -81,9 +81,7 @@ class IonProp(IntEnum):
     Molality = auto() # mol/kg fraction of solvent
     MolFraction = auto()
     Activity = auto()
-    MobilityInfDiffuse = auto()
-    MobilityTrunDiffuse = auto()
-    MobilityStern = auto()
+    Mobility = auto()
     Valence = auto()
 
 
@@ -98,9 +96,7 @@ ion_props_default = {
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-3,
-        IonProp.MobilityInfDiffuse.name: 5.19e-8,
-        IonProp.MobilityTrunDiffuse.name: 0.52e-8,
-        IonProp.MobilityStern.name: 2.59e-8,
+        IonProp.Mobility.name: 5.19e-8,
         IonProp.Valence.name: 1,
     },
     Species.Cl.name: {
@@ -108,9 +104,7 @@ ion_props_default = {
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-3,
-        IonProp.MobilityInfDiffuse.name: 7.91e-8,
-        IonProp.MobilityTrunDiffuse.name: 0.791e-8,
-        IonProp.MobilityStern.name: 3.95e-8,
+        IonProp.Mobility.name: 7.91e-8,
         IonProp.Valence.name: -1,
     },
     Species.H.name: {
@@ -118,8 +112,7 @@ ion_props_default = {
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-7,
-        IonProp.MobilityInfDiffuse.name: 36.3e-8,
-        IonProp.MobilityTrunDiffuse.name: 1.6e-8,
+        IonProp.Mobility.name: 36.3e-8,
         IonProp.Valence.name: 1,
     },
     Species.OH.name: {
@@ -127,8 +120,7 @@ ion_props_default = {
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
         IonProp.Activity.name: 1.0e-7,
-        IonProp.MobilityInfDiffuse.name: 20.5e-8,
-        IonProp.MobilityTrunDiffuse.name: 2.05e-8,
+        IonProp.Mobility.name: 20.5e-8,
         IonProp.Valence.name: -1,
     },
 }

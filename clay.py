@@ -97,7 +97,6 @@ class TLMParams:
         self.k2i = self.calc_K_T(k2i, T)
         self.k3i = self.calc_K_T(k3i, T)
         self.k4i = self.calc_K_T(k4i, T)
-        # TODO:
         self.c1i = c1i
         self.c2i = c2i
 
@@ -110,7 +109,6 @@ class TLMParams:
         self.k2o = self.calc_K_T(k2o, T)
         self.k3o = self.calc_K_T(k3o, T)
         self.k4o = self.calc_K_T(k4o, T)
-        # TODO:
         self.c1o = c1o
         self.c2o = c2o
 
@@ -153,6 +151,15 @@ class Phyllosilicate:
         Leroy P., T. Christophe, B. Olivier, D. Nicolas, A. Mohamed, 2015,
             doi: 10.1016/j.jcis.2015.03.047
         Shirozu, 1998, Introduction to Clay Mineralogy
+        Bourg I.C., Sposito G., Molecular dynamics simulations of the electrical
+                double layer on smectite surfaces contacting concentrated mixed
+                electrolyte (NaCl-CaCl2) solutions, 2011, doi:10.1016/j.jcis.2011.04.063
+        Zheng X., Underwood T.R., Bourg I.C., Molecular dynamics simulation of thermal,
+            hydraulic, and mechanical properties of bentonite clay at 298 to 373 K,
+            2023, https://doi.org/10.1016/j.clay.2023.106964
+        Zhang L., Lu X., Liu X., Zhou J., Zhou H., Hydration and Mobility of Interlayer
+            Ions of (Nax,Cay)-Montmorillonite: A Molecular Dynamics Study, 2014,
+            https://doi.org/10.1021/jp508427c
     """
 
     # pylint: disable=dangerous-default-value
@@ -236,6 +243,7 @@ class Phyllosilicate:
         self.k4: float = None
         self.c1: float = None
         self.c2: float = None
+        self.mobility_stern: float = self.__calc_mobility_stern()
 
         # electrical properties at outer surface
         self.potential_0_o: float = potential_0_o
@@ -310,6 +318,51 @@ class Phyllosilicate:
         )
         bottom = self.dielec_fluid * _kb * self.temperature
         self.kappa = np.sqrt(top / bottom)
+
+    def __calc_mobility_stern(self) -> float:
+        """Calculate mobility of Na+ at stern plane"""
+        # Mobility of stern layer is half of bulk water
+        d_cf = (
+            self.ion_props[Species.Na.name][IonProp.Mobility.name]
+            * 0.5
+            / const.ELEMENTARY_CHARGE
+            * const.BOLTZMANN_CONST
+            * self.temperature
+        )
+        return (
+            d_cf
+            * np.exp(-15.1e3 / (const.GAS_CONST * self.temperature))
+            * const.ELEMENTARY_CHARGE
+            / (const.BOLTZMANN_CONST * self.temperature)
+        )
+
+    def __calc_mobility_na_diffuse(self, _x: float) -> float:
+        """Calculate Na+ mobility at diffuse layer based on Bourg &
+        Sposito (2011).
+
+        Args:
+            _x (float): Distance from smectite surface (m)
+        """
+
+        return self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
+            (1.0 - np.exp(-0.14 * _x * 1.0e-10))
+            * const.ELEMENTARY_CHARGE
+            / (const.BOLTZMANN_CONST * self.temperature)
+        )
+
+    def __calc_mobility_cl_diffuse(self, _x: float) -> float:
+        """Calculate Na+ mobility at diffuse layer based on Bourg &
+        Sposito (2011).
+
+        Args:
+            _x (float): Distance from smectite surface (m)
+        """
+
+        return self.ion_props[Species.Cl.name][IonProp.Mobility.name] * (
+            (1.0 - np.exp(-0.14 * _x * 1.0e-10))
+            * const.ELEMENTARY_CHARGE
+            / (const.BOLTZMANN_CONST * self.temperature)
+        )
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
         """Calculate eq.(16) of Gonçalvès et al. (2007).
@@ -866,52 +919,37 @@ class Phyllosilicate:
             flag = False
         return flag
 
-    def calc_xd(self) -> Tuple[float]:
+    def calc_xd(self) -> float:
         """Calculate the distance from the surface to the zeta plane (shear plane)
-        Assume that Qs is not changed between infinite diffuse layer case and truncated case
-
+        Based on MD simulation results of Zhang et al.(2014)
+        
         Returns:
-            Tuple[float]: xd, integral error
+            float: xd (m)
         """
-        # TODO: fix (use Zhang et al. MD result)
-        assert self._check_if_calculated_electrical_params_inf(), (
-            "Before calculating xd, we should obtain electrical"
-            "arameters for infinite diffuse layer case"
-        )
-        # set params
-        self.gamma_1 = self.tlm_params.gamma_1o
-        self.gamma_2 = self.tlm_params.gamma_2o
-        self.gamma_3 = self.tlm_params.gamma_3o
-        self.qi = self.tlm_params.qio
-        self.k1 = self.tlm_params.k1o
-        self.k2 = self.tlm_params.k2o
-        self.k3 = self.tlm_params.k3o
-        self.k4 = self.tlm_params.k4o
-        self.c1 = self.tlm_params.c1o
-        self.c2 = self.tlm_params.c2o
+        xd: float = None
+        r = self.layer_width * 1.0e10
+        if r < 9.4:
+            xd = 2.0845481049562675
+        elif r < 12.3:
+            l = 12.3 - 9.4
+            r -= 9.4
+            xd = 2.4187499999999993 * abs(r / l) + 2.0845481049562675 * abs(l - r) / l
+        elif r < 15.2:
+            l = 15.2 - 12.3
+            r -= 12.3
+            xd = 4.206896551724138 * abs(r / l) + 2.4187499999999993 * abs(l - r) / l
+        elif r < 18.4:
+            l = 18.4 - 15.2
+            r -= 15.2
+            xd = 4.182509505703424 * abs(r / l) + 4.206896551724138 * abs(l - r) / l
+        elif r < 21.6:
+            l = 21.6 - 18.4
+            r -= 18.4
+            xd = 4.220116618075801 * abs(r / l) + 4.182509505703424 * abs(l - r) / l
+        else:
+            xd = 4.220116618075801
+        return xd * 1.0e-10
 
-        if not self.__check_if_calculated_qs_coeff():
-            self.__calc_qs_coeff_inf()
-        _qs = self.charge_diffuse_o
-        xd_ls: List = np.logspace(
-            -15, np.log10(self.layer_width * 0.5), 1000, base=10.0
-        ).tolist()
-        qs_ls: List = []
-        err_ls: List = []
-        r_diffuse: float = 1.0 / self.kappa
-        for _xd_tmp in xd_ls:
-            _xd_dl = _xd_tmp + r_diffuse
-            qs_tmp, _err = quad(self.__calc_qs_inf, _xd_tmp, _xd_dl, limit=1000)
-            qs_ls.append(qs_tmp)
-            err_ls.append(_err)
-        qs_diff = np.square(np.array(qs_ls) - _qs)
-        _idx = np.argmin(qs_diff)
-        _xd = xd_ls[_idx]
-        if self.layer_width * 0.5 < _xd:
-            _xd = self.layer_width * 0.5
-        self.xd = _xd
-        _err = err_ls[_idx]
-        return self.xd, _err
 
     def calc_potentials_and_charges_inf(
         self,

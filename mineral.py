@@ -126,6 +126,11 @@ class Quartz:
                     / const.ELEMENTARY_CHARGE
                     * log(_x)
                 )
+        # stern plane mobility of Na+ (based on Zhang 2011)
+        self.mobility_stern = self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
+            0.06253796
+            + exp(-6.86810976 * self.ion_props[Species.Na.name][IonProp.Molarity.name])
+        )
 
         # κ (inverted eq.(37) of Revil & Glover (1997), modified)
         _if = 0.0  # ionic strength
@@ -254,7 +259,7 @@ class Quartz:
                 continue
             v = _prop[IonProp.Valence.name]
             b = _prop[
-                IonProp.MobilityInfDiffuse.name
+                IonProp.Mobility.name
             ] + 2.0 * self.dielec_fluid * const.BOLTZMANN_CONST * self.temperature / (
                 self.viscosity * const.ELEMENTARY_CHARGE * v
             )
@@ -279,8 +284,12 @@ class Quartz:
             float: Specific conductivity of stern layer
         """
         e = const.ELEMENTARY_CHARGE
-        bs = self.ion_props[Species.Na.name][IonProp.MobilityStern.name]
-        return e * bs * self.__calc_ohm(self.potential_stern) * self.gamma_o
+        return (
+            e
+            * self.mobility_stern
+            * self.__calc_ohm(self.potential_stern)
+            * self.gamma_o
+        )
 
     def __calc_ohm(self, phid: float) -> float:
         """Calculate eq.(84) in Revil & Glover (1997).

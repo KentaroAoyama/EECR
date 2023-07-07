@@ -1241,7 +1241,7 @@ def test_single_condition():
 
 
 def test_sen_and_goode_1992():
-    cnacl_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
+    cnacl_ls = [0.09, 0.26, 0.858, 1.76, 4.74] # TODO: this should be molality, not morarity
     tempe_ls = [273.15 + i for i in range(20, 200, 1)]
     experimental = {
         0.09: [0.92, 1.46, 2.11, 2.79, 3.38, 3.87, 4.33],
@@ -1331,8 +1331,9 @@ def calc_quartz_mobility():
         ion_props_tmp["Cl"]["Molarity"] = cnacl
         mn_ls.append(mtmp / calc_mobility(ion_props_tmp, 298.15)["Na"]["mobility"])
     def __fit_exp(params, x, y):
-        return np.array(y) - (params[0] + np.exp(-params[1] * x))
-    result = least_squares(__fit_exp, [1.0, 0.3], bounds=([0.0, -np.inf], [1.0, np.inf]),  args=(np.array(cnacl_ls), np.array(mn_ls)))
+        return np.array(y) - (params[0] + np.exp(-params[1] * x + params[2]))
+        # return np.sqrt(np.square(np.array(y) - (params[0] + np.exp(-params[1] * x))))
+    result = least_squares(__fit_exp, [0.0, 0.0, 0.0], args=(np.array(cnacl_ls), np.array(mn_ls)), method="lm")
     print(mn_ls)
     print(result)
 
@@ -1370,7 +1371,7 @@ def test_mobility():
         ion_props["Cl"]["Molarity"] = _cna
         _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
         nacl = NaCl(temperature=i + 273.15, cnacl=_cna, pressure=5.0e6)
-        mu_na_revil_ls.append(nacl.ion_props["Na"]["MobilityTrunDiffuse"])
+        mu_na_revil_ls.append(nacl.ion_props["Na"]["Mobility"])
         m_na = _msa_props["Na"]["mobility"] * 0.1
         mu_na_msa_ls.append(m_na)
     _, ax = plt.subplots()
@@ -2481,6 +2482,45 @@ def test_nacl_viscosity():
     ax.set_xscale("log")
     fig.savefig(path.join(test_dir(), "nacl_viscosity.png"), dpi=200)
 
+def test_quartz_potential():
+    print("test_quartz_potential")
+    # compared to Sonnefeld et al. (2001) https://doi.org/10.1016/S0927-7757(01)00845-7
+    ph_ls = [4.0, 4.25, 4.5, 4.75, 5.0, 5.25, 5.5, 5.75, 6.0, 6.25, 6.5, 6.75, 7.0, 7.25, 7.5, 7.75, 8.0]
+    cna_dct = {0.1: [-0.005740164074378213,
+                     -0.007260657110567266,
+                     -0.009191173481417642,
+                     -0.011668550242696737,
+                     -0.014145764393095537,
+                     -0.017579699657704093,
+                     -0.02101330970055206,
+                     -0.025404291301130956,
+                     -0.0304783199043848,
+                     -0.03555202328587805,
+                     -0.04185612189311586,
+                     -0.0488437553356695,
+                     -0.05719797061621393,
+                     -0.06664541884497491,
+                     -0.07787012268990917,
+                     -0.08950452464774417,
+                     -0.10332571772377289],
+                0.01: [-0.003649152474224919, -0.004535974667561404, -0.005605830383069521, -0.007224895581202123, -0.008798025410113725, -0.01087497393297679, -0.013226554426179489, -0.015623689082219616, -0.018341118787546393, -0.02183705361521907, -0.025286889699506356, -0.030338908984939274, -0.035436645807374004, -0.041999304303839344, -0.04865328895819871, -0.05704655496665434, -0.06685891619602917],
+                0.001: [-0.002834553, -0.003236224, -0.004846015, -0.005741894, -0.007241963, -0.008522261, -0.010022264, -0.011522333, -0.01313219, -0.015236645, -0.017725389, -0.020598683, -0.024185889, -0.028377678, -0.033447832, -0.039067381, -0.046060089]
+                }
+    result_dct = {}
+    fig, ax = plt.subplots()
+    for cnacl in [0.1, 0.01, 0.001]:
+        print(f"cnacl: {cnacl}")
+        _ls: List = result_dct.setdefault(cnacl, [])
+        for ph in ph_ls:
+            quartz = Quartz(NaCl(cnacl=cnacl, pressure=1.0e5, temperature=298.15, ph=ph), method="eq44")
+            _ls.append(quartz.get_surface_charge())
+        ax.plot(ph_ls, _ls, label=cnacl)
+    # for cnacl, _ls in cna_dct.items():
+    #     ax.scatter(ph_ls, _ls, label=cnacl)
+    ax.legend()
+    plt.show()
+    
+
 
 if __name__ == "__main__":
     # get_kaolinite_init_params()
@@ -2491,10 +2531,10 @@ if __name__ == "__main__":
     # Revil_etal_1998_fig3()
     # Leroy_Revil_2004_fig4()
     # Leroy_Revil_2004_fig5_a()
-    # Leroy_Revil_2004_fig8()
+    # Leroy_Revil_2004_fig8() DONE
     # Leroy_Revil_2004_fig9()
-    # goncalves_fig6()
-    # test_sen_and_goode_1992()
+    # goncalves_fig6() DONE
+    # test_sen_and_goode_1992() DONE
     # test_mobility()
     # test_quartz()
     # calc_quartz_mobility()
@@ -2509,7 +2549,6 @@ if __name__ == "__main__":
     # potential_smectite_inf()
     # Revil_etal_fig2()
     # Revil_etal_fig2_by_bulk()
-    # Grieser_and_Healy()
     # compare_WS_shaly_1()
     # analysis_WS1_result()
     # test_poros_distribution()
@@ -2527,7 +2566,8 @@ if __name__ == "__main__":
 
     # test_nacl_density()
     # test_nacl_activity_and_molality()
-    test_dielec_nacl()
+    # test_dielec_nacl()
     # test_nacl_dielec()
     # test_nacl_viscosity()
+    test_quartz_potential()
     pass

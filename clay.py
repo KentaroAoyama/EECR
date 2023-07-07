@@ -152,8 +152,8 @@ class Phyllosilicate:
             doi: 10.1016/j.jcis.2015.03.047
         Shirozu, 1998, Introduction to Clay Mineralogy
         Bourg I.C., Sposito G., Molecular dynamics simulations of the electrical
-                double layer on smectite surfaces contacting concentrated mixed
-                electrolyte (NaCl-CaCl2) solutions, 2011, doi:10.1016/j.jcis.2011.04.063
+            double layer on smectite surfaces contacting concentrated mixed
+            electrolyte (NaCl-CaCl2) solutions, 2011, doi:10.1016/j.jcis.2011.04.063
         Zheng X., Underwood T.R., Bourg I.C., Molecular dynamics simulation of thermal,
             hydraulic, and mechanical properties of bentonite clay at 298 to 373 K,
             2023, https://doi.org/10.1016/j.clay.2023.106964
@@ -324,44 +324,19 @@ class Phyllosilicate:
         # Mobility of stern layer is half of bulk water
         d_cf = (
             self.ion_props[Species.Na.name][IonProp.Mobility.name]
-            * 0.5
-            / const.ELEMENTARY_CHARGE
-            * const.BOLTZMANN_CONST
-            * self.temperature
-        )
-        return (
-            d_cf
-            * np.exp(-15.1e3 / (const.GAS_CONST * self.temperature))
-            * const.ELEMENTARY_CHARGE
-            / (const.BOLTZMANN_CONST * self.temperature)
-        )
+            * 0.5)
+        return d_cf
 
-    def __calc_mobility_na_diffuse(self, _x: float) -> float:
+    def __calc_mobility_diffuse(self, _x: float, _s: str) -> float:
         """Calculate Na+ mobility at diffuse layer based on Bourg &
         Sposito (2011).
 
         Args:
             _x (float): Distance from smectite surface (m)
+            _s (str): Ion species
         """
-
-        return self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
+        return self.ion_props[_s][IonProp.Mobility.name] * (
             (1.0 - np.exp(-0.14 * _x * 1.0e-10))
-            * const.ELEMENTARY_CHARGE
-            / (const.BOLTZMANN_CONST * self.temperature)
-        )
-
-    def __calc_mobility_cl_diffuse(self, _x: float) -> float:
-        """Calculate Na+ mobility at diffuse layer based on Bourg &
-        Sposito (2011).
-
-        Args:
-            _x (float): Distance from smectite surface (m)
-        """
-
-        return self.ion_props[Species.Cl.name][IonProp.Mobility.name] * (
-            (1.0 - np.exp(-0.14 * _x * 1.0e-10))
-            * const.ELEMENTARY_CHARGE
-            / (const.BOLTZMANN_CONST * self.temperature)
         )
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
@@ -922,7 +897,7 @@ class Phyllosilicate:
     def calc_xd(self) -> float:
         """Calculate the distance from the surface to the zeta plane (shear plane)
         Based on MD simulation results of Zhang et al.(2014)
-        
+
         Returns:
             float: xd (m)
         """
@@ -948,8 +923,8 @@ class Phyllosilicate:
             xd = 4.220116618075801 * abs(r / l) + 4.182509505703424 * abs(l - r) / l
         else:
             xd = 4.220116618075801
-        return xd * 1.0e-10
-
+        self.xd = xd * 1.0e-10
+        return self.xd
 
     def calc_potentials_and_charges_inf(
         self,
@@ -1160,7 +1135,6 @@ class Phyllosilicate:
                 np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
             )
             x_init = cna_dct[cna_ls[_idx]]
-
         # set params
         self.gamma_1 = self.tlm_params.gamma_1i
         self.gamma_2 = self.tlm_params.gamma_2i
@@ -1589,7 +1563,7 @@ class Phyllosilicate:
         _props: Dict = self.ion_props[s]
         v = _props[IonProp.Valence.name]
         # mobility at position x
-        bx = _props[IonProp.MobilityInfDiffuse.name] + (v / abs(v)) * coeff * (
+        bx = self.__calc_mobility_diffuse(x, s) + (v / abs(v)) * coeff * (
             potential - self.potential_zeta_o
         )
         n = (
@@ -1606,7 +1580,7 @@ class Phyllosilicate:
         )
         return bx * n
 
-    def __calc_n_diffuse_truncated(self, x: float) -> float:
+    def __calc_cond_diffuse_truncated(self, _x: float) -> float:
         """Calculate Na+ number density in diffuse layer
 
         Args:
@@ -1617,23 +1591,28 @@ class Phyllosilicate:
         """
         # calc number density
         potential: float = self.potential_zeta_i * np.exp(
-            (-1.0) * self.kappa_truncated * x
+            (-1.0) * self.kappa_truncated * _x
         )
-        na_props: Dict = self.ion_props[Species.Na.name]
-        v = na_props[IonProp.Valence.name]
-        n = (
-            np.exp(
-                -v
-                * const.ELEMENTARY_CHARGE
-                * potential
-                / (const.BOLTZMANN_CONST * self.temperature)
+        _cond = 0.0
+        for _s, _prop in self.ion_props.items():
+            if _s in (Species.H.name, Species.OH.name):
+                continue
+            v = _prop[IonProp.Valence.name]
+            n = (
+                np.exp(
+                    -v
+                    * const.ELEMENTARY_CHARGE
+                    * potential
+                    / (const.BOLTZMANN_CONST * self.temperature)
+                )
+                * 1000.0
+                * const.AVOGADRO_CONST
+                * _prop[IonProp.Molarity.name]
+                * abs(v)
             )
-            * 1000.0
-            * const.AVOGADRO_CONST
-            * na_props[IonProp.Molarity.name]
-            * abs(v)
-        )
-        return n
+            beta = self.__calc_mobility_diffuse(_x, _s)
+            _cond += n * beta
+        return _cond
 
     def __calc_n_stern(self, orientation: str) -> float:
         """Calculate Na+ number density in stern layer
@@ -1688,14 +1667,12 @@ class Phyllosilicate:
         gamma_stern = self.__calc_n_stern("inner")
         _xdl = self.layer_width * 0.5
         # Na+ number (n/m^2) in diffuse layer
-        gamma_diffuse = 0.0
+        cond_diffuse = 0.0
         if not math.isclose(self.xd, _xdl):
-            gamma_diffuse, _ = quad(self.__calc_n_diffuse_truncated, self.xd, _xdl)
+            cond_diffuse, _ = quad(self.__calc_cond_diffuse_truncated, self.xd, _xdl)
 
         # total number density
-        na_prop: Dict = self.ion_props[Species.Na.name]
-        cond_stern = gamma_stern * na_prop[IonProp.MobilityStern.name]
-        cond_diffuse = gamma_diffuse * na_prop[IonProp.MobilityTrunDiffuse.name]
+        cond_stern = gamma_stern * self.mobility_stern
         cond_intra: float = (
             const.ELEMENTARY_CHARGE * (cond_stern + cond_diffuse)
         ) / _xdl
@@ -1739,7 +1716,7 @@ class Phyllosilicate:
         na_prop: Dict = self.ion_props[Species.Na.name]
         cond_diffuse: float = (
             const.ELEMENTARY_CHARGE
-            * (gamma_stern * na_prop[IonProp.MobilityStern.name] + cond_na_diffuse)
+            * (gamma_stern * self.mobility_stern + cond_na_diffuse)
         ) / xdl
 
         # log
@@ -2008,6 +1985,7 @@ class Kaolinite(Phyllosilicate):
         """
 
         if tlm_params is None:
+            # TODO: set valid params
             # Set parameters are based on Leroy & Revil (2004)
             tlm_params = TLMParams(
                 T=nacl.get_temperature(),

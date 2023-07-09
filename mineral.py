@@ -41,7 +41,7 @@ class Quartz:
         k_plus: float = None,
         k_minus: float = 2.5118864315095823e-07,
         k_na: float = 15.848931924611133,
-        c1: float = 3.3,
+        c1: float = 0.64,
         pzc: float = 3.0,
         potential_0: float = None,
         potential_stern: float = None,
@@ -49,7 +49,7 @@ class Quartz:
         charge_0: float = None,
         charge_stern: float = None,
         charge_diffuse: float = None,
-        method: str = "eq106",
+        method: str = "leroy2013",
         logger: Logger = None,
     ):
         """Initialize Quartz class. pH is assumed to be near the neutral.
@@ -58,7 +58,7 @@ class Quartz:
             nacl (NaCl): Instance of NaCl
             gamma_o (float): Surface site density (Unit: sites/nm^2).
             k_plus (float): Equilibrium constants of >SiOH+ + H+ ⇔ >SiOH2 at 25℃.
-                Default value is based on Revil & Glover (1997).
+                Default value is based on Leroy et al.(2013).
             k_minus (float): Equilibrium constants of >SiOH ⇔ >SiO- + H+ at 25℃.
             k_na (float): Equilibrium constants of >SiOH + Na+ ⇔ SiONa + H+ at 25℃.
                 Default value is based on Scales (1989).
@@ -72,7 +72,7 @@ class Quartz:
             charge_stern (float): Charge density at stern layer (C/m2)
             charge_diffuse (float): Charge density at diffuse layer (C/m2)
             method (str): Methods to calculate the potential of the stern surface
-                (solve eq.44 or eq.106)
+                (solve eq.44 or eq.106 or Leroy et al.(2013)'s model)
             logger (Logger): Logger
         """
         assert pzc is not None or k_plus is not None, "Either pzc or k_plus must be set"
@@ -100,7 +100,7 @@ class Quartz:
         if self.k_plus is None:
             # implicitly assume that activity coefficient of proton is 1
             _ch_pzc = 10.0 ** (-1.0 * pzc)
-            self.k_plus = self.k_minus / (_ch_pzc**2)
+            self.k_plus = self.k_minus / (_ch_pzc ** 2)
 
         # consider temperature dependence of equilibrium constant
         dg_plus = calc_standard_gibbs_energy(self.k_plus, 298.15)
@@ -117,7 +117,7 @@ class Quartz:
                 _if += _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Molarity.name]
         _if *= 0.5
         self.ion_strength = _if
-        _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
+        _top = 2000.0 * const.ELEMENTARY_CHARGE ** 2 * _if * const.AVOGADRO_CONST
         _bottom = self.dielec_fluid * const.BOLTZMANN_CONST * self.temperature
         self.kappa = sqrt(_top / _bottom)
         self.length_edl = 1.0 / self.kappa
@@ -140,6 +140,11 @@ class Quartz:
                 self.potential_stern = bisect(self.__calc_eq_44, -0.5, 1.0)
                 self.potential_zeta = self.potential_stern
                 self.__calc_cond_surface_1997()
+                self.charge_0 = self.__calc_qs0(
+                    self.ion_props[Species.H.name][IonProp.Activity.name],
+                    self.ion_props[Species.Na.name][IonProp.Activity.name],
+                    phidt=self.__calc_phid_tilda(self.potential_stern),
+                )
             if method == "eq106":
                 # set δ
                 self.delta = self.k_plus / self.k_minus
@@ -168,6 +173,11 @@ class Quartz:
                 )
                 self.potential_zeta = self.potential_stern
                 self.__calc_cond_surface_1997()
+                self.charge_0 = self.__calc_qs0(
+                    self.ion_props[Species.H.name][IonProp.Activity.name],
+                    self.ion_props[Species.Na.name][IonProp.Activity.name],
+                    phidt=self.__calc_phid_tilda(self.potential_stern),
+                )
             if method == "leroy2013":
                 self.k_minus = 1.0 / self.k_minus
                 self.qs_coeff = sqrt(
@@ -278,10 +288,10 @@ class Quartz:
         _t3 = _x - 1.0 / _x
         _t4 = (
             1.0
-            + self.delta * 10.0 ** (-2.0 * self.ph) * _x**4
-            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x**2
+            + self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4
+            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x ** 2
         )
-        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x**4 - 1.0
+        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4 - 1.0
         return _t1 * _t2 * _t3 * _t4 + _t5
 
     def __calc_cond_surface_1997(self) -> None:
@@ -300,7 +310,7 @@ class Quartz:
         beta: float = 0.75,
         lamda: float = 2.0,
     ) -> float:
-        xn = np.array([-1.0, -0.5, -1.0, 1.0, 1.0], dtype=np.float64).reshape(-1, 1)
+        xn = np.array([-1.0, 0.0, -1.0, 1.0, 1.0], dtype=np.float64).reshape(-1, 1)
         fn = self.__calc_functions(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
         cou = 0
@@ -314,7 +324,7 @@ class Quartz:
             _norm_fn_tmp, _rhs = float_info.max, float_info.min
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = 1.0 / (lamda**_cou_damp)
+                _mu = 1.0 / (lamda ** _cou_damp)
                 # calculate left hand side of eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions(xn_tmp)
@@ -350,7 +360,7 @@ class Quartz:
         return self.cond_surface
 
     def __calc_functions(self, xn: np.ndarray) -> np.ndarray:
-        f1 = self.__calc_f1(xn[2][0], xn[0][0], xn[1][0], )
+        f1 = self.__calc_f1(xn[2][0], xn[0][0], xn[1][0],)
         f2 = self.__calc_f2(xn[3][0], xn[0][0], xn[1][0])
         f3 = self.__calc_f3(xn[4][0], xn[1][0])
         f4 = self.__calc_f4(xn[2][0], xn[3][0], xn[4][0])
@@ -598,19 +608,16 @@ class Quartz:
         """
         return self.length_edl
 
-    def get_surface_charge(self) -> float:
+    def get_surface_charge(self) -> float or None:
         """Getter for the surface charge density (Qs0 in eq.100)
 
         Returns:
             float: Surface charge density (C/m2)
         """
-        ah = self.ion_props[Species.H.name][IonProp.Activity.name]
-        ana = self.ion_props[Species.Na.name][IonProp.Activity.name]
-        phidt = self.__calc_phid_tilda(self.potential_stern)
-        return self.__calc_qs0(ah, ana, phidt)
+        return self.charge_0
 
 
 if __name__ == "__main__":
     q = Quartz(NaCl(cnacl=0.001), method="leroy2013")
-    print(q.get_cond_surface())
+    print(q.get_surface_charge())
     pass

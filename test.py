@@ -2482,8 +2482,8 @@ def test_nacl_viscosity():
     ax.set_xscale("log")
     fig.savefig(path.join(test_dir(), "nacl_viscosity.png"), dpi=200)
 
-def test_quartz_potential():
-    print("test_quartz_potential")
+def test_quartz_charge():
+    print("test_quartz_charge")
     # compared to Sonnefeld et al. (2001) https://doi.org/10.1016/S0927-7757(01)00845-7
     ph_ls = [4.0, 4.25, 4.5, 4.75, 5.0, 5.25, 5.5, 5.75, 6.0, 6.25, 6.5, 6.75, 7.0, 7.25, 7.5, 7.75, 8.0]
     cna_dct = {0.1: [-0.005740164074378213,
@@ -2512,14 +2512,55 @@ def test_quartz_potential():
         print(f"cnacl: {cnacl}")
         _ls: List = result_dct.setdefault(cnacl, [])
         for ph in ph_ls:
-            quartz = Quartz(NaCl(cnacl=cnacl, pressure=1.0e5, temperature=298.15, ph=ph), method="eq44")
+            print(ph)
+            quartz = Quartz(NaCl(cnacl=cnacl, pressure=1.0e5, temperature=298.15, ph=ph), method="leroy2013")
             _ls.append(quartz.get_surface_charge())
         ax.plot(ph_ls, _ls, label=cnacl)
-    # for cnacl, _ls in cna_dct.items():
-    #     ax.scatter(ph_ls, _ls, label=cnacl)
+    for cnacl, _ls in cna_dct.items():
+        ax.scatter(ph_ls, _ls, label=cnacl)
     ax.legend()
     plt.show()
-    
+    fig.savefig("leroyetal2013_fig7.png", dpi=200, bbox_inches="tight")
+
+def test_quartz_charge_extend():
+    print("test_quartz_charge_extend")
+    # compared to Sonnefeld et al. (2001) https://doi.org/10.1016/S0927-7757(01)00845-7
+    ph_ls = [4.0, 4.25, 4.5, 4.75, 5.0, 5.25, 5.5, 5.75, 6.0, 6.25, 6.5, 6.75, 7.0, 7.25, 7.5, 7.75, 8.0]
+    cna_dct = {0.1: [-0.005740164074378213,
+                     -0.007260657110567266,
+                     -0.009191173481417642,
+                     -0.011668550242696737,
+                     -0.014145764393095537,
+                     -0.017579699657704093,
+                     -0.02101330970055206,
+                     -0.025404291301130956,
+                     -0.0304783199043848,
+                     -0.03555202328587805,
+                     -0.04185612189311586,
+                     -0.0488437553356695,
+                     -0.05719797061621393,
+                     -0.06664541884497491,
+                     -0.07787012268990917,
+                     -0.08950452464774417,
+                     -0.10332571772377289],
+                0.01: [-0.003649152474224919, -0.004535974667561404, -0.005605830383069521, -0.007224895581202123, -0.008798025410113725, -0.01087497393297679, -0.013226554426179489, -0.015623689082219616, -0.018341118787546393, -0.02183705361521907, -0.025286889699506356, -0.030338908984939274, -0.035436645807374004, -0.041999304303839344, -0.04865328895819871, -0.05704655496665434, -0.06685891619602917],
+                0.001: [-0.002834553, -0.003236224, -0.004846015, -0.005741894, -0.007241963, -0.008522261, -0.010022264, -0.011522333, -0.01313219, -0.015236645, -0.017725389, -0.020598683, -0.024185889, -0.028377678, -0.033447832, -0.039067381, -0.046060089]
+                }
+    result_dct = {}
+    fig, ax = plt.subplots()
+    for cnacl in [5.0, 1.0, 0.1, 0.01, 0.001]:
+        print(f"cnacl: {cnacl}")
+        _ls: List = result_dct.setdefault(cnacl, [])
+        for ph in ph_ls:
+            print(ph)
+            quartz = Quartz(NaCl(cnacl=cnacl, pressure=1.0e5, temperature=298.15, ph=ph), method="leroy2013")
+            _ls.append(quartz.get_surface_charge())
+        ax.plot(ph_ls, _ls, label=cnacl)
+    for cnacl, _ls in cna_dct.items():
+        ax.scatter(ph_ls, _ls, label=cnacl)
+    ax.legend()
+    plt.show()
+    fig.savefig("leroyetal2013_fig7.png", dpi=200, bbox_inches="tight")
 
 
 if __name__ == "__main__":
@@ -2569,5 +2610,6 @@ if __name__ == "__main__":
     # test_dielec_nacl()
     # test_nacl_dielec()
     # test_nacl_viscosity()
-    test_quartz_potential()
+    # test_quartz_charge()
+    test_quartz_charge_extend()
     pass

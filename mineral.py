@@ -17,6 +17,8 @@ from math import sqrt, exp, log, log10, sinh, cosh
 from logging import Logger
 from copy import deepcopy
 from sys import float_info
+from os import PathLike, path
+import pickle
 
 import numpy as np
 from scipy.optimize import bisect
@@ -30,6 +32,12 @@ from constants import (
 )
 from fluid import NaCl
 
+# initial parameter
+init_pth: PathLike = path.join(
+    path.dirname(__file__), "params", "quartz_init.pkl"
+)
+with open(init_pth, "rb") as pkf:
+    init_params: Dict = pickle.load(pkf)
 
 class Quartz:
     """Containing electrical properties of quartz"""
@@ -50,6 +58,7 @@ class Quartz:
         charge_stern: float = None,
         charge_diffuse: float = None,
         method: str = "leroy2013",
+        xn: np.ndarray = None,
         logger: Logger = None,
     ):
         """Initialize Quartz class. pH is assumed to be near the neutral.
@@ -100,7 +109,7 @@ class Quartz:
         if self.k_plus is None:
             # implicitly assume that activity coefficient of proton is 1
             _ch_pzc = 10.0 ** (-1.0 * pzc)
-            self.k_plus = self.k_minus / (_ch_pzc ** 2)
+            self.k_plus = self.k_minus / (_ch_pzc**2)
 
         # consider temperature dependence of equilibrium constant
         dg_plus = calc_standard_gibbs_energy(self.k_plus, 298.15)
@@ -117,7 +126,7 @@ class Quartz:
                 _if += _prop[IonProp.Valence.name] ** 2 * _prop[IonProp.Molarity.name]
         _if *= 0.5
         self.ion_strength = _if
-        _top = 2000.0 * const.ELEMENTARY_CHARGE ** 2 * _if * const.AVOGADRO_CONST
+        _top = 2000.0 * const.ELEMENTARY_CHARGE**2 * _if * const.AVOGADRO_CONST
         _bottom = self.dielec_fluid * const.BOLTZMANN_CONST * self.temperature
         self.kappa = sqrt(_top / _bottom)
         self.length_edl = 1.0 / self.kappa
@@ -188,7 +197,7 @@ class Quartz:
                     * const.AVOGADRO_CONST
                     * self.ion_strength
                 )
-                self.__calc_cond_surface_2013()
+                self.__calc_cond_surface_2013(xn)
 
         # calculate conductivity tensor
         self.__calc_cond_tensor()
@@ -288,10 +297,10 @@ class Quartz:
         _t3 = _x - 1.0 / _x
         _t4 = (
             1.0
-            + self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4
-            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x ** 2
+            + self.delta * 10.0 ** (-2.0 * self.ph) * _x**4
+            + 1.0 / self.k_minus * 10.0 ** (-self.ph) * _x**2
         )
-        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x ** 4 - 1.0
+        _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x**4 - 1.0
         return _t1 * _t2 * _t3 * _t4 + _t5
 
     def __calc_cond_surface_1997(self) -> None:
@@ -304,13 +313,21 @@ class Quartz:
 
     def __calc_cond_surface_2013(
         self,
+        xn: np.ndarray = None,
         iter_max: int = 1000,
         convergence_condition: float = 1.0e-10,
-        oscillation_tol: float = 1.0e-04,
+        oscillation_tol: float = 1.0e-2,
         beta: float = 0.75,
         lamda: float = 2.0,
     ) -> float:
-        xn = np.array([-1.0, 0.0, -1.0, 1.0, 1.0], dtype=np.float64).reshape(-1, 1)
+        # TODO? oscillation_tolが大きすぎる可能性がある. 検証する
+        if xn is None:
+            t_ls = list(init_params.keys())
+            _idx = np.argmin(np.square(np.array(t_ls) - self.temperature))
+            molarity_dct: Dict = init_params[t_ls[_idx]]
+            molarity_ls = list(molarity_dct.keys())
+            _idx = np.argmin(np.square(np.array(molarity_ls) - self.ion_props[Species.Na.name][IonProp.Molarity.name]))
+            xn = molarity_dct[molarity_ls[_idx]]
         fn = self.__calc_functions(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
         cou = 0
@@ -324,12 +341,10 @@ class Quartz:
             _norm_fn_tmp, _rhs = float_info.max, float_info.min
             while _norm_fn_tmp > _rhs:
                 # update μ
-                _mu = 1.0 / (lamda ** _cou_damp)
-                # calculate left hand side of eq.(21) of [1]
+                _mu = 1.0 / (lamda**_cou_damp)
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
-                # calculate right hand side of eq.(21) of [1]
                 _rhs = (1.0 - (1.0 - beta) * _mu) * norm_fn
                 _cou_damp += 1
                 if _cou_damp > 10000:
@@ -360,7 +375,11 @@ class Quartz:
         return self.cond_surface
 
     def __calc_functions(self, xn: np.ndarray) -> np.ndarray:
-        f1 = self.__calc_f1(xn[2][0], xn[0][0], xn[1][0],)
+        f1 = self.__calc_f1(
+            xn[2][0],
+            xn[0][0],
+            xn[1][0],
+        )
         f2 = self.__calc_f2(xn[3][0], xn[0][0], xn[1][0])
         f3 = self.__calc_f3(xn[4][0], xn[1][0])
         f4 = self.__calc_f4(xn[2][0], xn[3][0], xn[4][0])
@@ -618,6 +637,4 @@ class Quartz:
 
 
 if __name__ == "__main__":
-    q = Quartz(NaCl(cnacl=0.001), method="leroy2013")
-    print(q.get_surface_charge())
     pass

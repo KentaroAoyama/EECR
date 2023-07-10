@@ -1,6 +1,6 @@
 from enum import IntEnum, auto
 from math import log, exp
-
+from typing import Dict
 
 def calc_standard_gibbs_energy(k_25: float, t: float = 298.15) -> float:
     return -log(k_25) * GAS_CONST * t
@@ -18,8 +18,8 @@ GAS_CONST = 8.31446262
 PRESSURE = 2.0 * 1.0e6
 DISSOSIATION_WATER = 9.888215487598867e-15 # at 25℃
 PRESSURE_ATM = 101300.
-MNaCl = 58.443e-3 # kg/m3
-MH2O = 18.015e-3 # kg/m3
+MNaCl = 58.443e-3 # kg/mol
+MH2O = 18.015e-3 # kg/mol
 
 # Equilibrium constants (at 25℃) & Capacitance (F/m)
 # Smectite & inf
@@ -123,4 +123,9 @@ ion_props_default = {
         IonProp.Mobility.name: 20.5e-8,
         IonProp.Valence.name: -1,
     },
+}
+
+msa_props: Dict[str, Dict] = {
+    Species.Na.name: {"radius": 1.17 * 1.0e-10, "D0": 1.33 * 1.0e-9},
+    Species.Cl.name: {"radius": 1.81 * 1.0e-10, "D0": 2.03 * 1.0e-9},
 }

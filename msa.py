@@ -24,10 +24,7 @@ import constants as const
 # Set the ionic radius and the diffusion coefficient in solution at infinite dilution
 # based on TABLE 1 in Roger et al. (2009)
 Species: IntEnum = const.Species
-msa_props: Dict[str, Dict] = {
-    Species.Na.name: {"radius": 1.17 * 1.0e-10, "D0": 1.33 * 1.0e-9},
-    Species.Cl.name: {"radius": 1.81 * 1.0e-10, "D0": 2.03 * 1.0e-9},
-}
+msa_props: Dict[str, Dict] = const.msa_props
 
 
 def __calc_pn(
@@ -500,7 +497,8 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
 def calc_mobility(
     ion_props: Dict,
     temperature: float,
-    pressure: float = 2.0e6,
+    dielec: float,
+    pressure: float,
 ) -> OrderedDict[str, Dict]:
     """Calculate the mobility of each ion based on Roger et al. (2009)
 
@@ -508,6 +506,7 @@ def calc_mobility(
         ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
         temperature (float): Absolute temperature (K)
+        dielec (float): Dielectric permittivity (F)
         pressure (float): Absolute pressure (Pa)
 
     Returns:
@@ -543,9 +542,6 @@ def calc_mobility(
     water = iapws.IAPWS97(P=pressure * 1.0e-6, T=temperature)
     assert water.phase == "Liquid", f"water.phase: {water.phase}"
     _eta_t: float = iapws._iapws._Viscosity(water.rho, T=temperature) / water.rho
-    _dielec: float = (
-        iapws._iapws._Dielectric(water.rho, T=temperature) * const.DIELECTRIC_VACUUM
-    )
     water_298 = iapws.IAPWS97(P=pressure * 1.0e-6, T=t_std)
     _eta_298: float = iapws._iapws._Viscosity(water_298.rho, T=t_std) / water_298.rho
     d_coeff = _eta_298 * temperature / (_eta_t * t_std)
@@ -647,10 +643,10 @@ def calc_mobility(
         _prop["qp"] = __calc_qp(_alphap, _omega_mean, _omega_ls, _t_ls)
 
     # kappa (κ)
-    _kappa: float = __calc_kappa(_msa_props, temperature, _dielec)
+    _kappa: float = __calc_kappa(_msa_props, temperature, dielec)
 
     # gamma (Γ)
-    _gamma: float = __calc_gamma(_msa_props, temperature, _dielec)
+    _gamma: float = __calc_gamma(_msa_props, temperature, dielec)
 
     # Y
     _y = __calc_y(_msa_props, _kappa, _gamma)
@@ -658,9 +654,9 @@ def calc_mobility(
     # dkkkk (δkk/kk), dvhydi (δvhydi)
     for _s, _prop in _msa_props.items():
         _prop["dkkkk"] = __calc_dkkkk(
-            _s, _msa_props, ki_pk, sigma_ij, temperature, _dielec, _kappa, _gamma, _y
+            _s, _msa_props, ki_pk, sigma_ij, temperature, dielec, _kappa, _gamma, _y
         )
-        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, pressure, _dielec, _s)
+        _prop["dvhydi"] = __calc_dvhydi(_msa_props, temperature, pressure, dielec, _s)
 
     # mobility
     for _s, _prop in _msa_props.items():

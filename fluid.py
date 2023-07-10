@@ -1,4 +1,3 @@
-# TODO: molalityの入力も受け付ける仕様にする
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
 from typing import Dict, Tuple, OrderedDict
@@ -22,9 +21,9 @@ from constants import (
     DIELECTRIC_VACUUM,
     MNaCl,
     MH2O,
-    calc_equibilium_const
+    calc_equibilium_const,
+    msa_props,
 )
-from msa import calc_mobility
 
 
 class Fluid:
@@ -39,7 +38,8 @@ class NaCl(Fluid):
         self,
         temperature: float = 298.15,
         pressure: float = 5.0e6,
-        cnacl: float = 0.001,
+        molarity: float = None,
+        molality: float = None,
         ph: float = 7.0,
         conductivity: float = None,
         cond_tensor: np.ndarray = None,
@@ -50,12 +50,15 @@ class NaCl(Fluid):
         Args:
             temperature (float): Absolute temperature (K)
             pressure (float): Absolute pressure (Pa).
-            cnacl (float): Concentration of NaCl sodium (mol/l).
+            molarity (float): Molarity (mol/l).
+            molarity (float): Molality (mol/kg).
             ph (float, optional): pH.
             conductivity (float): Electrical conductivity of NaCl fluid
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
             logger (Logger): Logger
         """
+        assert molarity is not None or molality is not None
+
         self.temperature = temperature
         self.pressure = pressure
         self.conductivity = conductivity
@@ -64,6 +67,36 @@ class NaCl(Fluid):
 
         # Set ion_props and activities other than mobility
         ion_props: Dict = deepcopy(ion_props_default)
+
+        # calculate density
+        # TODO: Extend to apply to supercritical conditions
+        xnacl, density = None, None
+        if molality is None:
+
+            def __callback(__x) -> float:
+                rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
+                nh20 = (rho - 1000.0 * molarity * MNaCl) / MH2O  # mol/m3
+                return __x - molarity / (molarity + nh20 * 1.0e-3)
+
+            xnacl = bisect(
+                __callback, 0.0, calc_X_L_Sat(self.temperature, self.pressure)
+            )
+            density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
+            # calculate molality(mol/kg)
+            molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
+        if molarity is None:
+            xnacl = molality / (molality + 1.0 / MH2O)
+            density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
+
+            def __callback(__x) -> float:
+                nh20 = (density - 1000.0 * __x * MNaCl) / MH2O  # mol/m3
+                return xnacl - __x / (__x + nh20 * 1.0e-3)
+
+            molarity = bisect(__callback, 0.0, 10.0)
+        self.density = density
+        assert molality is not None and molarity is not None
+
+        # set ion properties
         _ah = 10.0 ** (-1.0 * ph)
         for _s, _prop in ion_props.items():
             if _s not in (
@@ -86,48 +119,16 @@ class NaCl(Fluid):
                 _prop[IonProp.Activity.name] = _c
                 continue
             # Na or Cl
-            _prop[IonProp.Molarity.name] = cnacl
+            _prop[IonProp.Molarity.name] = molarity
+            _prop[IonProp.Molality.name] = molality
+            _prop[IonProp.MolFraction.name] = xnacl
 
         # get dielectric constant
         water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
-        self.dielec_fluid = calc_dielec_nacl(cnacl, self.dielec_water)
-
-        # Calculate sodium ion mobility by MSA model and empirical findings of
-        # Revil et al. (1998).
-        msa_props_tgiven: OrderedDict = calc_mobility(ion_props, self.temperature, self.pressure)
-        for _s, _prop in ion_props.items():
-            if _s in (Species.H.name, Species.OH.name):
-                continue
-            # Based on Revil et al.(1998)
-            # _m = 0.51e-8 * (1.0 + 0.037 * (temperature - 298.15))
-            _prop[IonProp.Mobility.name] = msa_props_tgiven[_s]["mobility"]
-            # _prop[IonProp.MobilityTrunDiffuse.name] = _m
-            # if _s == Species.H.name:
-            #     _prop[IonProp.MobilityTrunDiffuse.name] = ion_props_default[
-            #         IonProp.MobilityTrunDiffuse.name
-            #     ]
-            # _prop[IonProp.MobilityStern.name] = _m
-
-        # calculate density
-        def __callback(__x):
-            rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
-            nh20 = (rho - 1000.0 * cnacl * MNaCl) / MH2O  # mol/m3
-            return __x - cnacl / (cnacl + nh20 * 1.0e-3)
-
-        # TODO: Extend to apply to supercritical conditions
-        xnacl = bisect(__callback, 0.0, calc_X_L_Sat(self.temperature, self.pressure))
-        density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
-        self.density = density
-        ion_props[Species.Na.name][IonProp.MolFraction.name] = xnacl
-        ion_props[Species.Cl.name][IonProp.MolFraction.name] = xnacl
-
-        # calculate molality(mol/kg)
-        _molality = 1000.0 * cnacl / (self.density - 1000.0 * cnacl * MNaCl)
-        ion_props[Species.Na.name][IonProp.Molality.name] = _molality
-        ion_props[Species.Cl.name][IonProp.Molality.name] = _molality
+        self.dielec_fluid = calc_dielec_nacl(molarity, self.dielec_water)
 
         # calculate activity
         ion_props = calc_nacl_activities(
@@ -136,14 +137,45 @@ class NaCl(Fluid):
         self.ion_props: Dict = ion_props
 
         # calculate viscosity
-        Xnacl = 1000.0 * cnacl * MNaCl / self.density
+        Xnacl = 1000.0 * molarity * MNaCl / self.density
         self.viscosity = calc_viscosity(self.temperature, self.pressure, Xnacl)
 
         # pKw
         self.kw = calc_equibilium_const(DG_H2O, self.temperature)
 
-        # TODO: 温度が200℃未満でsen_and_goode_1992を自動的に実効する仕様に変更する
+        # calculate mobility based on Zhang et al.(2020)' semi-experimental eqs
+        P1 = 1.1844738522786495
+        P2 = 0.3835869097290443
+        C = -94.93082293033551
+        coeff = exp(-P1 * molality**P2) - (C / self.temperature)
+        water_ref = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=298.15)
+        eta_298 = iapws._iapws._Viscosity(water_ref.rho, 298.15)
+        eta_t = iapws._iapws._Viscosity(water.rho, self.temperature)
+        for _s, _prop in ion_props.items():
+            if _s in (Species.H.name, Species.OH.name):
+                continue
+            d0 = msa_props[_s]["D0"] * eta_298 * self.temperature / (eta_t * 298.15)
+            m0 = ELEMENTARY_CHARGE * d0 / (self.temperature * BOLTZMANN_CONST)
+            m: float = None
+            if coeff > 1.0:
+                # TODO: remove this (make valid for dilute (< 1.0e-3) region)
+                m = m0
+            else:
+                m = m0 * coeff
+            ion_props[_s][IonProp.Mobility.name] = m
 
+        self.cond_from_mobility = (
+            ion_props["Na"]["Molarity"]
+            * AVOGADRO_CONST
+            * 1000.0
+            * ELEMENTARY_CHARGE
+            * (
+                ion_props[Species.Na.name][IonProp.Mobility.name]
+                + ion_props[Species.Cl.name][IonProp.Mobility.name]
+            )
+        )
+
+        # TODO: 温度が200℃未満でsen_and_goode_1992を自動的に実効する仕様に変更する
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -636,7 +668,7 @@ def calc_dielec_nacl(Cs: float, dielec_water: float, method="simonin1996") -> fl
         _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
         dielec = DIELECTRIC_VACUUM / _invert
     elif method == "gavish2016":
-        # TODO:
+        N = 500
         pass
     return dielec
 
@@ -652,7 +684,7 @@ def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
-        Xnacl (float): Weight fraction of Nacl (M)
+        Xnacl (float): Weight fraction of NaCl
 
     Returns:
         float: Viscosity (Pa s)
@@ -1250,4 +1282,6 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
+    nacl = NaCl(molarity=0.0001, temperature=298.15, pressure=1.0e5)
+    print(nacl.ion_props["Na"]["Mobility"])
     pass

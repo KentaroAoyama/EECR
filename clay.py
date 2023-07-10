@@ -36,8 +36,7 @@ kaolinite_init_pth: PathLike = path.join(
 with open(kaolinite_init_pth, "rb") as pkf:
     kaolinite_init_params = pickle.load(pkf)
 
-
-# TODO: refactor
+# for smectite, truncated case
 smectite_trun_init_pth: PathLike = path.join(
     path.dirname(__file__), "params", "smectite_trun_init.pkl"
 )
@@ -166,7 +165,7 @@ class Phyllosilicate:
     def __init__(
         self,
         nacl: NaCl,
-        layer_width: float = 1.3e-9,
+        layer_width: float = 1.52e-9,
         tlm_params: TLMParams = None,
         potential_0_o: float = None,
         potential_stern_o: float = None,
@@ -186,7 +185,7 @@ class Phyllosilicate:
         cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
-        # TODO: NaCl濃度が約3M以上で, truncatedの場合, 収束が悪い (10^-4)不具合があるので, 原因を特定して修正する → 初期値追加
+        # TODO: rが1.0e-9付近で収束が悪い → 初期値追加
         """Initialize phyllosilicate class.
 
         Args:
@@ -322,12 +321,10 @@ class Phyllosilicate:
     def __calc_mobility_stern(self) -> float:
         """Calculate mobility of Na+ at stern plane"""
         # Mobility of stern layer is half of bulk water
-        d_cf = (
-            self.ion_props[Species.Na.name][IonProp.Mobility.name]
-            * 0.5)
+        d_cf = self.ion_props[Species.Na.name][IonProp.Mobility.name] * 0.5
         return d_cf
 
-    def __calc_mobility_diffuse(self, _x: float, _s: str) -> float:
+    def __calc_mobility_diffuse(self, _x: float, _s: str) -> float or None:
         """Calculate Na+ mobility at diffuse layer based on Bourg &
         Sposito (2011).
 
@@ -335,9 +332,15 @@ class Phyllosilicate:
             _x (float): Distance from smectite surface (m)
             _s (str): Ion species
         """
-        return self.ion_props[_s][IonProp.Mobility.name] * (
-            (1.0 - np.exp(-0.14 * _x * 1.0e-10))
+        assert _s in (Species.Na.name, Species.Cl.name)
+        _m = self.ion_props[_s][IonProp.Mobility.name] * (
+            (1.0 - np.exp(-0.14 * _x * 1.0e10))
         )
+        if _s == Species.Na.name:
+            return _m
+        if _s == Species.Cl.name:
+            return _m * 0.5
+        return None
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
         """Calculate eq.(16) of Gonçalvès et al. (2007).
@@ -1105,7 +1108,7 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, phir, q0, qb, qs]
         """
-        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
 
@@ -1120,21 +1123,24 @@ class Phyllosilicate:
             r_ls = list(smectite_trun_init_params.keys())
             _r = self.layer_width
             _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
-            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
+            t_ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
+            # temperature
+            t_ls = list(t_ch_cna_dict.keys())
+            _idx = np.argmin(np.square(np.array(t_ls) - self.temperature))
+            ch_cna_dct: Dict = t_ch_cna_dict[t_ls[_idx]]
             # pH
             _ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
             _cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
-            ch_ls = list(ch_cna_dict.keys())
-            _idx = np.argmin(
-                np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
-            )
+            ch_ls = list(ch_cna_dct.keys())
+            _idx = np.argmin(np.square(np.log10(ch_ls) - np.log10(_ch)))
+            cna_dct: Dict = ch_cna_dct[ch_ls[_idx]]
             # sodium concentration
-            cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
             cna_ls = list(cna_dct.keys())
             _idx = np.argmin(
                 np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
             )
             x_init = cna_dct[cna_ls[_idx]]
+
         # set params
         self.gamma_1 = self.tlm_params.gamma_1i
         self.gamma_2 = self.tlm_params.gamma_2i
@@ -1252,7 +1258,7 @@ class Phyllosilicate:
         cx_pb: float = 0.8,
         mut_pb: float = 0.2,
     ) -> List:
-        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
 
         # obtain init values based on infinity developed diffuse layer
         # phi0, phib, phid, phir, q0, qb, qs
@@ -1393,7 +1399,7 @@ class Phyllosilicate:
         self,
         x_init: List = None,
     ) -> List:
-        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
 
         # obtain init values based on infinity developed diffuse layer
         # phi0, phib, phid, phir, q0, qb, qs
@@ -1653,7 +1659,7 @@ class Phyllosilicate:
         """
         # When the layer thickness is less than 1 nm,, water molecules
         # cannot pass between the layers of smectite (Shirozu, 1998)
-        assert self.layer_width >= 1.0e-9, "self.layer_width < 1.0e-9"
+        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert self._check_if_calculated_electrical_params_truncated(), (
             "Before calculating the conductivity of interlayer, we should "
             "obtain electrical parameters for truncated diffuse layer case"
@@ -1692,10 +1698,6 @@ class Phyllosilicate:
         Returns:
             Tuple[float]: conductivity, integral error
         """
-        # if self.qi < 0.0 and self.gamma_1 == 0.0:
-        #     self.__set_constant_for_smectite_inf()
-        # else:
-        #     self.__set_constant_for_kaolinite()
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
         if self.xd is None:
@@ -1713,7 +1715,6 @@ class Phyllosilicate:
         cond_na_diffuse, _ = quad(__callback, self.xd, xdl)
 
         # calc conductivity
-        na_prop: Dict = self.ion_props[Species.Na.name]
         cond_diffuse: float = (
             const.ELEMENTARY_CHARGE
             * (gamma_stern * self.mobility_stern + cond_na_diffuse)
@@ -1847,7 +1848,7 @@ class Smectite(Phyllosilicate):
     def __init__(
         self,
         nacl: NaCl,
-        layer_width: float = 1.3e-9,
+        layer_width: float = 1.52e-9,
         tlm_params: TLMParams = None,
         potential_0_o: float = None,
         potential_stern_o: float = None,

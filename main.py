@@ -87,7 +87,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     dirname += f"_temperature-{temperature}"
     dirname += f"_cnacl-{cnacl}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join(getcwd(), "output", "pickle", dirname, str(seed))
+    outdir_seed = path.join("E:\EECR", "output2", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
@@ -211,6 +211,11 @@ def experiment():
             for temperature in temperature_ls:
                 for cnacl in cnacl_ls:
                     for porosity in porosity_ls:
+                        # exec_single_condition(smec_frac=smec_frac,
+                        #     temperature=temperature,
+                        #     cnacl=cnacl,
+                        #     porosity=porosity,
+                        #     seed=seed,)
                         pool.submit(
                             exec_single_condition,
                             smec_frac=smec_frac,
@@ -223,7 +228,7 @@ def experiment():
 
 from tqdm import tqdm
 def output_fig():
-    pickle_dir = path.join(getcwd(), "output", "pickle")
+    pickle_dir = path.join("E:\EECR", "output2", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -345,6 +350,6 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    # experiment()
-    output_fig()
+    experiment()
+    # output_fig()
     # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

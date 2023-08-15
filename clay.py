@@ -1,4 +1,5 @@
 """Calculate electrical properties of phyllosilicate"""
+# TODO: add setter
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -272,7 +273,8 @@ class Phyllosilicate:
         self.cond_tensor: np.ndarray = None
         self.double_layer_length: float = None
 
-        # osmotic properties
+        # other properties (TODO:)
+        self.partition_coefficient: float = None
         self.swelling_pressure: float = None
         self.osmotic_coefficient: float = None
 
@@ -1544,6 +1546,7 @@ class Phyllosilicate:
         return flag
 
     def __calc_kappa_truncated(self) -> None:
+        # TODO? this should be called in potential & charge calculation stage?
         """Calculate the kappa of the potential (instead of Eq. 11
         of Gonçalvès et al., 2007) when the diffuse layer is truncated
         """
@@ -1591,7 +1594,6 @@ class Phyllosilicate:
 
         Args:
             x (float): Distance from zeta plane (m)
-
         Returns:
             float: Number density of Na+ (-/m^3)
         """
@@ -1707,12 +1709,20 @@ class Phyllosilicate:
         gamma_stern = self.__calc_n_stern("outer")
         # Na+ number (n/m^2) at diffuse layer
         xdl = self.xd + 1.0 / self.kappa
+        coeff = self.dielec_fluid / self.viscosity
         __callback = partial(
             self.__calc_cond_diffuse_inf,
             s=Species.Na.name,
-            coeff=self.dielec_fluid / self.viscosity,
+            coeff=coeff,
         )
         cond_na_diffuse, _ = quad(__callback, self.xd, xdl)
+
+        # Cl- number (n/m^2) at diffuse layer
+        __callback = partial(
+            self.__calc_cond_diffuse_inf,
+            s=Species.Cl.name,
+            coeff=coeff,
+        )
 
         # calc conductivity
         cond_diffuse: float = (
@@ -1791,6 +1801,30 @@ class Phyllosilicate:
 
         if self.logger is not None:
             self.logger.info(f"{__name__} cond tensor: {self.cond_tensor}")
+
+    def __calc_na_density_at_x(self, x: float) -> float:
+        phix = self.potential_zeta_i * np.exp(-self.kappa_truncated * x)
+        return np.exp(
+            -const.ELEMENTARY_CHARGE * phix / (const.BOLTZMANN_CONST * self.temperature)
+        )
+
+    def calc_partition_coefficient(self) -> float:
+        if self.xd is None:
+            self.calc_xd()
+        if self.kappa_truncated is None:
+            self.__calc_kappa_truncated()
+        _xdl = self.layer_width * 0.5
+        gamma_na_diffuse = (
+            1000.0
+            * const.AVOGADRO_CONST
+            * self.ion_props[Species.Na.name][IonProp.Molarity.name]
+            * quad(self.__calc_na_density_at_x, self.xd, _xdl)[0]
+        )
+        gamma_na_stern = self.__calc_n_stern("inner")
+        self.partition_coefficient = gamma_na_stern / (
+            gamma_na_stern + gamma_na_diffuse
+        )
+        return self.partition_coefficient
 
     def get_logger(self) -> Logger:
         """Getter for the logging.Logger

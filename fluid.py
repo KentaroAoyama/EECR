@@ -24,7 +24,6 @@ from constants import (
     MH2O,
     calc_equibilium_const,
     msa_props,
-    ALPHA_K,
 )
 
 
@@ -707,7 +706,7 @@ def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
     # εr* in eq.(5). (bi=v*)
     erstar = er * E
 
-    return erstar
+    return erstar * DIELECTRIC_VACUUM
 
 
 def calc_viscosity(T: float, P: float, Xnacl: float) -> float:

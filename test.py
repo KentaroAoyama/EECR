@@ -3205,16 +3205,21 @@ def vogit_pressure():
     pass
 
 def test_dielec_RaspoandNeau2020():
-    x_ls = np.logspace(-4, -2, 100, base=10.0).tolist()
-    molarity_ls = np.logspace(-4, 0.7, 100, base=10.0).tolist()
+    print("test_dielec_RaspoandNeau2020")
+    molarity_ls = np.logspace(-4, 0.7, 10, base=10.0).tolist()
     dt_ls = []
-    T = 298.15
-    for m in molarity_ls:
-        print(m)
-        nacl = NaCl(temperature=T, pressure=5.0e6, molarity=m)
-        dt_ls.append(calc_dielec_nacl_RaspoAndNeau2020(T, nacl.ion_props["Na"]["MolFraction"]))
-    plt.plot(x_ls, dt_ls)
-    plt.show()
+    t_ls = np.linspace(298.15, 498.15, 10).tolist()
+    fig, ax = plt.subplots()
+    for t in t_ls:
+        dt_ls = []
+        for m in molarity_ls:
+            nacl = NaCl(temperature=t, pressure=5.0e6, molarity=m)
+            dt_ls.append(calc_dielec_nacl_RaspoAndNeau2020(t, nacl.ion_props["Na"]["MolFraction"]))
+        ax.plot(molarity_ls, dt_ls, label=t)
+    
+    ax.legend()
+    fig.savefig(path.join(test_dir(), "RaspoandNeau2020.png"), dpi=200, bbox_inches="tight")
+
 
 def tmp():
     nacl = NaCl(temperature=298.15, pressure=1.0e6, molarity=0.001)
@@ -3227,7 +3232,7 @@ def tmp():
 
 
 if __name__ == "__main__":
-    tmp()
+    # tmp()
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
     # get_smectite_init_params_truncated()
@@ -3286,4 +3291,5 @@ if __name__ == "__main__":
     # test_smectite_temperature()
     # test_quartz_temperature()
     # test_smec_surface_temperature()
+    test_dielec_RaspoandNeau2020()
     pass

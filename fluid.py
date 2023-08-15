@@ -1,9 +1,9 @@
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict, Tuple, OrderedDict
+from typing import Dict, Tuple
 from copy import deepcopy
 from logging import Logger
-from math import pi, sqrt, log, log10, exp, isclose
+from math import pi, sqrt, log, log10, exp, tanh, isclose
 
 import pickle
 import numpy as np
@@ -15,6 +15,7 @@ from constants import (
     Species,
     IonProp,
     AVOGADRO_CONST,
+    GAS_CONST,
     ELEMENTARY_CHARGE,
     BOLTZMANN_CONST,
     DG_H2O,
@@ -23,6 +24,7 @@ from constants import (
     MH2O,
     calc_equibilium_const,
     msa_props,
+    ALPHA_K,
 )
 
 
@@ -128,7 +130,7 @@ class NaCl(Fluid):
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
-        self.dielec_fluid = calc_dielec_nacl(molarity, self.dielec_water)
+        self.dielec_fluid = calc_dielec_nacl_RaspoAndNeau2020(self.temperature, xnacl)
 
         # calculate activity
         ion_props = calc_nacl_activities(
@@ -143,7 +145,7 @@ class NaCl(Fluid):
         # pKw
         self.kw = calc_equibilium_const(DG_H2O, self.temperature)
 
-        # calculate mobility based on Zhang et al.(2020)' semi-experimental eqs
+        # calculate mobility based on Zhang et al.(2020)' experimental eqs
         P1 = 1.1844738522786495
         P2 = 0.3835869097290443
         C = -94.93082293033551
@@ -156,12 +158,8 @@ class NaCl(Fluid):
                 continue
             d0 = msa_props[_s]["D0"] * eta_298 * self.temperature / (eta_t * 298.15)
             m0 = ELEMENTARY_CHARGE * d0 / (self.temperature * BOLTZMANN_CONST)
-            m: float = None
-            if coeff > 1.0:
-                # TODO: remove this (make valid for dilute (< 1.0e-3) region)
-                m = m0
-            else:
-                m = m0 * coeff
+            # TODO: make valid for dilute (< 1.0e-3) region
+            m = m0 * coeff
             ion_props[_s][IonProp.Mobility.name] = m
 
         self.cond_from_mobility = (
@@ -174,8 +172,6 @@ class NaCl(Fluid):
                 + ion_props[Species.Cl.name][IonProp.Mobility.name]
             )
         )
-
-        # TODO: 温度が200℃未満でsen_and_goode_1992を自動的に実効する仕様に変更する
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -393,7 +389,7 @@ def calc_nacl_activities(
 ) -> Dict:
     """Calculate Na+ and Cl- activity by Pizer equation
     Reference:
-        Pitzer K.S, Activity coefficients in electrolyte solutions,
+        Pitzer K.S, Activity coefficients in electrolyte solutions, 1991,
             https://doi.org/10.1201/9781351069472
         Leroy P., C. Tournassat, O. Bernard, N. Devau, M. Azaroual,
             The electrophoretic mobility of montmorillonite. Zeta potential
@@ -641,16 +637,13 @@ def __calc_b(ion_strength: float, beta0: float, beta1: float) -> float:
     return beta0 + 2.0 * beta1 / ki1**2 * (1.0 - (1.0 + ki1) * exp(-ki1))
 
 
-def calc_dielec_nacl(Cs: float, dielec_water: float, method="simonin1996") -> float:
+def calc_dielec_nacl_simonin1996(Cs: float, dielec_water: float) -> float:
     """Calculate dielectric permittivity of H2O-NaCl liquid.
 
     Reference:
         Simonin J.P, Real Ionic Solutions in the Mean Spherical Approximation.
             2. Pure Strong Electrolytes up to Very High Concentrations,
             and Mixtures, in the Primitive Model, 1996,  https://doi.org/10.1021/jp970102k
-        The effect of concentration- and temperature-dependent dielectric constant on the
-            activity coefficient of NaCl electrolyte solutions, 2016,
-            https://doi.org/10.1063/1.4883742
 
     Args:
         Cs (float): NaCl concenttation (mol/l)
@@ -659,18 +652,62 @@ def calc_dielec_nacl(Cs: float, dielec_water: float, method="simonin1996") -> fl
     Returns:
         float: Dielectric permittivity of H2O-NaCl liquid (F/m)
     """
-    method = method.lower()
-    assert method in ("simonin1996", "gavish2016"), method
     dielec: float = None
-    if method == "simonin1996":
-        alpha = 6.930e-2
-        r_dielec_w = dielec_water / DIELECTRIC_VACUUM
-        _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
-        dielec = DIELECTRIC_VACUUM / _invert
-    elif method == "gavish2016":
-        N = 500
-        pass
+    alpha = 6.930e-2
+    r_dielec_w = dielec_water / DIELECTRIC_VACUUM
+    _invert = 1.0 / r_dielec_w * (1.0 + alpha * Cs)
+    dielec = DIELECTRIC_VACUUM / _invert
     return dielec
+
+
+def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
+    """Calculate dielectric permittivity of H2O-NaCl fluid by Raspo and Neau (2020).
+
+    Reference:
+        Raspo I., Neau E., An empirical correlation for the relative permittivity of liquids
+            in a wide temperature range: Application to the modeling of electrolyte systems
+            with a GE/EoS approach, 2020, https://doi.org/10.1016/j.fluid.2019.112371
+        Neau, E., J. Escandell, I. Raspo, A generalized reference state at constant volume
+            for the prediction of phase equilibria from low pressure model parameters:
+            Application to size-asymmetric systems and to the Wong–Sandler mixing rule, 2011,
+            https://doi.org/10.1016/j.ces.2011.05.043
+
+    Args:
+        T (float): Absolute temperature (K)
+        X (float): Mole fraction of NaCl
+
+    Returns:
+        float: Dielectric permittivity of H2O-NaCl fluid (F/m)
+    """
+
+    # critical temperature (K) and pressure (Pa) of water in Table 2 in Neau et al. (2011).
+    Tc, Pc = 647.13, 220.55e5
+    ALPHA_Na, ALPHA_Cl = 1.062e-4, 1.173e-4
+    # v* in Table 5 (consider only pure water solvent)
+    bi = 0.07779607 * GAS_CONST * Tc / Pc
+    vstar = bi
+
+    # δ(T) in eq.(7)
+    dt = 0.6 * tanh(0.02 * (498.15 - T))
+
+    # E(T, X) in eq.(6)
+    E = 1.0 + dt * (
+        2.0e-5 * X / vstar
+        - (ALPHA_Na + ALPHA_Cl) * X / (vstar * (1.0 + 1.6e-4 * X / vstar))
+    )
+
+    # εri in eq.(1). Parameters are in Table 2.
+    A0 = -1664.4988
+    A1 = -0.884533
+    A2 = 0.0003635
+    A4 = 64839.1736
+    A5 = 308.3394
+    er = A0 + A1 * T + A2 * T**2 + A4 / T + A5 * log(T)
+
+    # εr* in eq.(5). (bi=v*)
+    erstar = er * E
+
+    return erstar
 
 
 def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
@@ -1282,6 +1319,4 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
-    nacl = NaCl(molarity=0.0001, temperature=298.15, pressure=1.0e5)
-    print(nacl.ion_props["Na"]["Mobility"])
     pass

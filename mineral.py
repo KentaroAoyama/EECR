@@ -10,8 +10,11 @@
             1989, https://doi.org/10.1021/la00093a012
         Leroy P., Devau N., Revil A., Bizi M., Influence of surface conductivity on the apparent
             zeta potential of amorphous silica nanoparticles, 2013, https://doi.org/10.1016/j.jcis.2013.08.012
+        Leroy P., Maineult A., Li S., Vinogradov J., The zeta potential of quartz. Surface
+            complexation modelling to elucidate high salinity measurements, 2022,
+            https://doi.org/10.1016/j.colsurfa.2022.129507
 """
-# TODO: docstring
+
 from typing import Dict
 from math import sqrt, exp, log, log10, sinh, cosh
 from logging import Logger
@@ -33,11 +36,10 @@ from constants import (
 from fluid import NaCl
 
 # initial parameter
-init_pth: PathLike = path.join(
-    path.dirname(__file__), "params", "quartz_init.pkl"
-)
+init_pth: PathLike = path.join(path.dirname(__file__), "params", "quartz_init.pkl")
 with open(init_pth, "rb") as pkf:
     init_params: Dict = pickle.load(pkf)
+
 
 class Quartz:
     """Containing electrical properties of quartz"""
@@ -45,11 +47,12 @@ class Quartz:
     def __init__(
         self,
         nacl: NaCl,
-        gamma_o: float = 4.2,
+        gamma_o: float = 4.6,
         k_plus: float = None,
-        k_minus: float = 2.5118864315095823e-07,
-        k_na: float = 15.848931924611133,
-        c1: float = 0.64,
+        k_minus: float = 4.897788193684466e-08,
+        k_na: float = 3.8018939632056115,
+        c1: float = 3.43,
+        d: float = 0.20e-10,
         pzc: float = 3.0,
         potential_0: float = None,
         potential_stern: float = None,
@@ -65,13 +68,19 @@ class Quartz:
 
         Args:
             nacl (NaCl): Instance of NaCl
-            gamma_o (float): Surface site density (Unit: sites/nm^2).
-            k_plus (float): Equilibrium constants of >SiOH+ + H+ ⇔ >SiOH2 at 25℃.
-                Default value is based on Leroy et al.(2013).
+            gamma_o (float): Surface site density (Unit: sites/nm^2). Default value is
+                set based on Leroy et al. (2022).
+            k_plus (float): Equilibrium constants of >SiOH + H+ ⇔ >SiOH2 at 25℃.
+                Default value is set based on Leroy et al. (2022).
             k_minus (float): Equilibrium constants of >SiOH ⇔ >SiO- + H+ at 25℃.
+                Default value is set based on Leroy et al. (2022).
             k_na (float): Equilibrium constants of >SiOH + Na+ ⇔ SiONa + H+ at 25℃.
-                Default value is based on Scales (1989).
-            c1 (float): Capacitance of surface used in Leroy et al.(2013) (C/m2)
+                Default value is set based on Leroy et al. (2022). NOTE: if "method" is
+                specified as "leroy2013" or "leroy2022", this value means equilibrium
+                constants of >SiO- + Na+ ⇔ >SiO- ー Na+ (eq.5 in Leroy et al., 2013).
+            c1 (float): Capacitance of surface used in Leroy et al.(2013) (C/m2).
+                Default value is set based on Leroy et al. (2022).
+            d (float): Distance (m) of stern plane to zeta plane in Leroy et al. (2022)
             pzc (float): pH at point of zero charge. Default value is based on Revil &
                 Glover (1997).
             potential_0 (float): Surface plane potential (V)
@@ -90,6 +99,7 @@ class Quartz:
         self.k_minus: float = k_minus
         self.k_na: float = k_na
         self.c1 = c1
+        self.d = d
         self.potential_stern: float = None
         self.ion_props: Dict = nacl.get_ion_props()
         self.temperature: float = nacl.get_temperature()
@@ -142,10 +152,11 @@ class Quartz:
         # stern plane mobility of Na+ (based on Zhang 2011)
         self.mobility_stern = self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
             0.1
-            + exp(-7.0 * self.ion_props[Species.Na.name][IonProp.Molarity.name] - 0.105)
+            + exp(-7.0 * self.ion_props[Species.Na.name][IonProp.Molality.name] - 0.105)
         )
         if self.potential_stern is None:
             if method == "eq44":
+                # eq.(44) in Revil & Glover (1997)
                 self.potential_stern = bisect(self.__calc_eq_44, -0.5, 1.0)
                 self.potential_zeta = self.potential_stern
                 self.__calc_cond_surface_1997()
@@ -155,6 +166,7 @@ class Quartz:
                     phidt=self.__calc_phid_tilda(self.potential_stern),
                 )
             if method == "eq106":
+                # eq.(106) in Revil & Glover (1997)
                 # set δ
                 self.delta = self.k_plus / self.k_minus
                 # set η
@@ -188,7 +200,7 @@ class Quartz:
                     phidt=self.__calc_phid_tilda(self.potential_stern),
                 )
             if method == "leroy2013":
-                self.k_minus = 1.0 / self.k_minus
+                # Basic stern layer model proposed by Leroy et al. (2013)
                 self.qs_coeff = sqrt(
                     8000.0
                     * self.dielec_fluid
@@ -197,7 +209,35 @@ class Quartz:
                     * const.AVOGADRO_CONST
                     * self.ion_strength
                 )
-                self.__calc_cond_surface_2013(xn)
+                self.__calc_cond_potential_and_charges_2013(xn)
+                # eq.(28)
+                self.cond_surface = (
+                    1.53e-9 + self.__calc_diffuse_1997() + self.__calc_stern_2013()
+                ) / self.length_edl
+            if method == "leroy2022":
+                # Basic stern layer model proposed by Leroy et al. (2022).
+                # This model is a slight modification of Leroy et al. (2013).
+                self.qs_coeff = sqrt(
+                    8000.0
+                    * self.dielec_fluid
+                    * const.BOLTZMANN_CONST
+                    * self.temperature
+                    * const.AVOGADRO_CONST
+                    * self.ion_strength
+                )
+                self.__calc_cond_potential_and_charges_2013(xn)
+                # modify zeta plane potential by eq.(3)
+                self.potential_zeta = (
+                    self.potential_stern
+                    - (potential_stern - potential_0)
+                    * self.c1
+                    / (43.0 * const.DIELECTRIC_VACUUM)
+                    * self.d
+                )
+                # eq.(28) in Leroy et al. (2013)
+                self.cond_surface = (
+                    1.53e-9 + self.__calc_diffuse_1997() + self.__calc_stern_2013()
+                ) / self.length_edl
 
         # calculate conductivity tensor
         self.__calc_cond_tensor()
@@ -311,7 +351,7 @@ class Quartz:
         s_prot = 2.4e-9
         self.cond_surface = (s_diffuse + s_stern + s_prot) / self.length_edl
 
-    def __calc_cond_surface_2013(
+    def __calc_cond_potential_and_charges_2013(
         self,
         xn: np.ndarray = None,
         iter_max: int = 1000,
@@ -326,7 +366,12 @@ class Quartz:
             _idx = np.argmin(np.square(np.array(t_ls) - self.temperature))
             molarity_dct: Dict = init_params[t_ls[_idx]]
             molarity_ls = list(molarity_dct.keys())
-            _idx = np.argmin(np.square(np.array(molarity_ls) - self.ion_props[Species.Na.name][IonProp.Molarity.name]))
+            _idx = np.argmin(
+                np.square(
+                    np.array(molarity_ls)
+                    - self.ion_props[Species.Na.name][IonProp.Molarity.name]
+                )
+            )
             xn = molarity_dct[molarity_ls[_idx]]
         fn = self.__calc_functions(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
@@ -362,17 +407,13 @@ class Quartz:
                     )
                 else:
                     break
+        # NOTE: stern layer potential is equal to zeta potential
         self.potential_0 = xn[0][0]
         self.potential_stern = xn[1][0]
         self.potential_zeta = xn[1][0]
         self.charge_0 = xn[2][0]
         self.charge_stern = xn[3][0]
         self.charge_diffuse = xn[4][0]
-
-        self.cond_surface = (
-            1.53e-9 + self.__calc_diffuse_1997() + self.__calc_stern_1997()
-        ) / self.length_edl
-        return self.cond_surface
 
     def __calc_functions(self, xn: np.ndarray) -> np.ndarray:
         f1 = self.__calc_f1(
@@ -435,7 +476,7 @@ class Quartz:
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
         a = 1.0
-        b = self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
+        b = 1.0 / self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
         c = -e / kbt
         d = self.k_na * self.ion_props[Species.Na.name][IonProp.Activity.name]
         C = self.gamma_o
@@ -449,7 +490,7 @@ class Quartz:
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
         a = 1.0
-        b = self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
+        b = 1.0 / self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
         c = -e / kbt
         d = self.k_na * self.ion_props[Species.Na.name][IonProp.Activity.name]
         C = self.gamma_o
@@ -462,7 +503,7 @@ class Quartz:
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
         a = 1.0
-        b = self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
+        b = 1.0 / self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
         c = -e / kbt
         d = self.k_na * self.ion_props[Species.Na.name][IonProp.Activity.name]
         C = self.gamma_o
@@ -475,7 +516,7 @@ class Quartz:
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
         a = 1.0
-        b = self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
+        b = 1.0 / self.k_minus * self.ion_props[Species.H.name][IonProp.Activity.name]
         c = -e / kbt
         d = self.k_na * self.ion_props[Species.Na.name][IonProp.Activity.name]
         C = self.gamma_o
@@ -517,7 +558,7 @@ class Quartz:
         e = const.ELEMENTARY_CHARGE
         return (
             1.0
-            + self.k_minus * ah * exp(-e * phi0 / kbt)
+            + 1.0 / self.k_minus * ah * exp(-e * phi0 / kbt)
             + self.k_na * ana * exp(-e * phib / kbt)
         )
 
@@ -559,7 +600,7 @@ class Quartz:
         """Calculate stern layer conductivity by eq.(9) in Revil & Glover (1998)
 
         Returns:
-            float: Specific conductivity of stern layer
+            float: Conductivity of stern layer (S/m)
         """
         e = const.ELEMENTARY_CHARGE
         return (
@@ -568,6 +609,27 @@ class Quartz:
             * self.__calc_ohm(self.potential_stern)
             * self.gamma_o
         )
+
+    def __calc_stern_2013(self) -> float:
+        """Calculate stern layer conductivity by eq.(30) in Leroy et al. (2013)
+
+        Returns:
+            float: Conductivity of stern layer (S/m)
+        """
+        A = self.__calc_A(self.potential_0, self.potential_stern)
+        # eq.(13)
+        gamma_siom = (
+            self.gamma_o
+            / A
+            * self.k_na
+            * self.ion_props[Species.Na.name][IonProp.Activity.name]
+            * exp(
+                -const.ELEMENTARY_CHARGE
+                * self.potential_stern
+                / (const.BOLTZMANN_CONST * self.temperature)
+            )
+        )
+        return const.ELEMENTARY_CHARGE * self.mobility_stern * gamma_siom
 
     def __calc_ohm(self, phid: float) -> float:
         """Calculate eq.(84) in Revil & Glover (1997).
@@ -581,7 +643,7 @@ class Quartz:
         # calculate A in eq.(84)
         # NOTE: ignore 5th term
         Ah0 = Ah * exp(self.__calc_phid_tilda(phid))
-        A = 1.0 + self.k_plus * Ah0 + self.k_minus / Ah0 + self.k_na * ANa / Ah
+        A = 1.0 + self.k_plus * Ah0 + 1.0 / self.k_minus / Ah0 + self.k_na * ANa / Ah
         return self.k_na * ANa / (Ah * A)
 
     def __calc_cond_tensor(self):
@@ -634,7 +696,6 @@ class Quartz:
             float: Surface charge density (C/m2)
         """
         return self.charge_0
-
 
 if __name__ == "__main__":
     pass

@@ -1,3 +1,5 @@
+# TODO: このスコープで, 要素剛性マトリクスとAは定数扱いなので, 大文字に変更する
+# TODO: 表面における要素剛性マトリクスを設定する
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from typing import List
@@ -63,7 +65,7 @@ class FEM_Cube:
         self.gg (np.float64): The sum of the self.gb**2.
         self.h (np.ndarray): Conjugate gradient vector (shape is m).
         """
-        # m_u
+        # set 1d potential array
         pix_tensor: np.ndarray = self.fem_input.get_pix_tensor()
         ib: np.ndarray = np.array(self.fem_input.get_ib())
         ex: np.float64 = self.fem_input.get_ex()
@@ -83,13 +85,13 @@ class FEM_Cube:
         assert None not in u
         self.u: np.ndarray = np.array(u, dtype=np.float64)
 
-        # m_u2d
+        # set 2d potential array
         if self.logger is not None:
             self.logger.info("Expand u 2d")
         u_2d: np.ndarray = self.u[ib]
         self.u2d = u_2d
 
-        # m_a (2d array contains nxyz rows and 27 columns)
+        # set global stiffness matrix (nxyz × 27)
         a: List = [None for _ in range(nxyz)]
         dk = self.fem_input.get_dk()
         pix = self.fem_input.get_pix()

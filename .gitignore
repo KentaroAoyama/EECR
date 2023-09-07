@@ -1,4 +1,6 @@
-
+*.pyc
 *.pkl
 *log.txt
 *.png
+*.lnk
+test/*

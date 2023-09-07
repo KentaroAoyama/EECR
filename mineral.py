@@ -36,6 +36,7 @@ from constants import (
 from fluid import NaCl
 
 # initial parameter
+# TODO: consider pH dependence
 init_pth: PathLike = path.join(path.dirname(__file__), "params", "quartz_init.pkl")
 with open(init_pth, "rb") as pkf:
     init_params: Dict = pickle.load(pkf)
@@ -60,7 +61,7 @@ class Quartz:
         charge_0: float = None,
         charge_stern: float = None,
         charge_diffuse: float = None,
-        method: str = "leroy2013",
+        method: str = "leroy2022",
         xn: np.ndarray = None,
         logger: Logger = None,
     ):
@@ -229,7 +230,7 @@ class Quartz:
                 # modify zeta plane potential by eq.(3)
                 self.potential_zeta = (
                     self.potential_stern
-                    - (potential_stern - potential_0)
+                    - (self.potential_stern - self.potential_0)
                     * self.c1
                     / (43.0 * const.DIELECTRIC_VACUUM)
                     * self.d
@@ -354,7 +355,7 @@ class Quartz:
     def __calc_cond_potential_and_charges_2013(
         self,
         xn: np.ndarray = None,
-        iter_max: int = 1000,
+        iter_max: int = 10000,
         convergence_condition: float = 1.0e-10,
         oscillation_tol: float = 1.0e-2,
         beta: float = 0.75,

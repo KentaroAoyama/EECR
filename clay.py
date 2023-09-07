@@ -92,11 +92,21 @@ class TLMParams:
         self.gamma_1i = gamma_1i
         self.gamma_2i = gamma_2i
         self.gamma_3i = gamma_3i
-        self.qii = qii * 1.0e18 * const.ELEMENTARY_CHARGE
-        self.k1i = self.calc_K_T(k1i, T)
-        self.k2i = self.calc_K_T(k2i, T)
-        self.k3i = self.calc_K_T(k3i, T)
-        self.k4i = self.calc_K_T(k4i, T)
+        self.qii = qii
+        if qii is not None:
+            self.qii = qii * 1.0e18 * const.ELEMENTARY_CHARGE
+        self.k1i = k1i
+        if k1i is not None:
+            self.k1i = self.calc_K_T(k1i, T)
+        self.k2i = k2i
+        if k2i is not None:
+            self.k2i = self.calc_K_T(k2i, T)
+        self.k3i = k3i
+        if k3i is not None:
+            self.k3i = self.calc_K_T(k3i, T)
+        self.k4i = k4i
+        if k4i is not None:
+            self.k4i = self.calc_K_T(k4i, T)
         self.c1i = c1i
         self.c2i = c2i
 
@@ -327,7 +337,7 @@ class Phyllosilicate:
         return d_cf
 
     def __calc_mobility_diffuse(self, _x: float, _s: str) -> float or None:
-        """Calculate Na+ mobility at diffuse layer based on Bourg &
+        """Calculate mobility of Na+ and Cl- at diffuse layer based on Bourg &
         Sposito (2011).
 
         Args:
@@ -341,7 +351,7 @@ class Phyllosilicate:
         if _s == Species.Na.name:
             return _m
         if _s == Species.Cl.name:
-            return _m * 0.5
+            return _m
         return None
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
@@ -1110,7 +1120,7 @@ class Phyllosilicate:
             List: list containing potentials and charges
               [phi0, phib, phid, phir, q0, qb, qs]
         """
-        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
+        # assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
 
@@ -1661,7 +1671,7 @@ class Phyllosilicate:
         """
         # When the layer thickness is less than 1 nm,, water molecules
         # cannot pass between the layers of smectite (Shirozu, 1998)
-        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
+        # assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert self._check_if_calculated_electrical_params_truncated(), (
             "Before calculating the conductivity of interlayer, we should "
             "obtain electrical parameters for truncated diffuse layer case"
@@ -1804,11 +1814,30 @@ class Phyllosilicate:
 
     def __calc_na_density_at_x(self, x: float) -> float:
         phix = self.potential_zeta_i * np.exp(-self.kappa_truncated * x)
-        return np.exp(
+        return self.ion_props[Species.Na.name][IonProp.Molarity.name] * np.exp(
             -const.ELEMENTARY_CHARGE * phix / (const.BOLTZMANN_CONST * self.temperature)
         )
 
     def calc_partition_coefficient(self) -> float:
+        # TODO:
+        if self.xd is None:
+            self.calc_xd()
+        if self.kappa_truncated is None:
+            self.__calc_kappa_truncated()
+        _xdl = self.layer_width * 0.5
+        gamma_na_diffuse = (
+            1000.0
+            * const.AVOGADRO_CONST
+            * quad(self.__calc_na_density_at_x, self.xd, _xdl)[0]
+        )
+        gamma_na_stern = self.__calc_n_stern("inner")
+        self.partition_coefficient = gamma_na_stern / (
+            gamma_na_stern + gamma_na_diffuse
+        )
+        return self.partition_coefficient
+    
+    def calc_cation_density(self, xy_unit: float) -> float:
+        # TODO:
         if self.xd is None:
             self.calc_xd()
         if self.kappa_truncated is None:
@@ -1820,11 +1849,9 @@ class Phyllosilicate:
             * self.ion_props[Species.Na.name][IonProp.Molarity.name]
             * quad(self.__calc_na_density_at_x, self.xd, _xdl)[0]
         )
-        gamma_na_stern = self.__calc_n_stern("inner")
-        self.partition_coefficient = gamma_na_stern / (
-            gamma_na_stern + gamma_na_diffuse
-        )
-        return self.partition_coefficient
+        gamma_stern = self.__calc_n_stern("inner")
+        return (gamma_na_diffuse + gamma_stern) * 1.0e-18 / (xy_unit * self.layer_width * const.AVOGADRO_CONST)
+
 
     def get_logger(self) -> Logger:
         """Getter for the logging.Logger

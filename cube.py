@@ -276,7 +276,7 @@ class FEM_Input_Cube:
         self.rotation_angle_ls = rotation_angle_ls
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
-        # the Stern and diffusion layers.
+        # the stern and diffusion layers.
         if self.logger is not None:
             self.logger.info(
                 "Adding up the conductivity of the electrical double layer..."
@@ -1166,10 +1166,9 @@ class FEM_Input_Cube:
 
         Returns:
             List or None: Stiffness matrix described at pp.8 in Garboczi (1998). First
-                index indicates argument variable of sigma's first index and
-                second and third index (0 to 7) indicates the location of the
-                node (see Fig.1 of Garboczi, 1998). If the stiffness matrix is
-                not calculated, return None.
+                index indicates argument variable of sigma's indices (0 to 7) indicates
+                the location of the node (see Fig.1 of Garboczi, 1998). If the stiffness
+                matrix is not calculated, return None.
         """
         if self.dk is not None:
             return deepcopy(self.dk)

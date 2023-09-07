@@ -40,7 +40,7 @@ def run():
     cnacl = 1.0e-3
     temperature = 298.15
     # set fluid instance
-    nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph)
+    nacl = NaCl(temperature=temperature, molarity=cnacl, ph=ph)
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
 
@@ -103,7 +103,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
 
     # set NaCl instance
     ph = 7.0
-    nacl = NaCl(temperature=temperature, cnacl=cnacl, ph=ph, logger=logger, pressure=5.0e6)
+    nacl = NaCl(temperature=temperature, molarity=cnacl, ph=ph, logger=logger, pressure=5.0e6)
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
 
@@ -350,6 +350,6 @@ def main():
 
 if __name__ == "__main__":
     # main()
-    experiment()
-    # output_fig()
+    # experiment()
+    output_fig()
     # exec_single_condition(0., 298.15, 0.1, 0.1, 42)

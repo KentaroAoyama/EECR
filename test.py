@@ -14,11 +14,12 @@ from logging import getLogger, FileHandler, Formatter, DEBUG
 import time
 import pickle
 from os import path, getcwd, listdir, cpu_count, makedirs
+from functools import partial
 from copy import deepcopy
 from concurrent import futures
 from collections import OrderedDict
 from statistics import mean, stdev
-from math import log10
+from math import log10, sqrt, log
 from sys import float_info
 
 from matplotlib import pyplot as plt
@@ -27,12 +28,18 @@ import matplotlib.cm as cm
 import numpy as np
 from tqdm import tqdm
 import pandas as pd
-from scipy.optimize import least_squares, curve_fit
+from scipy.optimize import least_squares, curve_fit, bisect
 
 from clay import Smectite, Kaolinite
 from mineral import Quartz
 import constants as const
-from fluid import NaCl, calc_nacl_activities, calc_density, calc_dielec_nacl_RaspoAndNeau2020
+from fluid import (
+    NaCl,
+    calc_nacl_activities,
+    calc_density,
+    calc_dielec_nacl_RaspoAndNeau2020,
+    calc_X_L_Sat,
+)
 from msa import calc_mobility
 from solver import FEM_Cube
 from cube import FEM_Input_Cube
@@ -79,7 +86,6 @@ def Revil_etal_1998_fig3():
         # Kaolinite
         kaolinite = Kaolinite(
             nacl=nacl,
-            xd=None,
             logger=None,
         )
         kaolinite.calc_potentials_and_charges_inf()
@@ -335,7 +341,7 @@ def Revil_etal_fig2():
     nacl_ref = NaCl(molarity=0.577, temperature=273.15 + 25.0, ph=7.0)
     nacl_ref.sen_and_goode_1992()
     # r_ls = np.linspace(1.0e-9, 13.0e-9, 10).tolist()  #!
-    r_ls = [2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
+    r_ls = [1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
     r_result: Dict = {}
     for _r in r_ls:
         print("======")
@@ -534,6 +540,7 @@ def goncalves_fig6():
     _pth = path.join(test_dir(), "Goncalves_fig6_zeta.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+
 def goncalves_fig4():
     print("test: Goncalves et al., fig4")
     r = 2.0e-9
@@ -551,11 +558,13 @@ def goncalves_fig4():
     _pth = path.join(test_dir(), "Goncalves_fig4_fq.png")
     fig.savefig(_pth, dpi=200, bbox_inches="tight")
 
+
 def get_quartz_init():
+    print("get_quartz_init")
     init_dict = {}
-    molarity_ls = np.logspace(-7, 0.7, 10, base=10)
+    molarity_ls = np.logspace(-7, 0.7, 100, base=10.0)
     xn0 = None
-    for i, _t in enumerate(np.linspace(293.15, 493.15, 10).tolist()):
+    for i, _t in enumerate(np.linspace(293.15, 493.15, 20).tolist()):
         _dct: Dict = init_dict.setdefault(_t, {})
         for molarity in molarity_ls:
             print(_t, molarity)  #!
@@ -779,7 +788,7 @@ def smectite_cond_intra():
 def smec_cond_intra_r_dependence():
     print("smectite_cond_intra_r_dependence")
     molarity_ls = np.logspace(-3, 0.7, 10, base=10)
-    r_ls = [2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
+    r_ls = [1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
     condnacl_ls = []
     fig, ax = plt.subplots()
     for i, _r in enumerate(r_ls):
@@ -796,8 +805,8 @@ def smec_cond_intra_r_dependence():
             smectite = Smectite(nacl, layer_width=_r)
             smectite.calc_potentials_and_charges_truncated()
             _, (stern, diffuse) = smectite.calc_cond_interlayer()
-            stern_ls.append(stern)
-            zeta_ls.append(diffuse)
+            stern_ls.append(const.ELEMENTARY_CHARGE * stern / (_r * 0.5))
+            zeta_ls.append(const.ELEMENTARY_CHARGE * diffuse / (_r * 0.5))
         ax.plot(
             molarity_ls,
             stern_ls,
@@ -805,7 +814,9 @@ def smec_cond_intra_r_dependence():
             label=_r,
             linestyle="solid",
         )
-        ax.plot(molarity_ls, zeta_ls, color=cm.jet(float(i) / len(r_ls)), linestyle="dotted")
+        ax.plot(
+            molarity_ls, zeta_ls, color=cm.jet(float(i) / len(r_ls)), linestyle="dotted"
+        )
     ax.legend()
     ax.set_xscale("log")
     fig.savefig(path.join(test_dir(), "Smectite_cond_intra_r_dependence.png"), dpi=200)
@@ -1301,16 +1312,16 @@ def get_smectite_init_params_truncated():
     # TODO: ch: 0.1, cna: 0.01でoverflowを起こす場合があるのでfix
     ch_ls = np.logspace(-14, -1, 14, base=10.0).tolist()
     ch_ls = [10.0 ** (-7)]
-    r_ls = np.linspace(1.0e-9, 1.3e-8, 10).tolist()
+    r_ls = np.linspace(1.0e-9, 1.3e-8, 13).tolist()
     # r_ls = [1.166666666666666666e-8, 1.3e-8]
-    conc_ls = np.logspace(-7.0, 0.7, 20, base=10.0).tolist()
+    conc_ls = np.logspace(-7.0, 0.7, 50, base=10.0).tolist()
 
     # sort
     ch_ls = sort_by_center(ch_ls, 1.0e-7)
     conc_ls = sort_by_center(conc_ls, 0.01)
     t_ls = np.linspace(298.15, 498.15, 10).tolist()
     r_t_ch_cna_init_dict: Dict = {}
-    pool = futures.ProcessPoolExecutor(max_workers=2)
+    pool = futures.ProcessPoolExecutor(max_workers=cpu_count()-2)
     for _r in r_ls:
         # calc_t_ch_cna_init_smec_trun(
         #     r_t_ch_cna_init_dict, _r=_r, t_ls=t_ls, ch_ls=ch_ls, conc_ls=conc_ls
@@ -1357,7 +1368,8 @@ def test_single_condition():
 
 
 def test_sen_and_goode_1992():
-    molarity_ls = [
+    print("test_sen_and_goode_1992")
+    molality_ls = [
         0.09,
         0.26,
         0.858,
@@ -1374,16 +1386,16 @@ def test_sen_and_goode_1992():
     }
     t_exp = [22.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0]
     ion_props: Dict = const.ion_props_default.copy()
-    molarity_tempe_dct: Dict = {}
-    for molarity in molarity_ls:
-        _tempe_dct: Dict = molarity_tempe_dct.setdefault(molarity, {})
+    molality_tempe_dct: Dict = {}
+    for molality in molality_ls:
+        _tempe_dct: Dict = molality_tempe_dct.setdefault(molality, {})
         for tempe in tempe_ls:
-            ion_props["Na"]["Molarity"] = molarity
-            ion_props["Cl"]["Molarity"] = molarity
-            nacl = NaCl(temperature=tempe, molarity=molarity)
+            ion_props["Na"]["Molality"] = molality
+            ion_props["Cl"]["Molality"] = molality
+            nacl = NaCl(temperature=tempe, molality=molality)
             _tempe_dct.setdefault(tempe, nacl.sen_and_goode_1992())
     fig, ax = plt.subplots()
-    for molarity, _tempe_dct in molarity_tempe_dct.items():
+    for molarity, _tempe_dct in molality_tempe_dct.items():
         tempe_ls: List = []
         cond_ls: List = []
         for _tempe, _cond in _tempe_dct.items():
@@ -1424,6 +1436,7 @@ def search_ill_cond():
 
 def test_quartz():
     """Revil & Glover (1997), fig.3"""
+    print("test_quartz (potential)")
     molarity_potential: Dict = {}
     molarity_ls = [1, 0.1, 0.01, 0.001]
     ph_ls = np.arange(0.0, 12.0, 0.1).tolist()
@@ -1443,97 +1456,83 @@ def test_quartz():
     fig.savefig(path.join(test_dir(), "quartz_stern.png"), dpi=200)
 
 
-def calc_quartz_mobility():
-    molarity_ls = [0.55, 0.3, 0.0000001]
-    mobility_zhang_ls = [
-        5.474820923831422e-09,
-        6.7903929391458455e-09,
-        5.2868390444305864e-08,
-    ]
-    # normalized mobility
-    mn_ls = []
-    for molarity, mtmp in zip(molarity_ls, mobility_zhang_ls):
-        ion_props_tmp = deepcopy(const.ion_props_default)
-        ion_props_tmp["Na"]["Molarity"] = molarity
-        ion_props_tmp["Cl"]["Molarity"] = molarity
-        mn_ls.append(mtmp / NaCl(temperature=298.15, pressure=1.0e5, molarity=molarity))
+# def calc_quartz_mobility():
+#     molarity_ls = [0.55, 0.3, 0.0000001]
+#     mobility_zhang_ls = [
+#         5.474820923831422e-09,
+#         6.7903929391458455e-09,
+#         5.2868390444305864e-08,
+#     ]
+#     # normalized mobility
+#     mn_ls = []
+#     for molarity, mtmp in zip(molarity_ls, mobility_zhang_ls):
+#         ion_props_tmp = deepcopy(const.ion_props_default)
+#         ion_props_tmp["Na"]["Molarity"] = molarity
+#         ion_props_tmp["Cl"]["Molarity"] = molarity
+#         mn_ls.append(mtmp / NaCl(temperature=298.15, pressure=1.0e5, molarity=molarity))
 
-    def __fit_exp(params, x, y):
-        return np.array(y) - (params[0] + np.exp(-params[1] * x + params[2]))
-        # return np.sqrt(np.square(np.array(y) - (params[0] + np.exp(-params[1] * x))))
+#     def __fit_exp(params, x, y):
+#         return np.array(y) - (params[0] + np.exp(-params[1] * x + params[2]))
+#         # return np.sqrt(np.square(np.array(y) - (params[0] + np.exp(-params[1] * x))))
 
-    result = least_squares(
-        __fit_exp,
-        [0.0, 0.0, 0.0],
-        args=(np.array(molarity_ls), np.array(mn_ls)),
-        method="lm",
-    )
-    print(mn_ls)
-    print(result)
+#     result = least_squares(
+#         __fit_exp,
+#         [0.0, 0.0, 0.0],
+#         args=(np.array(molarity_ls), np.array(mn_ls)),
+#         method="lm",
+#     )
+#     print(mn_ls)
+#     print(result)
 
 
-def test_mobility():
-    # TODO:
-    # _ls = [1.0e-5, 1.0e-4, 1.0e-3, 1.0e-2, 1.0e-1, 1.0, 2.0, 3.0]
-    # ion_props: Dict = deepcopy(const.ion_props_default)
-    # for i in _ls:
-    #     ion_props["Na"]["Molarity"] = i
-    #     ion_props["Cl"]["Molarity"] = i
-    #     _msa_props: Dict = calc_mobility(ion_props, 298.0)
-    #     m_na = _msa_props["Na"]["mobility"]
-    #     m_cl = _msa_props["Cl"]["mobility"]
-    #     print("=======")
-    #     print(f"Conc: {i}")  #!
-    #     print(f"Na: {m_na}")  #!
-    #     print(f"Cl: {m_cl}")  #!
-    #     print(f"_msa_props: {_msa_props}") #!
-    _min, _max = 20, 200
-    tempe_ls = [float(i) for i in range(_min, _max)]
-    _min, _max = 1, 1000
-    nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
-    # _ls = [20., 50., 80., 110., 140., 170., 200.]
-    ion_props: Dict = deepcopy(const.ion_props_default)
-    mu_na_msa_ls: List = []
-    mu_na_revil_ls = []
-    mu_cl_ls: List = []
-    cond_ls: List = []
-    _cna = 1.0
-    for i in tempe_ls:
-        print("=======")
-        print(f"Tempe: {i}")  #!
-        ion_props["Na"]["Molarity"] = _cna
-        ion_props["Cl"]["Molarity"] = _cna
-        _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
-        nacl = NaCl(temperature=i + 273.15, molarity=_cna, pressure=5.0e6)
-        mu_na_revil_ls.append(nacl.ion_props["Na"]["Mobility"])
-        m_na = _msa_props["Na"]["mobility"] * 0.1
-        mu_na_msa_ls.append(m_na)
-    _, ax = plt.subplots()
-    ax.plot(tempe_ls, mu_na_msa_ls, label="MSA")
-    ax.plot(tempe_ls, mu_na_revil_ls, label="Linear")
-    ax.legend()
-    # ax.set_yscale("log")
-    plt.show()
+# def test_mobility():
+#     _min, _max = 20, 200
+#     tempe_ls = [float(i) for i in range(_min, _max)]
+#     _min, _max = 1, 1000
+#     nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
+#     # _ls = [20., 50., 80., 110., 140., 170., 200.]
+#     ion_props: Dict = deepcopy(const.ion_props_default)
+#     mu_na_msa_ls: List = []
+#     mu_na_revil_ls = []
+#     mu_cl_ls: List = []
+#     cond_ls: List = []
+#     _cna = 1.0
+#     for i in tempe_ls:
+#         print("=======")
+#         print(f"Tempe: {i}")  #!
+#         ion_props["Na"]["Molarity"] = _cna
+#         ion_props["Cl"]["Molarity"] = _cna
+#         _msa_props: Dict = calc_mobility(ion_props, i + 273.15)
+#         nacl = NaCl(temperature=i + 273.15, molarity=_cna, pressure=5.0e6)
+#         mu_na_revil_ls.append(nacl.ion_props["Na"]["Mobility"])
+#         m_na = _msa_props["Na"]["mobility"] * 0.1
+#         mu_na_msa_ls.append(m_na)
+#     _, ax = plt.subplots()
+#     ax.plot(tempe_ls, mu_na_msa_ls, label="MSA")
+#     ax.plot(tempe_ls, mu_na_revil_ls, label="Linear")
+#     ax.legend()
+#     # ax.set_yscale("log")
+#     plt.show()
 
-    _min, _max = 1, 1000
-    nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
-    mu_na_ls = []
-    mu_cl_ls = []
-    for _molarity in nacl_ls:
-        print("=======")
-        print(f"molarity: {_molarity}")  #!
-        ion_props["Na"]["Molarity"] = _molarity
-        ion_props["Cl"]["Molarity"] = _molarity
-        _msa_props: Dict = calc_mobility(ion_props, 293.15)
-        m_na = _msa_props["Na"]["mobility"]
-        m_cl = _msa_props["Cl"]["mobility"]
-        mu_na_ls.append(m_na)
-        mu_cl_ls.append(m_cl)
-        _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.0
-    _, ax = plt.subplots()
-    ax.plot(nacl_ls, mu_na_ls)
-    ax.set_yscale("log")
-    plt.show()
+#     _min, _max = 1, 1000
+#     nacl_ls = [float(i) / 1000.0 for i in range(_min, _max)]
+#     mu_na_ls = []
+#     mu_cl_ls = []
+#     for _molarity in nacl_ls:
+#         print("=======")
+#         print(f"molarity: {_molarity}")  #!
+#         ion_props["Na"]["Molarity"] = _molarity
+#         ion_props["Cl"]["Molarity"] = _molarity
+#         _msa_props: Dict = calc_mobility(ion_props, 293.15)
+#         m_na = _msa_props["Na"]["mobility"]
+#         m_cl = _msa_props["Cl"]["mobility"]
+#         mu_na_ls.append(m_na)
+#         mu_cl_ls.append(m_cl)
+#         _coeff = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _cna * 1000.0
+#     _, ax = plt.subplots()
+#     ax.plot(nacl_ls, mu_na_ls)
+#     ax.set_yscale("log")
+#     plt.show()
 
 
 def ws_single_1(
@@ -2751,7 +2750,7 @@ def test_quartz_charge():
             print(ph)
             quartz = Quartz(
                 NaCl(molarity=molarity, pressure=1.0e5, temperature=298.15, ph=ph),
-                method="leroy2013",
+                method="leroy2022",
             )
             _ls.append(quartz.get_surface_charge())
         ax.plot(ph_ls, _ls, label=molarity)
@@ -3047,6 +3046,7 @@ def fit_bulk_mobility():
     print(result.best_fit)
     print(result.best_values)
 
+
 def test_activity():
     molarity_ls = np.logspace(-4, 0.7, num=20, base=10.0)
     activity_ls = []
@@ -3059,6 +3059,7 @@ def test_activity():
     ax.set_xscale("log")
     ax.set_yscale("log")
     plt.show()
+
 
 def test_fraction():
     molarity_ls = np.logspace(-4, -1, num=20, base=10.0)
@@ -3073,14 +3074,56 @@ def test_fraction():
     ax.set_xscale("log")
     plt.show()
 
+
 def test_smectite_temperature():
     # compare with Fig.6 of Revil et al.(1998)
-    sen_goode_x = [25.0, 45.0, 45.0, 80.0, 80.0, 80.0, 110.0, 110.0, 110.0, 140.0, 140.0, 140.0, 170.0, 170.0]
-    sen_goode_y = [1.0, 1.81294452347084, 2.56827880512091, 2.7923186344238973, 2.952347083926032, 3.253200568990043, 3.957325746799431, 4.418207681365576, 4.578236130867709, 5.7368421052631575, 5.941678520625889, 6.1849217638691325, 7.0234708392603125, 7.209103840682788]
-    clavier_x = [25.0, 80.12684989429177, 144.87315010570825, 194.57364341085275,]
+    sen_goode_x = [
+        25.0,
+        45.0,
+        45.0,
+        80.0,
+        80.0,
+        80.0,
+        110.0,
+        110.0,
+        110.0,
+        140.0,
+        140.0,
+        140.0,
+        170.0,
+        170.0,
+    ]
+    sen_goode_y = [
+        1.0,
+        1.81294452347084,
+        2.56827880512091,
+        2.7923186344238973,
+        2.952347083926032,
+        3.253200568990043,
+        3.957325746799431,
+        4.418207681365576,
+        4.578236130867709,
+        5.7368421052631575,
+        5.941678520625889,
+        6.1849217638691325,
+        7.0234708392603125,
+        7.209103840682788,
+    ]
+    clavier_x = [
+        25.0,
+        80.12684989429177,
+        144.87315010570825,
+        194.57364341085275,
+    ]
     clavier_y = [1.0, 2.9331436699857756, 5.41678520625889, 7.503556187766714]
     waxman_thomas_x = [50.0, 80.0, 110.0, 140.0, 170.0]
-    waxman_thomas_y = [2.369843527738265, 3.5028449502133716, 4.501422475106685, 5.461593172119488, 6.261735419630156]
+    waxman_thomas_y = [
+        2.369843527738265,
+        3.5028449502133716,
+        4.501422475106685,
+        5.461593172119488,
+        6.261735419630156,
+    ]
     molarity_ls = [1.0e-3, 1.0e-2, 1.0e-1, 1.0, 3.0, 5.0]
     tempe_ls = np.linspace(298.15, 473.15, 10).tolist()
     tempe_degree = [t - 273.15 for t in tempe_ls]
@@ -3099,21 +3142,70 @@ def test_smectite_temperature():
         _ls = [i / cond_25 for i in _ls]
         ax.plot(tempe_degree, _ls, color=cm.jet(float(i) / len(molarity_ls)), label=m)
     # plot previous study's results
-    ax.scatter(waxman_thomas_x, waxman_thomas_y, marker=",",)
+    ax.scatter(
+        waxman_thomas_x,
+        waxman_thomas_y,
+        marker=",",
+    )
     ax.scatter(clavier_x, clavier_y, marker="o", facecolor="None")
     ax.scatter(sen_goode_x, sen_goode_y, marker="^")
     ax.legend()
-    fig.savefig(path.join(test_dir(), "test_smectite_temperature.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(
+        path.join(test_dir(), "test_smectite_temperature.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
 
 
 def test_smectite_temperature():
     # compare with Fig.6 of Revil et al.(1998)
-    sen_goode_x = [25.0, 45.0, 45.0, 80.0, 80.0, 80.0, 110.0, 110.0, 110.0, 140.0, 140.0, 140.0, 170.0, 170.0]
-    sen_goode_y = [1.0, 1.81294452347084, 2.56827880512091, 2.7923186344238973, 2.952347083926032, 3.253200568990043, 3.957325746799431, 4.418207681365576, 4.578236130867709, 5.7368421052631575, 5.941678520625889, 6.1849217638691325, 7.0234708392603125, 7.209103840682788]
-    clavier_x = [25.0, 80.12684989429177, 144.87315010570825, 194.57364341085275,]
+    sen_goode_x = [
+        25.0,
+        45.0,
+        45.0,
+        80.0,
+        80.0,
+        80.0,
+        110.0,
+        110.0,
+        110.0,
+        140.0,
+        140.0,
+        140.0,
+        170.0,
+        170.0,
+    ]
+    sen_goode_y = [
+        1.0,
+        1.81294452347084,
+        2.56827880512091,
+        2.7923186344238973,
+        2.952347083926032,
+        3.253200568990043,
+        3.957325746799431,
+        4.418207681365576,
+        4.578236130867709,
+        5.7368421052631575,
+        5.941678520625889,
+        6.1849217638691325,
+        7.0234708392603125,
+        7.209103840682788,
+    ]
+    clavier_x = [
+        25.0,
+        80.12684989429177,
+        144.87315010570825,
+        194.57364341085275,
+    ]
     clavier_y = [1.0, 2.9331436699857756, 5.41678520625889, 7.503556187766714]
     waxman_thomas_x = [50.0, 80.0, 110.0, 140.0, 170.0]
-    waxman_thomas_y = [2.369843527738265, 3.5028449502133716, 4.501422475106685, 5.461593172119488, 6.261735419630156]
+    waxman_thomas_y = [
+        2.369843527738265,
+        3.5028449502133716,
+        4.501422475106685,
+        5.461593172119488,
+        6.261735419630156,
+    ]
     molarity_ls = [1.0e-3, 1.0e-2, 1.0e-1, 1.0, 3.0, 5.0]
     tempe_ls = np.linspace(298.15, 473.15, 10).tolist()
     tempe_degree = [t - 273.15 for t in tempe_ls]
@@ -3132,20 +3224,70 @@ def test_smectite_temperature():
         _ls = [i / cond_25 for i in _ls]
         ax.plot(tempe_degree, _ls, color=cm.jet(float(i) / len(molarity_ls)), label=m)
     # plot previous study's results
-    ax.scatter(waxman_thomas_x, waxman_thomas_y, marker=",",)
+    ax.scatter(
+        waxman_thomas_x,
+        waxman_thomas_y,
+        marker=",",
+    )
     ax.scatter(clavier_x, clavier_y, marker="o", facecolor="None")
     ax.scatter(sen_goode_x, sen_goode_y, marker="^")
     ax.legend()
-    fig.savefig(path.join(test_dir(), "test_smectite_temperature.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(
+        path.join(test_dir(), "test_smectite_temperature.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
+
 
 def test_smec_surface_temperature():
     # compare with Fig.6 of Revil et al.(1998)
-    sen_goode_x = [25.0, 45.0, 45.0, 80.0, 80.0, 80.0, 110.0, 110.0, 110.0, 140.0, 140.0, 140.0, 170.0, 170.0]
-    sen_goode_y = [1.0, 1.81294452347084, 2.56827880512091, 2.7923186344238973, 2.952347083926032, 3.253200568990043, 3.957325746799431, 4.418207681365576, 4.578236130867709, 5.7368421052631575, 5.941678520625889, 6.1849217638691325, 7.0234708392603125, 7.209103840682788]
-    clavier_x = [25.0, 80.12684989429177, 144.87315010570825, 194.57364341085275,]
+    sen_goode_x = [
+        25.0,
+        45.0,
+        45.0,
+        80.0,
+        80.0,
+        80.0,
+        110.0,
+        110.0,
+        110.0,
+        140.0,
+        140.0,
+        140.0,
+        170.0,
+        170.0,
+    ]
+    sen_goode_y = [
+        1.0,
+        1.81294452347084,
+        2.56827880512091,
+        2.7923186344238973,
+        2.952347083926032,
+        3.253200568990043,
+        3.957325746799431,
+        4.418207681365576,
+        4.578236130867709,
+        5.7368421052631575,
+        5.941678520625889,
+        6.1849217638691325,
+        7.0234708392603125,
+        7.209103840682788,
+    ]
+    clavier_x = [
+        25.0,
+        80.12684989429177,
+        144.87315010570825,
+        194.57364341085275,
+    ]
     clavier_y = [1.0, 2.9331436699857756, 5.41678520625889, 7.503556187766714]
     waxman_thomas_x = [50.0, 80.0, 110.0, 140.0, 170.0]
-    waxman_thomas_y = [2.369843527738265, 3.5028449502133716, 4.501422475106685, 5.461593172119488, 6.261735419630156]
+    waxman_thomas_y = [
+        2.369843527738265,
+        3.5028449502133716,
+        4.501422475106685,
+        5.461593172119488,
+        6.261735419630156,
+    ]
     molarity_ls = [1.0e-3, 1.0e-2, 1.0e-1, 1.0, 3.0, 5.0]
     tempe_ls = np.linspace(298.15, 473.15, 10).tolist()
     tempe_degree = [t - 273.15 for t in tempe_ls]
@@ -3164,20 +3306,70 @@ def test_smec_surface_temperature():
         _ls = [i / cond_25 for i in _ls]
         ax.plot(tempe_degree, _ls, color=cm.jet(float(i) / len(molarity_ls)), label=m)
     # plot previous study's results
-    ax.scatter(waxman_thomas_x, waxman_thomas_y, marker=",",)
+    ax.scatter(
+        waxman_thomas_x,
+        waxman_thomas_y,
+        marker=",",
+    )
     ax.scatter(clavier_x, clavier_y, marker="o", facecolor="None")
     ax.scatter(sen_goode_x, sen_goode_y, marker="^")
     ax.legend()
-    fig.savefig(path.join(test_dir(), "test_smec_surface_temperature.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(
+        path.join(test_dir(), "test_smec_surface_temperature.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
+
 
 def test_quartz_temperature():
     # compare with Fig.6 of Revil et al.(1998)
-    sen_goode_x = [25.0, 45.0, 45.0, 80.0, 80.0, 80.0, 110.0, 110.0, 110.0, 140.0, 140.0, 140.0, 170.0, 170.0]
-    sen_goode_y = [1.0, 1.81294452347084, 2.56827880512091, 2.7923186344238973, 2.952347083926032, 3.253200568990043, 3.957325746799431, 4.418207681365576, 4.578236130867709, 5.7368421052631575, 5.941678520625889, 6.1849217638691325, 7.0234708392603125, 7.209103840682788]
-    clavier_x = [25.0, 80.12684989429177, 144.87315010570825, 194.57364341085275,]
+    sen_goode_x = [
+        25.0,
+        45.0,
+        45.0,
+        80.0,
+        80.0,
+        80.0,
+        110.0,
+        110.0,
+        110.0,
+        140.0,
+        140.0,
+        140.0,
+        170.0,
+        170.0,
+    ]
+    sen_goode_y = [
+        1.0,
+        1.81294452347084,
+        2.56827880512091,
+        2.7923186344238973,
+        2.952347083926032,
+        3.253200568990043,
+        3.957325746799431,
+        4.418207681365576,
+        4.578236130867709,
+        5.7368421052631575,
+        5.941678520625889,
+        6.1849217638691325,
+        7.0234708392603125,
+        7.209103840682788,
+    ]
+    clavier_x = [
+        25.0,
+        80.12684989429177,
+        144.87315010570825,
+        194.57364341085275,
+    ]
     clavier_y = [1.0, 2.9331436699857756, 5.41678520625889, 7.503556187766714]
     waxman_thomas_x = [50.0, 80.0, 110.0, 140.0, 170.0]
-    waxman_thomas_y = [2.369843527738265, 3.5028449502133716, 4.501422475106685, 5.461593172119488, 6.261735419630156]
+    waxman_thomas_y = [
+        2.369843527738265,
+        3.5028449502133716,
+        4.501422475106685,
+        5.461593172119488,
+        6.261735419630156,
+    ]
     molarity_ls = [1.0e-3, 1.0e-2, 1.0e-1, 1.0, 3.0, 5.0]
     tempe_ls = np.linspace(298.15, 473.15, 10).tolist()
     tempe_degree = [t - 273.15 for t in tempe_ls]
@@ -3194,15 +3386,25 @@ def test_quartz_temperature():
         _ls = [i / cond_25 for i in _ls]
         ax.plot(tempe_degree, _ls, color=cm.jet(float(i) / len(molarity_ls)), label=m)
     # plot previous study's results
-    ax.scatter(waxman_thomas_x, waxman_thomas_y, marker=",",)
+    ax.scatter(
+        waxman_thomas_x,
+        waxman_thomas_y,
+        marker=",",
+    )
     ax.scatter(clavier_x, clavier_y, marker="o", facecolor="None")
     ax.scatter(sen_goode_x, sen_goode_y, marker="^")
     ax.legend()
-    fig.savefig(path.join(test_dir(), "test_quartz_temperature.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(
+        path.join(test_dir(), "test_quartz_temperature.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
+
 
 def vogit_pressure():
-    # investigate the equilibrium pressure of the data in 
+    # investigate the equilibrium pressure of the data in
     pass
+
 
 def test_dielec_RaspoandNeau2020():
     print("test_dielec_RaspoandNeau2020")
@@ -3214,21 +3416,440 @@ def test_dielec_RaspoandNeau2020():
         dt_ls = []
         for m in molarity_ls:
             nacl = NaCl(temperature=t, pressure=5.0e6, molarity=m)
-            dt_ls.append(calc_dielec_nacl_RaspoAndNeau2020(t, nacl.ion_props["Na"]["MolFraction"]))
+            dt_ls.append(
+                calc_dielec_nacl_RaspoAndNeau2020(
+                    t, nacl.ion_props["Na"]["MolFraction"]
+                )
+            )
         ax.plot(molarity_ls, dt_ls, label=t)
-    
+
     ax.legend()
-    fig.savefig(path.join(test_dir(), "RaspoandNeau2020.png"), dpi=200, bbox_inches="tight")
+    fig.savefig(
+        path.join(test_dir(), "RaspoandNeau2020.png"), dpi=200, bbox_inches="tight"
+    )
+
+
+def test_leroyetal_2022():
+    print("test_leroyetal_2022")
+    x_ex = [
+        0.000113048,
+        0.000154421,
+        0.000210273,
+        0.000287319,
+        0.000387261,
+        0.000524723,
+        0.000724056,
+        0.001023689,
+        0.001385934,
+        0.001981016,
+        0.002736892,
+        0.003696382,
+        0.005106772,
+        0.006897085,
+        0.009421282,
+        0.012869284,
+        0.017579187,
+        0.024012822,
+        0.032801039,
+        0.044805569,
+        0.061396628,
+        0.082426001,
+        0.117483891,
+        0.169843518,
+        0.23200288,
+        0.316911337,
+        0.432894607,
+        0.591325456,
+        0.807738857,
+        1.103355274,
+        1.507161443,
+        2.03553664,
+        2.812215353,
+        3.841430451,
+        4.684733233,
+    ]
+    y_ex = [
+        -115.5000164,
+        -112.7385951,
+        -109.8495169,
+        -107.0706267,
+        -104.3593084,
+        -101.5719718,
+        -98.72656562,
+        -95.26879008,
+        -92.39276548,
+        -89.08174743,
+        -86.05157466,
+        -82.9676516,
+        -79.79907183,
+        -76.57808552,
+        -73.49416246,
+        -70.08773764,
+        -66.84256371,
+        -63.43613889,
+        -60.07002679,
+        -56.50235109,
+        -52.94139418,
+        -49.50473483,
+        -45.33824727,
+        -40.98195399,
+        -37.53521646,
+        -34.18926072,
+        -30.9843995,
+        -27.819851,
+        -24.89717882,
+        -22.11560116,
+        -19.59605617,
+        -17.3405595,
+        -15.87720778,
+        -14.77868617,
+        -14.65774801,
+    ]
+    y_m = []
+    for m in x_ex:
+        print(m)
+        nacl = NaCl(temperature=298.15, pressure=5.0e6, molarity=m, ph=7.0) # NOTE: Strictly speaking, ph=7.15
+        nacl.sen_and_goode_1992()
+        q = Quartz(nacl=nacl, method="leroy2022")
+        print(q.potential_zeta * 1000.0)
+        y_m.append(q.potential_zeta * 1000.0)
+
+    fig, ax = plt.subplots()
+
+    ax.plot(x_ex, y_ex)
+    ax.scatter(x_ex, y_m)
+    ax.set_xscale("log")
+    fig.savefig(
+        path.join(test_dir(), "leroyetal_2022.png"), dpi=200, bbox_inches="tight"
+    )
+
+
+# def reviletal1998():
+#     # Revil et al. (1998)のeq.(10)と, スメクタイトの導電率のオーダーが合っているかどうか確認する
+#     print("reviletal1998")
+#     # calculate formation factor F*
+#     cw_26 = [2.085, 4.049, 7.802, 14.92, 28.22, 52.49, 94.5, 139.8, 192.2, 235.5]
+#     co_26 = [1.503, 1.597, 1.826, 2.046, 2.48, 3.14, 4.13, 5.21, 6.49, 7.50]
+
+#     def __linear(x_ls: List[float], a: float, b: float):
+#         co_ls = []
+#         for x in x_ls:
+#             co_ls.append(a * x + b)
+#         return np.array(co_ls)
+
+#     model = Model(__linear, independent_vars=["x_ls"], param_names=["a", "b"])
+#     params = model.make_params()
+#     params["a"] = Parameter(name="a", value=30.0)
+#     params["b"] = Parameter(name="b", value=0.0)
+#     result = model.fit(co_26, params, x_ls=cw_26, verbose=True)
+#     Fstar = 1.0 / result.best_values["a"]
+#     phi = 0.229
+#     m = -log(Fstar, phi)
+#     print(Fstar)
+#     print(m)
+#     # Fstar = 0.229 ** (-2)
+#     # print(Fstar)
+
+#     # # solve eq.(10) in Revil et al.(1998)
+#     # def __eq10(zeta, cw, co):
+#     #     tfp = 0.38  # based on Revil et al. (1998)
+#     #     return co - cw / Fstar * (
+#     #         1.0
+#     #         - tfp
+#     #         + Fstar * zeta
+#     #         + 0.5
+#     #         * (tfp - zeta)
+#     #         * (
+#     #             1.0
+#     #             - zeta / tfp
+#     #             + sqrt((1.0 - zeta / tfp) ** 2 + 4.0 * Fstar * zeta / tfp)
+#     #         )
+#     #     )
+
+#     # zeta_ls = []
+#     # _min, _max = 0.0, 1000.0
+#     # for cw, co in zip(cw_26, co_26):
+#     #     print(f"cw: {cw}")
+#     #     __callback = partial(__eq10, cw=cw, co=co)
+#     #     print(__callback(_min), __callback(_max))
+#     #     zeta = bisect(__callback, _min, _max)
+# #     #     print(zeta)
+# #     #     zeta_ls.append(zeta)
+# #     # print(zeta_ls)
+
+#     def __bussian_7(cr, cw, co):
+#         return co - cw * phi**m * ((1.0 - cr / cw) / (1.0 - cr / co)) ** m
+
+#     cr_ls = []
+#     _min, _max = 0.00001, 100000.0
+#     for cr in np.logspace(-4, 5, 50, base=10.0):
+#         cw, co = 2.0, 1.503
+#         print(__bussian_7(co * 0.9999, cw, co), __bussian_7(cw, cw, co))
+
+#     for cw, co in zip(cw_26, co_26):
+#         print(f"cw: {cw}")
+#         __callback = partial(__bussian_7, cw=cw, co=co)
+#         print(__callback(_min), __callback(_max))
+#         cr = bisect(__callback, _min, _max)
+#         print(cr)
+#         cr_ls.append(cr)
+#     print(cr_ls)
+
+
+def compare_md_cond():
+    print("compare_md_cond")
+    results: Dict = {}
+    # load from file
+    with open(path.join(test_dir(), "MD_data", "Bourg2011.pkl"), "rb") as pkf:
+        cf_xdens_bourg = pickle.load(pkf)
+    
+    def __calc_mobility_diffuse_bourg(mbulk: float, _x: float, _s: str) -> float:
+        _m = mbulk * ((1.0 - np.exp(-0.14 * _x * 1.0e10)))
+        return _m
+
+    def __calc_eq_morality(T, P, mtarg, layer_width, xy_unit):
+        m_ls = np.logspace(-4, 0.7, 10, base=10.0)
+        m_result = [] # internal molarity
+        for m in m_ls:
+            nacl = NaCl(temperature=T, pressure=P, molarity=m)
+            smectite = Smectite(nacl=nacl, layer_width=layer_width)
+            smectite.calc_potentials_and_charges_truncated()
+            smectite.calc_cond_interlayer()
+            m_result.append(smectite.calc_cation_density(xy_unit))
+        print(m_result) #!
+        return m_ls[np.argmin(np.square(np.array(m_result) - mtarg))]
+
+    cf_ls = []
+    cond_md_ls = []
+    cond_smec_ls = []
+    T, P = 298.15, 1.0e5
+    _results: Dict = results.setdefault("Bourg and Sposito (2011)", {})
+    for cf, nacl_dens in cf_xdens_bourg.items():
+        nacl = NaCl(temperature=T, pressure=P, molarity=cf)
+
+        # calculate mobility by MSA
+        ion_props = deepcopy(const.ion_props_default)
+
+        ion_props["Na"]["Molarity"] = cf * 1 / 2
+        ion_props.setdefault("Ca", {"Molarity": cf * 1 / 4})
+        ion_props["Ca"]["Valence"] = 2
+        ion_props["Cl"]["Molarity"] = cf
+        msa_prop = calc_mobility(ion_props, T, nacl.get_dielec_fluid(), P)
+
+        # MD
+        sigma = 0.0
+        for _s, xy in nacl_dens.items():
+            x_ls = xy[0]
+            y_ls = xy[1]
+            cond_sum = 0.0
+            _mbulk = msa_prop[_s]["mobility"]
+            v = abs(ion_props[_s]["Valence"])
+            for x, y in zip(x_ls, y_ls):
+                if x > 29.0:
+                    continue
+                # number density (/m3)
+                n = 1000.0 * y * const.AVOGADRO_CONST
+                # mobility
+                m = __calc_mobility_diffuse_bourg(_mbulk, x, _s)
+                cond_sum += v * const.ELEMENTARY_CHARGE * n * m
+            sigma += cond_sum / len(x_ls)
+        smectite = Smectite(nacl=nacl, layer_width=5.8)
+        smectite.calc_potentials_and_charges_truncated()
+        smectite.calc_cond_interlayer()
+
+        cf_ls.append(cf)
+        cond_md_ls.append(sigma)
+        cond_smec_ls.append(smectite.cond_intra)
+
+        _results.setdefault("MD", []).append(sigma)
+        _results.setdefault("TLM", []).append(smectite.cond_intra)
+
+    fig, ax = plt.subplots()
+    ax.plot(cf_ls, cond_smec_ls)
+    ax.scatter(cf_ls, cond_md_ls)
+
+    # Tournassat et al. (2009)
+    # density (mol/l)
+    with open(path.join(test_dir(), "MD_data", "tournassat2009_na.pkl"), "rb") as pkf:
+        na_xy = pickle.load(pkf)
+    with open(path.join(test_dir(), "MD_data", "tournassat2009_cl.pkl"), "rb") as pkf:
+        cl_xy = pickle.load(pkf)
+
+    # x0, x1, normarized diffusion coefficient (Na, Cl) (zone Ⅱ ~ Ⅵ)
+    zone_props = {
+        0: [11.29734057365636, 14.77826510721247, 0.16, 0.0],
+        1: [14.77826510721247, 17.27181200865411, 0.52, 0.0],
+        2: [17.27181200865411, 23.74833986676091, 0.83, 1.0],
+        3: [23.74833986676091, 40.03170318959792, 0.91, 0.9],
+        4: [40.03170318959792, 60.0, 1.0, 1.0],
+    }
+
+    # (model) layer width: 10 nm
+    T = 298.15
+    P = 1.0e5
+    molarity = 0.1
+    # for
+    nacl = NaCl(temperature=T, pressure=P, molarity=molarity)
+    smectite = Smectite(nacl=nacl, layer_width=10.0e-9)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_interlayer()
+
+    ion_props = deepcopy(const.ion_props_default)
+    ion_props["Na"]["Molarity"] = molarity
+    ion_props["Cl"]["Molarity"] = molarity
+    msa_props = calc_mobility(ion_props, T, nacl.get_dielec_fluid(), P)
+
+    cond = 0.0
+    na_xy, cl_xy = np.array(na_xy), np.array(cl_xy)
+    _results: Dict = results.setdefault("Tournassat et al. (2009)", {})
+    for _, prop in zone_props.items():
+        x0, x1 = prop[0], prop[1]
+        # Na+
+        _filt = (x0 < na_xy[0]) * (na_xy[0] < x1)
+        cna = np.mean(na_xy[1][_filt])
+        cond += (
+            (x1 - x0)
+            * const.ELEMENTARY_CHARGE
+            * prop[2]
+            * msa_props["Na"]["mobility"]
+            * 1000.0
+            * const.AVOGADRO_CONST
+            * cna
+        )
+
+        # Cl-
+        _filt = (x0 < cl_xy[0]) * (cl_xy[0] < x1)
+        if len(cl_xy[1][_filt]) == 0:
+            continue
+        ccl = np.mean(cl_xy[1][_filt])
+        cond += (
+            (x1 - x0)
+            * const.ELEMENTARY_CHARGE
+            * prop[3]
+            * msa_props["Cl"]["mobility"]
+            * 1000.0
+            * const.AVOGADRO_CONST
+            * ccl
+        )
+
+    cond /= zone_props[4][1] - zone_props[0][0]
+
+    _results.setdefault("MD", []).append(cond)
+    _results.setdefault("TLM", []).append(smectite.cond_intra)
+
+    print("Tournassat et al., 2009")
+    print(cond, smectite.cond_intra)
+
+    # Zhang et al. (2014)
+    # fig. 2
+    with open(path.join(test_dir(), "MD_data", "zhang2014.pkl"), "rb") as pkf:
+        wc_xy = pickle.load(pkf)
+    wc_d = [
+        [
+            48.442064264849066,
+            121.71372930866599,
+            170.39922103213243,
+            243.1840311587147,
+            365.141187925998,
+            486.6114897760467,
+        ],
+        [
+            0.0,
+            0.031714285714285584,
+            0.10457142857142854,
+            0.18514285714285705,
+            0.4148571428571428,
+            0.5545714285714285,
+        ],
+    ]
+    # temperature (K), pressure (Pa), cation number
+    T, P, N = 298.15, 1.0e5, 32.0
+    _result: Dict = results.setdefault("Zhang et al. (2014)", {})
+    for wc, xy in wc_xy.items():
+        d0: float = None
+        if wc < 48.442064264849066:
+            d0 = 0.0
+        elif wc < 121.71372930866599:
+            l = 121.71372930866599 - 48.442064264849066
+            r = wc - 48.442064264849066
+            d0 = 0.031714285714285584 * abs(r / l)
+        elif wc < 170.39922103213243:
+            l = 170.39922103213243 - 121.71372930866599
+            r = wc - 121.71372930866599
+            d0 = (
+                0.10457142857142854 * abs(r / l) + 0.031714285714285584 * abs(l - r) / l
+            )
+        elif wc < 243.1840311587147:
+            l = 243.1840311587147 - 170.39922103213243
+            r = wc - 170.39922103213243
+            d0 = 0.18514285714285705 * abs(r / l) + 0.10457142857142854 * abs(l - r) / l
+        elif wc < 365.141187925998:
+            l = 365.141187925998 - 243.1840311587147
+            r = wc - 243.1840311587147
+            d0 = 0.4148571428571428 * abs(r / l) + 0.18514285714285705 * abs(l - r) / l
+        elif wc < 486.6114897760467:
+            l = 486.6114897760467 - 365.141187925998
+            r = wc - 365.141187925998
+            d0 = 0.5545714285714285 * abs(r / l) + 0.4148571428571428 * abs(l - r) / l
+        else:
+            d0 = 0.5545714285714285
+
+        d0 *= 1.0e-9
+        x = xy[0]
+        dens = xy[1]
+        beta = const.ELEMENTARY_CHARGE * d0 / (const.BOLTZMANN_CONST * T)
+        v = (max(x) - min(x)) * 41.44 * 35.92 * 1.0e-30 # unit volume
+        n = N / v
+        cond = const.ELEMENTARY_CHARGE * beta * n
+        # TLM
+        # mext = __calc_eq_morality(T, P, n/const.AVOGADRO_CONST, layer_width=(max(x) - min(x)) * 1.0e-10, xy_unit=41.44 * 35.92 * 1.0e-20)
+        # print(n/const.AVOGADRO_CONST, mext)
+        mext = 5.0
+        nacl = NaCl(temperature=T, pressure=P, molarity=mext)
+        smectite = Smectite(nacl=nacl, layer_width=(max(x) - min(x)) * 1.0e-10)
+        smectite.calc_potentials_and_charges_truncated()
+        smectite.calc_cond_interlayer()
+        _result.setdefault("MD", []).append(cond)
+        _result.setdefault("TLM", []).append(smectite.cond_intra)
+
+    # Greathouse et al. (2015), using the result listed in Table 3, -0.75e/u.c.
+    # temperature (K), basal spacing (d(001)), molarity (M): conductivity (S/m)
+    condition_mdresult = {(300.0, 12.2, 10.3): 6.3,
+                          (300.0, 14.79, 5.2): 9.9,
+                          (300.0, 17.0, 3.6): 7.5,
+                          (330.0, 12.23, 10.3): 10.8,
+                          (330.0, 14.89, 5.2): 18.3,
+                          (330.0, 17.21, 3.5): 13.1,
+                          (366.0, 12.28, 10.0): 17.4,
+                          (366.0, 14.99, 5.0): 26.7,
+                          (366.0, 17.46, 3.4): 22.9,}
+    _result: Dict = results.setdefault("Greathouse et al. (2015)", {})
+    for condition, mdresult in condition_mdresult.items():
+        # NOTE: In Greathouse et al. (2015) the pressure is set to 0
+        T, d, M = condition
+        P = 1.0e6
+        nacl = NaCl(temperature=T, pressure=1.0e6, molarity=5.0)
+        smectite = Smectite(nacl=nacl, layer_width=(d-9.6) * 1.0e-10)
+        smectite.calc_potentials_and_charges_truncated()
+        smectite.calc_cond_interlayer()
+        _result.setdefault("MD", []).append(mdresult)
+        _result.setdefault("TLM", []).append(smectite.cond_intra)
+
+    fig, ax = plt.subplots()
+    for ref, result in results.items():
+        ax.scatter(result["TLM"], result["MD"], label=ref)
+    ax.legend()
+    fig.savefig(
+        path.join(test_dir(), "cond_MD.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
 
 
 def tmp():
-    nacl = NaCl(temperature=298.15, pressure=1.0e6, molarity=0.001)
-    smectite = Smectite(nacl=nacl)
-    smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
-    print(smectite.cond_intra)
-    print(smectite.cond_tensor)
+    nacl = NaCl(temperature=298.15, pressure=1.0e5, molarity=0.1)
+    nacl.sen_and_goode_1992()
+    print(nacl.conductivity)
 
 
 if __name__ == "__main__":
@@ -3237,21 +3858,23 @@ if __name__ == "__main__":
     # get_smectite_init_params_inf()
     # get_smectite_init_params_truncated()
     # test_single_condition()
-
-    # Revil_etal_1998_fig3()
-    # Leroy_Revil_2004_fig4()
-    # Leroy_Revil_2004_fig5_a()
-    # Leroy_Revil_2004_fig8() DONE
-    # Leroy_Revil_2004_fig9()
-    # goncalves_fig6() DONE
-    # goncalves_fig4()
-    # test_sen_and_goode_1992() DONE
-    # test_mobility()
-    # test_quartz()
-    # calc_quartz_mobility()
     # get_quartz_init()
-    # qurtz_cond()
+    # fit_bulk_mobility()
     # fit_KNa()
+
+    # Revil_etal_1998_fig3() # DONE
+    # Leroy_Revil_2004_fig4() 
+    # Leroy_Revil_2004_fig5_a()
+    # Leroy_Revil_2004_fig8() # DONE
+    # Leroy_Revil_2004_fig9()
+    # goncalves_fig6() # DONE
+    # goncalves_fig4()
+    # test_sen_and_goode_1992() # DONE
+    # # test_mobility() # やる必要なし
+    # test_leroyetal_2022()
+
+    # calc_quartz_mobility()
+    # qurtz_cond() # やる必要なし
     # smectite_cond_intra()
     # potential_smectite_intra()
     # test_dielec()
@@ -3260,10 +3883,10 @@ if __name__ == "__main__":
     # fit_TLM_params_smec_inf()
     # potential_smectite_inf()
     # Revil_etal_fig2()
-    # Revil_etal_fig2_by_bulk()
+    # #Revil_etal_fig2_by_bulk()
     # compare_WS_shaly_1()
     # analysis_WS1_result()
-    # test_poros_distribution() # TODO
+    # # test_poros_distribution() # TODO
     # compare_WS_shaly_2()
     # analysis_WS_result2()
 
@@ -3285,11 +3908,12 @@ if __name__ == "__main__":
     # test_quartz_charge_extend()
     # test_quartz_potential_temperature()
     # test_mobility_fluid()
-    # fit_bulk_mobility()
     # test_activity()
     # test_fraction()
     # test_smectite_temperature()
     # test_quartz_temperature()
     # test_smec_surface_temperature()
-    test_dielec_RaspoandNeau2020()
+    # test_dielec_RaspoandNeau2020()
+    # reviletal1998()
+    # compare_md_cond()
     pass

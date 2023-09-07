@@ -476,9 +476,10 @@ def calc_nacl_activities(
 
     # calculate activity
     ion_strength = __calc_ion_strength(ion_props)
+    rho = iapws.IAPWS97(T=T, P=P * 1.0e-6).rho
     f = __calc_f(
         T,
-        iapws.IAPWS97(T=T, P=P * 1.0e-6).rho,
+        rho,
         dielec_water,
         ion_strength,
         ion_props,
@@ -506,12 +507,26 @@ def calc_nacl_activities(
         + abs(zx) * mplus * mminus * cmx
     )
 
-    # set activity
+    # conversion between molality and molarity scale (Pitzer, 1991, eq.34)
+    y_plus = (
+        ion_props[Species.Na.name][IonProp.Molality.name]
+        * (1.0e-3 * rho)
+        * gamma_plus
+        / ion_props[Species.Na.name][IonProp.Molarity.name]
+    )
+    y_minus = (
+        ion_props[Species.Cl.name][IonProp.Molality.name]
+        * (1.0e-3 * rho)
+        * gamma_minus
+        / ion_props[Species.Cl.name][IonProp.Molarity.name]
+    )
+
+    # set activity (molarity scale)
     ion_props[Species.Na.name][IonProp.Activity.name] = (
-        gamma_plus * ion_props[Species.Na.name][IonProp.Molarity.name]
+        y_plus * ion_props[Species.Na.name][IonProp.Molarity.name]
     )
     ion_props[Species.Cl.name][IonProp.Activity.name] = (
-        gamma_minus * ion_props[Species.Cl.name][IonProp.Molarity.name]
+        y_minus * ion_props[Species.Cl.name][IonProp.Molarity.name]
     )
 
     return ion_props

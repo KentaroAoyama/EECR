@@ -6,6 +6,7 @@
         Steven Van Damme and Johan Deconinck
             The Journal of Physical Chemistry B 2007 111 (19), 5308-5315
             DOI: 10.1021/jp071651l
+    NOTE: This program is only appropriate use low temperature (~25℃) and low salinity (< 1M)
 """
 from typing import Dict, List, Tuple
 from enum import IntEnum
@@ -534,7 +535,7 @@ def calc_mobility(
 
     # Assume that the set of keys in _ion_props excluding H+ and OH- is equal to the set
     # of keys in _msa_props
-    assert set(list(_ion_props.keys())) == set(list(_msa_props.keys()))
+    assert set(list(_ion_props.keys())) <= set(list(_msa_props.keys()))
 
     sigma_ij: Dict[Tuple, float] = {}
     # set basic ionic propeties

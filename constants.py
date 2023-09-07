@@ -74,6 +74,7 @@ class Species(IntEnum):
     Cl = auto()
     H = auto()
     OH = auto()
+    Ca = auto()
 
 
 class IonProp(IntEnum):
@@ -125,7 +126,9 @@ ion_props_default = {
     },
 }
 
+# Based on Roger et al. (2009) and Gouellec and Elimelech (2002)
 msa_props: Dict[str, Dict] = {
     Species.Na.name: {"radius": 1.17 * 1.0e-10, "D0": 1.33 * 1.0e-9},
     Species.Cl.name: {"radius": 1.81 * 1.0e-10, "D0": 2.03 * 1.0e-9},
+    Species.Ca.name: {"radius": 1.14 * 1.0e-10, "D0": 0.79e-9}
 }

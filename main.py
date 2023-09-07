@@ -71,7 +71,6 @@ def run():
     # print("create_from_file")
     # solver_input.create_from_file("./microstructure_tmp.dat")
     # print("set_ib")
-    solver_input.set_ib()
     # print("femat")
     solver_input.femat()
 
@@ -140,7 +139,6 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         seed=seed,
         rotation_setting="random",
     )
-    solver_input.set_ib()
     solver_input.femat()
 
     # run solver

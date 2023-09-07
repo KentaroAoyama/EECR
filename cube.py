@@ -1,3 +1,5 @@
+# TODO: dkをdkvとdksに分ける
+# TODO: aをここで作る (A, Av, As)
 """Create input to be passed to the solver class"""
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
@@ -35,15 +37,19 @@ class FEM_Input_Cube:
     def __init__(
         self,
         pix_tensor: List = None,
-        dk: List = None,
+        dkv: List = None,
+        dks: List = None,
         sigma: List = None,
         ib: List = None,
         pix: List = None,
         ex: float = None,
         ey: float = None,
         ez: float = None,
-        b: np.ndarray = None,
-        c: float = None,
+        A: np.ndarray = None,
+        Av: np.ndarray = None,
+        As: np.ndarray = None,
+        B: np.ndarray = None,
+        C: float = None,
         logger: Logger = None,
     ):
         """Initialize FEM_Input_Cube class.
@@ -52,9 +58,9 @@ class FEM_Input_Cube:
             pix_tensor (List): 3d list of pix. Each index indicate node. First index increases
                 along z direction and second index increases along y direction, and third index
                 increases along z direction.
-            dk (List): Stiffness matrix described at pp.8 in Garboczi (1998). First index
-                indicates argument variable of sigma's first index and second and third index
-                (0 to 7) indicates the location of the node (see Fig.1 of Garboczi, 1998).
+            dkv (List): 1d list containing volume stiffness matrix described at pp.8 in Garboczi (1998).
+                First index indicates argument variable of sigma's first index and second and third
+                index (0 to 7) indicates the location of the node (see Fig.1 of Garboczi, 1998).
             sigma (List): 3d list of conductivity tensor adescribed at pp.6 in in Garboczi (1998).
                 First index is the identifier of the tensor. Second and third indexes indicate the
                 row and column of conductivity tensor respectively.
@@ -75,20 +81,27 @@ class FEM_Input_Cube:
             ez (float): Electrical field of z direction. Note that the unit is volt/Δz (Δz is
                 the pix size of z direction), which is somewhat differnt from the description
                 at pp.7 in Garboczi (1998).
-            b (np.ndarray): Constants for energy diverging at the boundary
-            c (float): Constants for energy diverging at the boundary
+            A (np.ndarray): Gloval stiffness matrix (Av + As, Number of elements × 27)
+            Av (np.ndarray): Gloval volume stiffness matrix (Number of elements × 27)
+            As (np.ndarray): Gloval surface stiffness matrix (Number of elements × 27)
+            B (np.ndarray): Constants for energy diverging at the boundary
+            C (float): Constants for energy diverging at the boundary
             logger (Logger): Logger for debugging
         """
         self.pix_tensor: np.ndarray = pix_tensor
-        self.dk: List = dk
+        self.dkv: List = dkv
+        self.dks: List = dks
         self.sigma: List = sigma
         self.ib: List = ib
         self.pix: List = pix
         self.ex: float = ex
         self.ey: float = ey
         self.ez: float = ez
-        self.b: np.ndarray = b
-        self.c: float = c
+        self.A: np.ndarray = A
+        self.Av: np.ndarray = Av
+        self.As: np.ndarray = As
+        self.B: np.ndarray = B
+        self.C: float = C
         self.logger = logger
         self.__init_default()
         self.instance_ls: List = None
@@ -112,6 +125,7 @@ class FEM_Input_Cube:
         instance_range_dict: DictLike = {},
         instance_adj_rate_dict: DictLike = {},
         cluster_size: DictLike = {},
+        surface: str = "average",
         seed: int = 42,
         rotation_setting: str or Tuple[float] = "random",
     ) -> None:
@@ -133,6 +147,11 @@ class FEM_Input_Cube:
                 and value is the cluster size. Cluster size indicates the length of the sides of a
                 cube-shaped cluster. NOTE: Currently, only the first element of volume_frac_dict can
                 apply this method
+            surface (str): Flag specifying how surface conductivity is to be implemented.
+                "average": Add volume average surface conductivity to the fluid conductivity tensor
+                "boundary": Build surface stiffness matrix (4×4)
+                None: Ignore surface conductivity.
+            seed (int): Seed for assigning elements
             (OUTDATED) rotation_setting (str or Tuple): Argument that control the rotation of the
                 conductivity tensor of each element. If you set as "rondom", conductivity tensor
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
@@ -157,6 +176,9 @@ class FEM_Input_Cube:
             if len(rotation_setting) == 3:
                 # TODO: consider another implementation
                 rot_mat_const: np.ndarray = random_rotation_matrix()
+
+        # ib
+        self.set_ib(shape)
 
         # first create pixel as 3d list
         instance_set_ls: List = []
@@ -279,23 +301,24 @@ class FEM_Input_Cube:
         # the stern and diffusion layers.
         if self.logger is not None:
             self.logger.info(
-                "Adding up the conductivity of the electrical double layer..."
+                f"Adding up the conductivity of the electrical double layer by method={surface}"
             )
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    # Checks whether instance has an attribute for the electric double layer.
-                    instance = instance_ls[k][j][i]
-                    # surface conductance (S/m)
-                    get_cond_surface = getattr(instance, "get_cond_surface", None)
-                    # debye length
-                    get_double_layer_length = getattr(
-                        instance, "get_double_layer_length", None
-                    )
-                    if None not in [get_cond_surface, get_double_layer_length]:
-                        cond_infdiffuse: float = get_cond_surface()
+        if surface == "average":
+            for k in range(nz):
+                for j in range(ny):
+                    for i in range(nx):
+                        # Checks whether instance has an attribute for the electric double layer.
+                        instance = instance_ls[k][j][i]
+                        # surface conductance (S/m)
+                        get_cond_surface = getattr(instance, "get_cond_surface", None)
+                        # debye length
+                        get_double_layer_length = getattr(
+                            instance, "get_double_layer_length", None
+                        )
+                        if None in (get_cond_surface, get_double_layer_length):
+                            continue
+                        cond_surface: float = get_cond_surface()
                         double_layer_length: float = get_double_layer_length()
-                        # TODO: __sum_double_layer_condをdouble_layer_length >= edge_lengthに使えるように拡張して, 以下のassertionを消す
                         assert (
                             double_layer_length < edge_length
                         ), f"double_layer_length: {double_layer_length}, edge_length: {edge_length}"
@@ -306,20 +329,77 @@ class FEM_Input_Cube:
                             j,
                             k,
                             edge_length,
-                            cond_infdiffuse,
+                            cond_surface,
                             double_layer_length,
                         )
+        elif surface == "boundary":
+            # x-, x+, y-, y+, z-, z+
+            _ds0 = np.zeros(shape=(4, 4))
+            dks: List[np.ndarray] = [[_ds0 for _ in range(6)] for _ in range(ns)]
+            for k in range(nz):
+                for j in range(ny):
+                    for i in range(nx):
+                        m = calc_m(i, j, k, nx, ny)
+                        # Checks whether instance has an attribute for the electric double layer.
+                        instance = instance_ls[k][j][i]
+                        # surface conductance (S/m)
+                        get_cond_surface = getattr(instance, "get_cond_surface", None)
+                        # debye length
+                        get_double_layer_length = getattr(
+                            instance, "get_double_layer_length", None
+                        )
+                        if None in (get_cond_surface, get_double_layer_length):
+                            continue
+                        cond_surface: float = get_cond_surface()
+                        double_layer_length: float = get_double_layer_length()
+                        assert (
+                            double_layer_length < edge_length
+                        ), f"double_layer_length: {double_layer_length}, edge_length: {edge_length}"
+                        _ds = (
+                            double_layer_length
+                            * cond_surface
+                            / (6.0 * edge_length)
+                            * np.array(
+                                [
+                                    [4.0, -1.0, -2.0, 1.0],
+                                    [-1.0, 4.0, -1.0, -2.0],
+                                    [-2.0, -1.0, 4.0, -1.0],
+                                    [-1.0, -2.0, -1.0, 4.0],
+                                ]
+                            )
+                        )
+                        dks_m = dks[m]
+                        if is_fluid(instance_ls[self.ib[m][6]]):
+                            dks_m[0] = _ds  # x-
+                            dks[self.ib[m][6]][1] = _ds  # x+
+                        if is_fluid(instance_ls[self.ib[m][2]]):
+                            dks_m[1] = _ds  # x+
+                            dks[self.ib[m][2]][0] = _ds  # x-
+                        if is_fluid(instance_ls[self.ib[m][4]]):
+                            dks_m[2] = _ds  # y-
+                            dks[self.ib[m][4]][3] = _ds  # y+
+                        if is_fluid(instance_ls[self.ib[m][0]]):
+                            dks_m[3] = _ds  # y+
+                            dks[self.ib[m][0]][2] = _ds  # y-
+                        if is_fluid(instance_ls[self.ib[m][24]]):
+                            dks_m[4] = _ds  # z-
+                            dks[self.ib[m][24]][5] = _ds  # z+
+                        if is_fluid(instance_ls[self.ib[m][25]]):
+                            dks_m[5] = _ds  # z+
+                            dks[self.ib[m][25]][4] = _ds  # z-
+            self.dks = np.array(dks, dtype=np.float64)
+
         self.pix_tensor = np.array(pix_tensor)
 
         # construct self.sigma and self.pix
-        sigma_ls: List = []
-        pix_ls: List = []
+        sigma_ls: List = [None for _ in range(ns)]
+        pix_ls: List = [None for _ in range(ns)]
         for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
                     m = calc_m(i, j, k, nx, ny)
-                    sigma_ls.append(self.pix_tensor[k][j][i].tolist())
-                    pix_ls.append(m)  # TODO: remove pix
+                    sigma_ls[m] = self.pix_tensor[k][j][i].tolist()
+                    pix_ls[m] = m
         self.sigma = sigma_ls
         self.pix = pix_ls
         self.instance_ls = instance_ls
@@ -463,7 +543,7 @@ class FEM_Input_Cube:
         """
         iadj, jadj, kadj = idx_adj
         instance = instance_ls[kadj][jadj][iadj]
-        if not instance.__class__.__base__ is Fluid:
+        if not is_fluid(instance):
             return None
         assert adj_axis in ("x", "y", "z"), f"adj_axis: {adj_axis}"
         edl_tensor: np.ndarray = None
@@ -499,9 +579,8 @@ class FEM_Input_Cube:
             ratio_edl * edl_tensor + ratio_fluid * pix_tensor[kadj][jadj][iadj]
         )
 
-    def set_ib(self) -> None:
-        """set member variable of m_ib based on m_pix_tensor."""
-        assert self.pix_tensor is not None
+    def set_ib(self, shape: Tuple[int, int, int]) -> None:
+        """set local indices (0~26) to global indices (0~m)"""
         # Construct the neighbor table, ib(m,n)
         # First construct 27 neighbor table in terms of delta i, delta j, delta k
         # (See Table 3 in manual)
@@ -544,7 +623,7 @@ class FEM_Input_Cube:
         _kn[25] = 1
         _kn[26] = 0
 
-        nz, ny, nx, _, _ = np.array(self.pix_tensor).shape
+        nz, ny, nx = shape
         nxy = nx * ny
         nxyz = nxy * nz
         ib = np.zeros(shape=(nxyz, 27)).tolist()
@@ -655,7 +734,7 @@ class FEM_Input_Cube:
                     # now build electric field matrix
                     es[k][j][i] = [dndx, dndy, dndz]
 
-        # construct stiffness matrix
+        # construct volume stiffness matrix
         dk: List = [None for _ in range(n_phase)]
         es_expanded = []
         g_expanded = []
@@ -673,7 +752,7 @@ class FEM_Input_Cube:
             dk_tmp = np.matmul(np.matmul(es_t, sigma), es)
             dk_tmp = np.dot(np.transpose(dk_tmp, (1, 2, 0)), g_expanded)
             dk[ijk] = roundup_small_negative(np.array(dk_tmp))
-        self.dk = np.array(dk, dtype=np.float64)
+        self.dkv = np.array(dk, dtype=np.float64)
 
         # Set up vector for linear term, b, and constant term, C,
         # in the electrical energy.  This is done using the stiffness matrices,
@@ -830,10 +909,181 @@ class FEM_Input_Cube:
                 c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
             b[self.ib[m][_is[mm]]] += _sum
 
-        self.b = np.array(b, dtype=np.float64)
-        self.c = np.float64(c)
+        self.B = np.array(b, dtype=np.float64)
+        self.C = np.float64(c)
         if self.logger is not None:
             self.logger.info("femat done")
+
+    def set_A(self) -> None:
+        """Set global stiffness matrix"""
+        assert None not in (self.ib, self.dkv, self.pix)
+        ns = len(self.pix)
+        # Av
+        Av: List = [None for _ in range(ns)]
+        for m in range(ns):
+            self.__set_av_m(Av=Av, m=m, ib=self.ib, dk=self.dkv, pix=self.pix)
+        self.Av = np.array(Av, dtype=np.float64)
+        # As
+        # Assuming matrices for the same face are equal
+        # (e.g., dks[ib[0][1]]==dks[ib[1][0]])
+        As: List = [None for _ in range(ns)]
+        for m in range(ns):
+            self.__set_as_m(As=As, m=m, ib=self.ib, dk=self.dks)
+        self.As = np.array(Av, dtype=np.float64)
+
+        self.A = self.Av + self.As
+
+    def __set_av_m(self, Av: List, m: int, ib: List, dk: List, pix: List) -> None:
+        """Set self.Av[m] value
+
+        Args:
+            Av (List): 2d list of global matrix A.
+            m (int): Global 1d labelling index.
+            ib (List): Neighbor labeling 2d list.
+            dk (List): Stiffness matrix (nphase, 8, 8)
+            pix (List): 1d list identifying conductivity tensors
+        """
+        ib_m: List = ib[m]
+        am: List = [0.0 for _ in range(27)]
+        am[0] = (
+            dk[pix[ib_m[26]]][0][3]
+            + dk[pix[ib_m[6]]][1][2]
+            + dk[pix[ib_m[24]]][4][7]
+            + dk[pix[ib_m[14]]][5][6]
+        )
+        am[1] = dk[pix[ib_m[26]]][0][2] + dk[pix[ib_m[24]]][4][6]
+        am[2] = (
+            dk[pix[ib_m[26]]][0][1]
+            + dk[pix[ib_m[4]]][3][2]
+            + dk[pix[ib_m[12]]][7][6]
+            + dk[pix[ib_m[24]]][4][5]
+        )
+        am[3] = dk[pix[ib_m[4]]][3][1] + dk[pix[ib_m[12]]][7][5]
+        am[4] = (
+            dk[pix[ib_m[5]]][2][1]
+            + dk[pix[ib_m[4]]][3][0]
+            + dk[pix[ib_m[13]]][5][6]
+            + dk[pix[ib_m[12]]][7][4]
+        )
+        am[5] = dk[pix[ib_m[5]]][2][0] + dk[pix[ib_m[13]]][6][4]
+        am[6] = (
+            dk[pix[ib_m[5]]][2][3]
+            + dk[pix[ib_m[6]]][1][0]
+            + dk[pix[ib_m[13]]][6][7]
+            + dk[pix[ib_m[14]]][5][4]
+        )
+        am[7] = dk[pix[ib_m[6]]][1][3] + dk[pix[ib_m[14]]][5][7]
+        am[8] = dk[pix[ib_m[24]]][4][3] + dk[pix[ib_m[14]]][5][2]
+        am[9] = dk[pix[ib_m[24]]][4][2]
+        am[10] = dk[pix[ib_m[12]]][7][2] + dk[pix[ib_m[24]]][4][1]
+        am[11] = dk[pix[ib_m[12]]][7][1]
+        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[13]]][6][1]
+        am[13] = dk[pix[ib_m[13]]][6][0]
+        am[14] = dk[pix[ib_m[13]]][6][3] + dk[pix[ib_m[14]]][5][0]
+        am[15] = dk[pix[ib_m[14]]][5][3]
+        am[16] = dk[pix[ib_m[26]]][0][7] + dk[pix[ib_m[6]]][1][6]
+        am[17] = dk[pix[ib_m[26]]][0][6]
+        am[18] = dk[pix[ib_m[26]]][0][5] + dk[pix[ib_m[4]]][3][6]
+        am[19] = dk[pix[ib_m[4]]][3][5]
+        am[20] = dk[pix[ib_m[4]]][3][4] + dk[pix[ib_m[5]]][2][5]
+        am[21] = dk[pix[ib_m[5]]][2][4]
+        am[22] = dk[pix[ib_m[5]]][2][7] + dk[pix[ib_m[6]]][1][4]
+        am[23] = dk[pix[ib_m[6]]][1][7]
+        am[24] = (
+            dk[pix[ib_m[13]]][6][2]
+            + dk[pix[ib_m[12]]][7][3]
+            + dk[pix[ib_m[14]]][5][1]
+            + dk[pix[ib_m[24]]][4][0]
+        )
+        am[25] = (
+            dk[pix[ib_m[5]]][2][6]
+            + dk[pix[ib_m[4]]][3][7]
+            + dk[pix[ib_m[26]]][0][4]
+            + dk[pix[ib_m[6]]][1][5]
+        )
+        am[26] = (
+            dk[pix[ib_m[26]]][0][0]
+            + dk[pix[ib_m[6]]][1][1]
+            + dk[pix[ib_m[5]]][2][2]
+            + dk[pix[ib_m[4]]][3][3]
+            + dk[pix[ib_m[24]]][4][4]
+            + dk[pix[ib_m[14]]][5][5]
+            + dk[pix[ib_m[13]]][6][6]
+            + dk[pix[ib_m[12]]][7][7]
+        )
+        Av[m] = am
+
+    def __set_as_m(
+        self, As: List, m: int, ib: List[List[int]], dk: List[List[np.ndarray]]
+    ) -> None:
+        """Set self.As[m] value
+
+        Args:
+            As (List): 2d list of global matrix A.
+            m (int): Global 1d labelling index.
+            ib (List): Neighbor labeling 2d list.
+            dk (List): Stiffness matrix (nxyz, 6, 4, 4)
+        """
+        ib_m = ib[m]
+        am = [None for _ in range(27)]
+        # Faces perpendicular to X axis (counterclockwise from bottom left)
+        x0, x1, x2, x3 = (
+            dk[ib_m[12]][0],
+            dk[ib_m[24]][0],
+            dk[ib_m[26]][0],
+            dk[ib_m[4]][0],
+        )
+        # Faces perpendicular to Y axis (counterclockwise from bottom left)
+        y0, y1, y2, y3 = (
+            dk[ib_m[14]][2],
+            dk[ib_m[24]][2],
+            dk[ib_m[26]][2],
+            dk[ib_m[6]][2],
+        )
+        # Faces perpendicular to Z axis (counterclockwise from bottom left)
+        z0, z1, z2, z3 = dk[ib_m[5]][4], dk[ib_m[4]][4], dk[ib_m[26]][4], dk[ib_m[6]][4]
+
+        am[0] = z2[3][1] + z3[2][1] + x1[2][3] + x2[1][0]
+        am[1] = z2[2][0]
+        am[2] = z1[2][3] + z2[1][0] + y1[2][3] + y2[1][0]
+        am[3] = z1[1][3]
+        am[4] = z0[1][2] + z1[0][3] + x0[3][2] + x3[0][1]
+        am[5] = z0[0][2]
+        am[6] = z0[3][2] + z3[0][1] + y0[3][2] + y3[0][1]
+        am[7] = z3[3][1]
+        am[8] = x1[1][3]
+        am[9] = 0.0
+        am[10] = y1[1][3]
+        am[11] = 0.0
+        am[12] = x0[0][2]
+        am[13] = 0.0
+        am[14] = y0[0][2]
+        am[15] = 0.0
+        am[16] = x2[2][0]
+        am[17] = 0.0
+        am[18] = y2[2][0]
+        am[19] = 0.0
+        am[20] = x3[3][1]
+        am[21] = 0.0
+        am[22] = y3[3][1]
+        am[23] = 0.0
+        am[24] = x0[1][2] + x1[0][3] + y0[1][2] + y1[0][3]
+        am[25] = x2[3][0] + x3[2][1] + y2[3][0] + y3[2][1]
+        am[26] = (
+            x0[2][2]
+            + x1[3][3]
+            + x2[0][0]
+            + x3[1][1]
+            + y0[2][2]
+            + y1[3][3]
+            + y2[0][0]
+            + y3[1][1]
+            + z0[2][2]
+            + z1[3][3]
+            + z2[0][0]
+            + z3[1][1]
+        )
+        As[m] = am
 
     def __assign_random(
         self,
@@ -1170,9 +1420,9 @@ class FEM_Input_Cube:
                 the location of the node (see Fig.1 of Garboczi, 1998). If the stiffness
                 matrix is not calculated, return None.
         """
-        if self.dk is not None:
-            return deepcopy(self.dk)
-        return self.dk
+        if self.dkv is not None:
+            return deepcopy(self.dkv)
+        return self.dkv
 
     def get_sigma(self) -> List or None:
         """Getter for the conductivity tensor in 3d shape.
@@ -1247,6 +1497,36 @@ class FEM_Input_Cube:
         """
         return self.ez
 
+    def get_A(self) -> np.ndarray or None:
+        """Getter for the global stiffness matrix A
+
+        Returns:
+            np.ndarray or None: Global stiffness matrix
+        """
+        if self.A is not None:
+            return deepcopy(self.A)
+        return self.A
+
+    def get_Av(self) -> np.ndarray or None:
+        """Getter for the global volume stiffness matrix A
+
+        Returns:
+            np.ndarray or None: global volume stiffness matrix
+        """
+        if self.Av is not None:
+            return deepcopy(self.Av)
+        return self.Av
+
+    def get_As(self) -> np.ndarray or None:
+        """Getter for the Global surface stiffness matrix A
+
+        Returns:
+            np.ndarray or None: Global surface stiffness matrix
+        """
+        if self.As is not None:
+            return deepcopy(self.As)
+        return self.As
+
     def get_b(self) -> np.ndarray or None:
         """Getter for the coefficient matrix b
 
@@ -1255,9 +1535,9 @@ class FEM_Input_Cube:
                 By calculating the inner product of u and b, the energy loss at the boundary
                 can be calculated. If b is not calculated, return None.
         """
-        if self.b is not None:
-            return deepcopy(self.b)
-        return self.b
+        if self.B is not None:
+            return deepcopy(self.B)
+        return self.B
 
     def get_c(self) -> np.float64 or None:
         """Getter for the constant of the energy loss at the boundery.
@@ -1266,7 +1546,7 @@ class FEM_Input_Cube:
             np.float64 or None: Constant of the energy loss at the boundery which is described
                 at pp.11 in Garboczi (1998). If c is not calculated, return None.
         """
-        return self.c
+        return self.C
 
     def get_shape(self) -> Tuple[int] or None:
         """Getter for the shpe of the cubic FEM mesh
@@ -1354,3 +1634,7 @@ def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.
     _filt = _filt + _filt.T
     _arr = np.where(_filt, 0.0, _arr)
     return _arr
+
+
+def is_fluid(_instance) -> bool:
+    return _instance.__class__.__base__ is Fluid

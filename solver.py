@@ -1,5 +1,3 @@
-# TODO: このスコープで, 要素剛性マトリクスとAは定数扱いなので, 大文字に変更する
-# TODO: 表面における要素剛性マトリクスを設定する
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from typing import List
@@ -10,6 +8,7 @@ from warnings import warn
 import pickle
 import numpy as np
 from cube import FEM_Input_Cube, calc_m
+
 
 class FEM_Cube:
     """Calculate effective conductivity in systems with cubic elements.
@@ -35,7 +34,7 @@ class FEM_Cube:
         self.logger: Logger = logger
         self.u: np.ndarray = None
         self.u2d: np.ndarray = None
-        self.a: np.ndarray = None
+        self.A: np.ndarray = None
         self.gb: np.ndarray = None
         self.u_tot: np.float64 = None
         self.gg: np.float64 = None
@@ -55,9 +54,9 @@ class FEM_Cube:
     def __init_default(self) -> None:
         """Initialize the following member variables:
         self.u (np.ndarray): 1d array of the electrical potential (shape is m).
-        self.a (np.ndarray): 2d array of global matrix (m rows and 27 colums)
+        self.A (np.ndarray): 2d array of global matrix (m rows and 27 colums)
             described at pp.11 to 12 in Garboczi (1998). By computing the inner
-            product with self.u[m] in each row self.a[m], the gradient vector can
+            product with self.u[m] in each row self.A[m], the gradient vector can
             be computed.
         self.gb (np.ndarray): 1d array of the gradient: ∂En/∂um described at pp.11
             in Garboczi (1998).
@@ -92,14 +91,7 @@ class FEM_Cube:
         self.u2d = u_2d
 
         # set global stiffness matrix (nxyz × 27)
-        a: List = [None for _ in range(nxyz)]
-        dk = self.fem_input.get_dk()
-        pix = self.fem_input.get_pix()
-        if self.logger is not None:
-            self.logger.info("Setting the global matrix A...")
-        for m in range(nxyz):
-            self.__set_a_m(a=a, m=m, ib=ib, dk=dk, pix=pix)
-        self.a = np.array(a, dtype=np.float64)
+        self.A = self.fem_input.get_A()
         # m_gb and u_tot
         self.__calc_energy()
         # m_h (conjugate direction vector)
@@ -170,95 +162,13 @@ class FEM_Cube:
             self.logger.debug(f"cond y: {self.cond_y}")
             self.logger.debug(f"cond z: {self.cond_z}")
 
-    def __set_a_m(self, a: List, m: int, ib: List, dk: List, pix: List) -> List:
-        """Set self.a[m] value
-
-        Args:
-            a (List): 2d list of global matrix A.
-            m (int): Global 1d labelling index.
-            ib (List): Neighbor labeling 1d list.
-            dk (List): Stiffness matrix (nphase, 8, 8)
-            pix (List): 1d list identifying conductivity tensors
-        Returns:
-            List: 1d list of a[m]
-        """
-        ib_m: List = ib[m]
-        am: List = [0.0 for _ in range(27)]
-        am[0] = (
-            dk[pix[ib_m[26]]][0][3]
-            + dk[pix[ib_m[6]]][1][2]
-            + dk[pix[ib_m[24]]][4][7]
-            + dk[pix[ib_m[14]]][5][6]
-        )
-        am[1] = dk[pix[ib_m[26]]][0][2] + dk[pix[ib_m[24]]][4][6]
-        am[2] = (
-            dk[pix[ib_m[26]]][0][1]
-            + dk[pix[ib_m[4]]][3][2]
-            + dk[pix[ib_m[12]]][7][6]
-            + dk[pix[ib_m[24]]][4][5]
-        )
-        am[3] = dk[pix[ib_m[4]]][3][1] + dk[pix[ib_m[12]]][7][5]
-        am[4] = (
-            dk[pix[ib_m[5]]][2][1]
-            + dk[pix[ib_m[4]]][3][0]
-            + dk[pix[ib_m[13]]][5][6]
-            + dk[pix[ib_m[12]]][7][4]
-        )
-        am[5] = dk[pix[ib_m[5]]][2][0] + dk[pix[ib_m[13]]][6][4]
-        am[6] = (
-            dk[pix[ib_m[5]]][2][3]
-            + dk[pix[ib_m[6]]][1][0]
-            + dk[pix[ib_m[13]]][6][7]
-            + dk[pix[ib_m[14]]][5][4]
-        )
-        am[7] = dk[pix[ib_m[6]]][1][3] + dk[pix[ib_m[14]]][5][7]
-        am[8] = dk[pix[ib_m[24]]][4][3] + dk[pix[ib_m[14]]][5][2]
-        am[9] = dk[pix[ib_m[24]]][4][2]
-        am[10] = dk[pix[ib_m[12]]][7][2] + dk[pix[ib_m[24]]][4][1]
-        am[11] = dk[pix[ib_m[12]]][7][1]
-        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[13]]][6][1]
-        am[13] = dk[pix[ib_m[13]]][6][0]
-        am[14] = dk[pix[ib_m[13]]][6][3] + dk[pix[ib_m[14]]][5][0]
-        am[15] = dk[pix[ib_m[14]]][5][3]
-        am[16] = dk[pix[ib_m[26]]][0][7] + dk[pix[ib_m[6]]][1][6]
-        am[17] = dk[pix[ib_m[26]]][0][6]
-        am[18] = dk[pix[ib_m[26]]][0][5] + dk[pix[ib_m[4]]][3][6]
-        am[19] = dk[pix[ib_m[4]]][3][5]
-        am[20] = dk[pix[ib_m[4]]][3][4] + dk[pix[ib_m[5]]][2][5]
-        am[21] = dk[pix[ib_m[5]]][2][4]
-        am[22] = dk[pix[ib_m[5]]][2][7] + dk[pix[ib_m[6]]][1][4]
-        am[23] = dk[pix[ib_m[6]]][1][7]
-        am[24] = (
-            dk[pix[ib_m[13]]][6][2]
-            + dk[pix[ib_m[12]]][7][3]
-            + dk[pix[ib_m[14]]][5][1]
-            + dk[pix[ib_m[24]]][4][0]
-        )
-        am[25] = (
-            dk[pix[ib_m[5]]][2][6]
-            + dk[pix[ib_m[4]]][3][7]
-            + dk[pix[ib_m[26]]][0][4]
-            + dk[pix[ib_m[6]]][1][5]
-        )
-        am[26] = (
-            dk[pix[ib_m[26]]][0][0]
-            + dk[pix[ib_m[6]]][1][1]
-            + dk[pix[ib_m[5]]][2][2]
-            + dk[pix[ib_m[4]]][3][3]
-            + dk[pix[ib_m[24]]][4][4]
-            + dk[pix[ib_m[14]]][5][5]
-            + dk[pix[ib_m[13]]][6][6]
-            + dk[pix[ib_m[12]]][7][7]
-        )
-        a[m] = am
-
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
         and the square value of the step width (self.gg), and update the these member variables.
         """
         assert isinstance(self.u, np.ndarray)
         assert isinstance(self.u2d, np.ndarray)
-        assert isinstance(self.a, np.ndarray)
+        assert isinstance(self.A, np.ndarray)
 
         b = self.fem_input.get_b()
         c = self.fem_input.get_c()
@@ -266,7 +176,7 @@ class FEM_Cube:
         assert isinstance(c, float)
 
         # m_gb (1d array for gradient), m_u_tot
-        gb: np.ndarray = np.sum(self.a * self.u2d, axis=1)
+        gb: np.ndarray = np.sum(self.A * self.u2d, axis=1)
         u_tot = 0.5 * np.dot(self.u, gb) + np.dot(b, self.u) + c
         self.u_tot = u_tot
         self.gb = gb + b
@@ -286,7 +196,7 @@ class FEM_Cube:
             self.h2d = self.h[ib]
 
             # Do global matrix multiply via small stiffness matrices, Ah = A * h
-            ah: np.ndarray = np.sum(self.a * self.h2d, axis=1)  # 1d
+            ah: np.ndarray = np.sum(self.A * self.h2d, axis=1)  # 1d
             hah: float = np.dot(self.h, ah)
             lamda = self.gg / hah
 
@@ -410,11 +320,11 @@ class FEM_Cube:
         self.currx_ave = currx_ave
         self.curry_ave = curry_ave
         self.currz_ave = currz_ave
-        if ex != 0.:
+        if ex != 0.0:
             self.cond_x = currx_ave / ex
-        if ey != 0.:
+        if ey != 0.0:
             self.cond_y = curry_ave / ey
-        if ez != 0.:
+        if ez != 0.0:
             self.cond_z = currz_ave / ez
 
     # getters methods for member variables
@@ -432,7 +342,7 @@ class FEM_Cube:
         return deepcopy(self.u2d)
 
     def get_a(self):
-        return deepcopy(self.a)
+        return deepcopy(self.A)
 
     def get_gb(self):
         return deepcopy(self.gb)

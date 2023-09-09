@@ -187,7 +187,6 @@ class FEM_Cube:
         Args:
             ldemb (int): Maximum number of conjugate gradient iterations.
         """
-        nxyz = self.u.shape[0]
         ib = self.fem_input.get_ib()
 
         # Conjugate gradient loop
@@ -224,6 +223,7 @@ class FEM_Cube:
         field in a pixel is af*u(pixel). The matrix af relates the nodal voltages to the
         average field in the pixel.
         """
+        # volumetric current density: iv=∫Σep(σpq)dv
         af = np.zeros(shape=(3, 8)).tolist()
         af[0][0] = 0.25
         af[0][1] = -0.25
@@ -259,7 +259,8 @@ class FEM_Cube:
         ex = self.fem_input.get_ex()
         ey = self.fem_input.get_ey()
         ez = self.fem_input.get_ez()
-        sigma = self.fem_input.get_sigma()
+        sigmav = self.fem_input.get_sigmav()
+        sigmas = self.fem_input.get_sigmas()
         currx_m: List = list(range(ns))
         curry_m: List = list(range(ns))
         currz_m: List = list(range(ns))
@@ -299,9 +300,9 @@ class FEM_Cube:
                     for n in range(8):
                         for nn in range(3):
                             _e = af[nn][n] * uu[n]
-                            cur1 += sigma[pix[m]][0][nn] * _e
-                            cur2 += sigma[pix[m]][1][nn] * _e
-                            cur3 += sigma[pix[m]][2][nn] * _e
+                            cur1 += sigmav[pix[m]][0][nn] * _e
+                            cur2 += sigmav[pix[m]][1][nn] * _e
+                            cur3 += sigmav[pix[m]][2][nn] * _e
                     # sum into the global average currents
                     currx_m[m] = cur1
                     curry_m[m] = cur2

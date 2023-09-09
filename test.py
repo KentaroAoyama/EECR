@@ -413,7 +413,6 @@ def exec_etal_fig2_by_bulk(_r: float, molarity: float, fpth):
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20), volume_frac_dict={smectite: 1.0}
     )
-    solver_input.set_ib()
     solver_input.femat()
     solver = FEM_Cube(solver_input)
     solver.run(kmax=100, gtest=1.0e-9)
@@ -1582,7 +1581,6 @@ def ws_single_1(
             ]
         ),
     )
-    solver_input.set_ib()
     solver_input.femat()
 
     solver = FEM_Cube(solver_input, logger=logger)
@@ -1912,7 +1910,6 @@ def ws_single_2(
         cluster_size=OrderedDict([(nacl, cluster_size)]),
         seed=seed,
     )
-    solver_input.set_ib()
     solver_input.femat()
 
     solver = FEM_Cube(solver_input, logger=logger)
@@ -2155,7 +2152,6 @@ def test_poros_distribution():
         ),
         seed=42,
     )
-    solver_input.set_ib()
     solver_input.femat()
     # after
     m_initial_0, m_initial_1, m_remain, prob = _gamma
@@ -2297,7 +2293,6 @@ def seed_tempe_molarity_n(seed, n):
     sol_input.create_pixel_by_macro_variable(
         shape=(n, n, n), volume_frac_dict={smectite: 1.0}, seed=seed
     )
-    sol_input.set_ib()
     sol_input.femat()
     solver = FEM_Cube(sol_input)
     solver.run(100, 30, 1.0e-9)
@@ -2364,7 +2359,6 @@ def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
     nacl = NaCl()
     quartz = Quartz(nacl)
     solver_input = FEM_Input_Cube()
-    solver_input.set_ib()
     solver_input.femat()
     solver_input.create_pixel_by_macro_variable(
         (n, n, n),

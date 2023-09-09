@@ -1,6 +1,7 @@
-# TODO: dkをdkvとdksに分ける
-# TODO: aをここで作る (A, Av, As)
 """Create input to be passed to the solver class"""
+# TODO: solverで表面を流れる電流を計算できるように, 適当なメンバ変数を追加する
+# TODO: 理論解がわかっている条件で, dksの実装が正しいかテストする
+# TODO: black
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
@@ -39,7 +40,8 @@ class FEM_Input_Cube:
         pix_tensor: List = None,
         dkv: List = None,
         dks: List = None,
-        sigma: List = None,
+        sigmav: List = None,
+        sigmas: List = None,
         ib: List = None,
         pix: List = None,
         ex: float = None,
@@ -61,9 +63,10 @@ class FEM_Input_Cube:
             dkv (List): 1d list containing volume stiffness matrix described at pp.8 in Garboczi (1998).
                 First index indicates argument variable of sigma's first index and second and third
                 index (0 to 7) indicates the location of the node (see Fig.1 of Garboczi, 1998).
-            sigma (List): 3d list of conductivity tensor adescribed at pp.6 in in Garboczi (1998).
+            sigmav (List): 3d list of conductivity tensor adescribed at pp.6 in in Garboczi (1998).
                 First index is the identifier of the tensor. Second and third indexes indicate the
                 row and column of conductivity tensor respectively.
+            sigmas (List): 3d list (nxyz × 6 × (Debye length (m), surface conductivity (S/m))) containing surface conductivity
             ib (List): 2d list of neighbor labelling described at pp.8 to 11 in Garboczi (1998).
                 First index indicates one dimensional labbeling scheme (m) and second index
                 indicates neighbor node index of m'th node. m is calculated as follows:
@@ -91,7 +94,8 @@ class FEM_Input_Cube:
         self.pix_tensor: np.ndarray = pix_tensor
         self.dkv: List = dkv
         self.dks: List = dks
-        self.sigma: List = sigma
+        self.sigmav: List = sigmav
+        self.sigmas: List = sigmas
         self.ib: List = ib
         self.pix: List = pix
         self.ex: float = ex
@@ -333,9 +337,12 @@ class FEM_Input_Cube:
                             double_layer_length,
                         )
         elif surface == "boundary":
-            # x-, x+, y-, y+, z-, z+
+            # consruct self.dks and self.sigmas
             _ds0 = np.zeros(shape=(4, 4))
             dks: List[np.ndarray] = [[_ds0 for _ in range(6)] for _ in range(ns)]
+            sigmas: List[List[Tuple[float]]] = [
+                [(0.0, 0.0) for _ in range(6)] for _ in range(ns)
+            ]
             for k in range(nz):
                 for j in range(ny):
                     for i in range(nx):
@@ -372,26 +379,32 @@ class FEM_Input_Cube:
                         if is_fluid(instance_ls[self.ib[m][6]]):
                             dks_m[0] = _ds  # x-
                             dks[self.ib[m][6]][1] = _ds  # x+
+                            sigmas[0] = (double_layer_length, cond_surface)
                         if is_fluid(instance_ls[self.ib[m][2]]):
                             dks_m[1] = _ds  # x+
                             dks[self.ib[m][2]][0] = _ds  # x-
+                            sigmas[1] = (double_layer_length, cond_surface)
                         if is_fluid(instance_ls[self.ib[m][4]]):
                             dks_m[2] = _ds  # y-
                             dks[self.ib[m][4]][3] = _ds  # y+
+                            sigmas[2] = (double_layer_length, cond_surface)
                         if is_fluid(instance_ls[self.ib[m][0]]):
                             dks_m[3] = _ds  # y+
                             dks[self.ib[m][0]][2] = _ds  # y-
+                            sigmas[3] = (double_layer_length, cond_surface)
                         if is_fluid(instance_ls[self.ib[m][24]]):
                             dks_m[4] = _ds  # z-
                             dks[self.ib[m][24]][5] = _ds  # z+
+                            sigmas[4] = (double_layer_length, cond_surface)
                         if is_fluid(instance_ls[self.ib[m][25]]):
                             dks_m[5] = _ds  # z+
                             dks[self.ib[m][25]][4] = _ds  # z-
+                            sigmas[5] = (double_layer_length, cond_surface)
             self.dks = np.array(dks, dtype=np.float64)
 
         self.pix_tensor = np.array(pix_tensor)
 
-        # construct self.sigma and self.pix
+        # construct self.sigmav and self.pix
         sigma_ls: List = [None for _ in range(ns)]
         pix_ls: List = [None for _ in range(ns)]
         for k in range(nz):
@@ -400,7 +413,7 @@ class FEM_Input_Cube:
                     m = calc_m(i, j, k, nx, ny)
                     sigma_ls[m] = self.pix_tensor[k][j][i].tolist()
                     pix_ls[m] = m
-        self.sigma = sigma_ls
+        self.sigmav = sigma_ls
         self.pix = pix_ls
         self.instance_ls = instance_ls
 
@@ -439,7 +452,7 @@ class FEM_Input_Cube:
                 pix_tensor[k][j][i] = idx_tensor_map[cidx]
                 pix_ls.append(cidx)
         self.pix_tensor = pix_tensor
-        self.sigma = sigma
+        self.sigmav = sigma
         self.pix = pix_ls
 
         if self.logger is not None:
@@ -661,14 +674,14 @@ class FEM_Input_Cube:
         voltages, and constant term C that appear in the total energy due
         to the periodic boundary conditions.
         """
-        assert self.sigma is not None
+        assert self.sigmav is not None
         assert self.pix_tensor is not None
         assert self.ib is not None
         assert self.pix is not None
         assert self.ex is not None
         assert self.ey is not None
         assert self.ez is not None
-        n_phase: int = len(self.sigma)
+        n_phase: int = len(self.sigmav)
         # initialize stiffness matrices
         dk = np.zeros(shape=(n_phase, 8, 8)).tolist()
         # set up Simpson's rule integration weight vector
@@ -748,7 +761,7 @@ class FEM_Input_Cube:
         es_t = np.transpose(es_expanded, (0, 2, 1))
         es = es_expanded
         for ijk in range(n_phase):
-            sigma = np.array(self.sigma[ijk])
+            sigma = np.array(self.sigmav[ijk])
             dk_tmp = np.matmul(np.matmul(es_t, sigma), es)
             dk_tmp = np.dot(np.transpose(dk_tmp, (1, 2, 0)), g_expanded)
             dk[ijk] = roundup_small_negative(np.array(dk_tmp))
@@ -1424,7 +1437,7 @@ class FEM_Input_Cube:
             return deepcopy(self.dkv)
         return self.dkv
 
-    def get_sigma(self) -> List or None:
+    def get_sigmav(self) -> List or None:
         """Getter for the conductivity tensor in 3d shape.
 
         Returns:
@@ -1433,9 +1446,19 @@ class FEM_Input_Cube:
                 third indexes indicate the row and column of conductivity tensor
                 respectively. If the sigma is not calculated, return None.
         """
-        if self.sigma is not None:
-            return deepcopy(self.sigma)
-        return self.sigma
+        if self.sigmav is not None:
+            return deepcopy(self.sigmav)
+        return self.sigmav
+
+    def get_sigmas(self) -> List or None:
+        """Getter for the surface conductivity tensor in 3d shape.
+
+        Returns:
+            List or None: 3d list of surface conductivity tensor.
+        """
+        if self.sigmas is not None:
+            return deepcopy(self.sigmas)
+        return self.sigmas
 
     def get_ib(self) -> List or None:
         """Getter for the neighbor labelling list in 2d shape.
@@ -1638,3 +1661,7 @@ def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.
 
 def is_fluid(_instance) -> bool:
     return _instance.__class__.__base__ is Fluid
+
+
+if __name__ == "__main__":
+    pass

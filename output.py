@@ -7,10 +7,10 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 
 from solver import FEM_Cube
-from cube import FEM_Input_Cube
+from cube import Cube
 from cube import calc_ijk
 
-SolverLike = Union[FEM_Cube, FEM_Input_Cube]
+SolverLike = Union[FEM_Cube, Cube]
 
 # TODO: docstring
 # TODO: plot electrical potential
@@ -190,7 +190,7 @@ def plot_instance(solver_like: SolverLike,
     fem_input = None
     if isinstance(solver_like, FEM_Cube):
         fem_input = solver_like.get_fem_input()
-    elif isinstance(solver_like, FEM_Input_Cube):
+    elif isinstance(solver_like, Cube):
         fem_input = solver_like
     
     instance_ls = fem_input.instance_ls

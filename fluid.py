@@ -174,7 +174,7 @@ class NaCl(Fluid):
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
-        The modified equation was in Watanabe et al., 2021.
+        The modified equation was in Watanabe et al. (2021).
 
         Returens:
             float: Conductivity of NaCl fluid in liquid phase

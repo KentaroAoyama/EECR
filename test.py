@@ -42,7 +42,7 @@ from fluid import (
 )
 from msa import calc_mobility
 from solver import FEM_Cube
-from cube import FEM_Input_Cube
+from cube import Cube
 from output import plot_curr_all, plot_instance, plt_any_val
 
 # from main import exec_single_condition
@@ -409,11 +409,12 @@ def exec_etal_fig2_by_bulk(_r: float, molarity: float, fpth):
     smectite.calc_cond_tensor()
     smectite.calc_potentials_and_charges_inf()
     smectite.calc_cond_infdiffuse()
-    solver_input = FEM_Input_Cube()
+    solver_input = Cube()
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20), volume_frac_dict={smectite: 1.0}
     )
     solver_input.femat()
+    solver_input.set_A()
     solver = FEM_Cube(solver_input)
     solver.run(kmax=100, gtest=1.0e-9)
 
@@ -1558,7 +1559,7 @@ def ws_single_1(
     # quartz
     quartz = Quartz(nacl=nacl, logger=logger)
     # set solver_input
-    solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
+    solver_input = Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
         seed=seed,
         shape=(20, 20, 20),
@@ -1582,6 +1583,7 @@ def ws_single_1(
         ),
     )
     solver_input.femat()
+    solver_input.set_A()
 
     solver = FEM_Cube(solver_input, logger=logger)
     solver.run(100, 30, 1.0e-9)
@@ -1891,7 +1893,7 @@ def ws_single_2(
     # quartz
     quartz = Quartz(nacl=nacl, logger=logger)
     # set solver_input
-    solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
+    solver_input = Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20),
         edge_length=1.0e-6,
@@ -1911,6 +1913,7 @@ def ws_single_2(
         seed=seed,
     )
     solver_input.femat()
+    solver_input.set_A()
 
     solver = FEM_Cube(solver_input, logger=logger)
     solver.run(100, 30, 1.0e-9)
@@ -2137,7 +2140,7 @@ def test_poros_distribution():
 
     quartz = Quartz(nacl)
 
-    solver_input = FEM_Input_Cube(ex=1.0, ey=0.0, ez=0.0)
+    solver_input = Cube(ex=1.0, ey=0.0, ez=0.0)
     r = 1.0
     _gamma = solver_input.create_pixel_by_macro_variable(
         shape=(10, 10, 10),
@@ -2153,6 +2156,7 @@ def test_poros_distribution():
         seed=42,
     )
     solver_input.femat()
+    solver_input.set_A()
     # after
     m_initial_0, m_initial_1, m_remain, prob = _gamma
     prob = prob.tolist()
@@ -2289,7 +2293,7 @@ def seed_tempe_molarity_n(seed, n):
     smectite.calc_cond_interlayer()
     smectite.calc_cond_tensor()
 
-    sol_input = FEM_Input_Cube()
+    sol_input = Cube()
     sol_input.create_pixel_by_macro_variable(
         shape=(n, n, n), volume_frac_dict={smectite: 1.0}, seed=seed
     )
@@ -2358,7 +2362,7 @@ def analyse_result():
 def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
     nacl = NaCl()
     quartz = Quartz(nacl)
-    solver_input = FEM_Input_Cube()
+    solver_input = Cube()
     solver_input.femat()
     solver_input.create_pixel_by_macro_variable(
         (n, n, n),
@@ -2370,6 +2374,7 @@ def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
         range_dct,
         seed,
     )
+    solver_input.set_A()
     solver = FEM_Cube(solver_input)
     solver.run(100, 30, 1.0e-9)
 
@@ -2415,7 +2420,7 @@ def plt_ws_instance():
     ayz_pore = 0.75
     adj_rate = 0.5
 
-    solver_input = FEM_Input_Cube()
+    solver_input = Cube()
     solver_input.create_pixel_by_macro_variable(
         seed=42,
         shape=(20, 20, 20),
@@ -2500,7 +2505,7 @@ def test_cluster():
     nacl.calc_cond_tensor_cube_oxyz()
     quartz = Quartz(nacl)
     for size in (1, 2, 3, 4, 5):
-        solver_input = FEM_Input_Cube()
+        solver_input = Cube()
         solver_input.create_pixel_by_macro_variable(
             seed=42,
             shape=(20, 20, 20),
@@ -3910,4 +3915,6 @@ if __name__ == "__main__":
     # test_dielec_RaspoandNeau2020()
     # reviletal1998()
     # compare_md_cond()
+    nacl = NaCl(molarity=0.1, temperature=298.15, pressure=5.0e6)
+    print(nacl.sen_and_goode_1992())
     pass

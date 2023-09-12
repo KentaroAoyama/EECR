@@ -17,9 +17,9 @@ import numpy as np
 from clay import Smectite, Kaolinite
 from mineral import Quartz
 from fluid import NaCl
-from cube import FEM_Input_Cube
+from cube import Cube
 from solver import FEM_Cube
-from output import plot_smec_frac_cond
+from output import plot_smec_frac_cond, plot_curr_all
 
 
 def create_logger(fpth="./debug.txt", logger_name: str = "log"):
@@ -60,7 +60,7 @@ def run():
     kaolinite.calc_cond_tensor()
 
     # set solver input
-    solver_input = FEM_Input_Cube()
+    solver_input = Cube()
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20),
         edge_length=edge_length,
@@ -73,6 +73,7 @@ def run():
     # print("set_ib")
     # print("femat")
     solver_input.femat()
+    solver_input.set_A()
 
     # run solver
     # print("run solver")
@@ -125,7 +126,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     smectite.calc_cond_tensor()
 
     # set solver input
-    solver_input = FEM_Input_Cube(logger=logger)
+    solver_input = Cube(logger=logger)
     smec_frac_tol = (1.0 - porosity) * smec_frac
     siica_frac_tol = (1.0 - porosity) * (1.0 - smec_frac)
     solver_input.create_pixel_by_macro_variable(
@@ -140,6 +141,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         rotation_setting="random",
     )
     solver_input.femat()
+    solver_input.set_A()
 
     # run solver
     solver = FEM_Cube(solver_input, logger=logger)
@@ -165,7 +167,11 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
     solver_fpth: str = path.join(outdir, "cond.pkl")
     with open(solver_fpth, "wb") as pkf:
         pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf, pickle.HIGHEST_PROTOCOL)
-
+    # solver
+    solver_fpth: str = path.join(outdir, "solver.pkl")
+    with open(solver_fpth, "wb") as pkf:
+        pickle.dump(solver, pkf, pickle.HIGHEST_PROTOCOL)
+    
     # remove handler
     for h in logger.handlers:
         logger.removeHandler(h)
@@ -349,5 +355,9 @@ def main():
 if __name__ == "__main__":
     # main()
     # experiment()
-    output_fig()
-    # exec_single_condition(0., 298.15, 0.1, 0.1, 42)
+    # output_fig()
+    exec_single_condition(0., 298.15, 0.1, 0.1, 42)
+    with open(r"E:\EECR\output2\pickle\smec_frac-0.0_temperature-298.15_cnacl-0.1_porosity-0.1\42\2023-09-11\solver.pkl", "rb") as pkf:    
+        solver = pickle.load(pkf)
+    plot_curr_all(solver, "y", 1.0e-6, "tmp/curr")
+    pass

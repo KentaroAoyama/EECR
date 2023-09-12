@@ -1,7 +1,6 @@
 """Create input to be passed to the solver class"""
-# TODO: solverで表面を流れる電流を計算できるように, 適当なメンバ変数を追加する
 # TODO: 理論解がわかっている条件で, dksの実装が正しいかテストする
-# TODO: black
+# TODO: docstring
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
@@ -21,9 +20,9 @@ from sklearn.cluster import KMeans
 from fluid import Fluid
 
 DictLike = Union[Dict, OrderedDict]
-
+# TODO: ex, ey, ezは固定する
 # pylint: disable=invalid-name
-class FEM_Input_Cube:
+class Cube:
     """Class for creating finite element method inputs when using cubic elements.
     This program is based on Garboczi (1998).
 
@@ -40,8 +39,9 @@ class FEM_Input_Cube:
         pix_tensor: List = None,
         dkv: List = None,
         dks: List = None,
-        sigmav: List = None,
-        sigmas: List = None,
+        sigmav: List[List[List[np.ndarray]]] = None,
+        sigmas: List[List[List[List[Tuple[np.ndarray, np.ndarray]]]]] = None,
+        edge_length: float = None,
         ib: List = None,
         pix: List = None,
         ex: float = None,
@@ -54,7 +54,7 @@ class FEM_Input_Cube:
         C: float = None,
         logger: Logger = None,
     ):
-        """Initialize FEM_Input_Cube class.
+        """Initialize Cube class.
 
         Args:
             pix_tensor (List): 3d list of pix. Each index indicate node. First index increases
@@ -66,7 +66,9 @@ class FEM_Input_Cube:
             sigmav (List): 3d list of conductivity tensor adescribed at pp.6 in in Garboczi (1998).
                 First index is the identifier of the tensor. Second and third indexes indicate the
                 row and column of conductivity tensor respectively.
-            sigmas (List): 3d list (nxyz × 6 × (Debye length (m), surface conductivity (S/m))) containing surface conductivity
+            sigmas (List): 3d list (nxyz × 6 × (Debye length (m), surface conductivity (S/m)))
+                containing surface conductivity.
+            edge_length (float): Edge length of cubic cell (m).
             ib (List): 2d list of neighbor labelling described at pp.8 to 11 in Garboczi (1998).
                 First index indicates one dimensional labbeling scheme (m) and second index
                 indicates neighbor node index of m'th node. m is calculated as follows:
@@ -96,6 +98,7 @@ class FEM_Input_Cube:
         self.dks: List = dks
         self.sigmav: List = sigmav
         self.sigmas: List = sigmas
+        self.edge_length: float = edge_length
         self.ib: List = ib
         self.pix: List = pix
         self.ex: float = ex
@@ -129,7 +132,7 @@ class FEM_Input_Cube:
         instance_range_dict: DictLike = {},
         instance_adj_rate_dict: DictLike = {},
         cluster_size: DictLike = {},
-        surface: str = "average",
+        surface: str = "boundary",
         seed: int = 42,
         rotation_setting: str or Tuple[float] = "random",
     ) -> None:
@@ -161,6 +164,7 @@ class FEM_Input_Cube:
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
                 conductivity tensor are rotated based on these angles (Defaults to "random").
         """
+        self.edge_length = edge_length
         # TODO: 時間計測して高速化
         assert len(volume_frac_dict) > 0
         # Check to see if the volume fractions sum to 1
@@ -324,15 +328,15 @@ class FEM_Input_Cube:
                         cond_surface: float = get_cond_surface()
                         double_layer_length: float = get_double_layer_length()
                         assert (
-                            double_layer_length < edge_length
-                        ), f"double_layer_length: {double_layer_length}, edge_length: {edge_length}"
+                            double_layer_length < self.edge_length
+                        ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
                         self.__sum_double_layer_cond(
                             pix_tensor,
                             instance_ls,
                             i,
                             j,
                             k,
-                            edge_length,
+                            self.edge_length,
                             cond_surface,
                             double_layer_length,
                         )
@@ -360,15 +364,17 @@ class FEM_Input_Cube:
                         cond_surface: float = get_cond_surface()
                         double_layer_length: float = get_double_layer_length()
                         assert (
-                            double_layer_length < edge_length
-                        ), f"double_layer_length: {double_layer_length}, edge_length: {edge_length}"
+                            double_layer_length < self.edge_length
+                        ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
+                        # Multiply by 0.5 to account for calculating energy for each volume element
                         _ds = (
-                            double_layer_length
+                            0.5
+                            * double_layer_length
                             * cond_surface
-                            / (6.0 * edge_length)
+                            / (6.0 * self.edge_length)
                             * np.array(
                                 [
-                                    [4.0, -1.0, -2.0, 1.0],
+                                    [4.0, -1.0, -2.0, -1.0],
                                     [-1.0, 4.0, -1.0, -2.0],
                                     [-2.0, -1.0, 4.0, -1.0],
                                     [-1.0, -2.0, -1.0, 4.0],
@@ -376,30 +382,37 @@ class FEM_Input_Cube:
                             )
                         )
                         dks_m = dks[m]
-                        if is_fluid(instance_ls[self.ib[m][6]]):
+                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][6], nx, ny)
+                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
                             dks_m[0] = _ds  # x-
                             dks[self.ib[m][6]][1] = _ds  # x+
-                            sigmas[0] = (double_layer_length, cond_surface)
-                        if is_fluid(instance_ls[self.ib[m][2]]):
+                            sigmas[m][0] = (double_layer_length, cond_surface)
+                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][2], nx, ny)
+                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
                             dks_m[1] = _ds  # x+
                             dks[self.ib[m][2]][0] = _ds  # x-
-                            sigmas[1] = (double_layer_length, cond_surface)
-                        if is_fluid(instance_ls[self.ib[m][4]]):
+                            sigmas[m][1] = (double_layer_length, cond_surface)
+                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][4], nx, ny)
+                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
                             dks_m[2] = _ds  # y-
                             dks[self.ib[m][4]][3] = _ds  # y+
-                            sigmas[2] = (double_layer_length, cond_surface)
-                        if is_fluid(instance_ls[self.ib[m][0]]):
+                            sigmas[m][2] = (double_layer_length, cond_surface)
+                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][0], nx, ny)
+                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
                             dks_m[3] = _ds  # y+
                             dks[self.ib[m][0]][2] = _ds  # y-
-                            sigmas[3] = (double_layer_length, cond_surface)
-                        if is_fluid(instance_ls[self.ib[m][24]]):
+                            sigmas[m][3] = (double_layer_length, cond_surface)
+                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][24], nx, ny)
+                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
                             dks_m[4] = _ds  # z-
                             dks[self.ib[m][24]][5] = _ds  # z+
-                            sigmas[4] = (double_layer_length, cond_surface)
-                        if is_fluid(instance_ls[self.ib[m][25]]):
+                            sigmas[m][4] = (double_layer_length, cond_surface)
+                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][25], nx, ny)
+                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
                             dks_m[5] = _ds  # z+
                             dks[self.ib[m][25]][4] = _ds  # z-
-                            sigmas[5] = (double_layer_length, cond_surface)
+                            sigmas[m][5] = (double_layer_length, cond_surface)
+            self.sigmas = sigmas
             self.dks = np.array(dks, dtype=np.float64)
 
         self.pix_tensor = np.array(pix_tensor)
@@ -416,6 +429,12 @@ class FEM_Input_Cube:
         self.sigmav = sigma_ls
         self.pix = pix_ls
         self.instance_ls = instance_ls
+
+        # For simplicity, set default values for sigmas and dks
+        if self.sigmas is None:
+            self.sigmas = [[(0.0, 0.0) for _ in range(6)] for _ in range(ns)]
+        if self.dks is None:
+            self.dks = [[0.0 for _ in range(6)] for _ in range(ns)]
 
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
@@ -791,6 +810,7 @@ class FEM_Input_Cube:
         _is[6] = 17
         _is[7] = 16
         # TODO: 高速化
+        # δr in eq.(9), Garboczi (1997)
         xn: List = list(range(8))
         # x=nx face
         i = nx - 1
@@ -801,12 +821,13 @@ class FEM_Input_Cube:
         for j in range(ny - 1):
             for k in range(nz - 1):
                 m = calc_m(i, j, k, nx, ny)  # fix i
+                dkvm = dk[self.pix[m]]
+                dksm = self.dks[m]
                 for mm in range(8):
-                    _sum = 0.0
-                    for m8 in range(8):
-                        _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                        c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-                    b[self.ib[m][_is[mm]]] += _sum
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                    b[self.ib[m][_is[mm]]] += _sumb
+                    c += _sumc
+
         # y=ny face
         j = ny - 1
         for i8 in range(8):
@@ -816,46 +837,53 @@ class FEM_Input_Cube:
         for i in range(nx - 1):
             for k in range(nz - 1):
                 m = calc_m(i, j, k, nx, ny)  # fix j
+                dkvm = dk[self.pix[m]]
+                dksm = self.dks[m]
                 for mm in range(8):
-                    _sum = 0.0
-                    for m8 in range(8):
-                        _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                        c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-                    b[self.ib[m][_is[mm]]] += _sum
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                    b[self.ib[m][_is[mm]]] += _sumb
+                    c += _sumc
+
         # z=nz face
         k = nz - 1
+        dr = -1.0 * self.ez * nz
         for i8 in range(8):
             xn[i8] = 0.0
             if i8 in [4, 5, 6, 7]:
-                xn[i8] = -1.0 * self.ez * nz
+                xn[i8] = dr
         for i in range(nx - 1):
             for j in range(ny - 1):
                 m = calc_m(i, j, k, nx, ny)  # fix k
+                dkvm = dk[self.pix[m]]
+                dksm = self.dks[m]
                 for mm in range(8):
-                    _sum = 0.0
-                    for m8 in range(8):
-                        _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                        c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-                    b[self.ib[m][_is[mm]]] += _sum
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                    b[self.ib[m][_is[mm]]] += _sumb
+                    c += _sumc
+
         # x=nx y=ny edge
         i = nx - 1
         j = ny - 1
+        dx = -1.0 * self.ex * nx
+        dy = -1.0 * self.ey * ny
+        dxy = dx + dy
         for i8 in range(8):
             xn[i8] = 0.0
             if i8 in [1, 5]:
-                xn[i8] = -1.0 * self.ex * nx
+                xn[i8] = dx
             if i8 in [3, 7]:
-                xn[i8] = -1.0 * self.ey * ny
+                xn[i8] = dy
             if i8 in [2, 6]:
-                xn[i8] = -1.0 * self.ey * ny - self.ex * nx
+                xn[i8] = dxy
         for k in range(nz - 1):
             m = calc_m(i, j, k, nx, ny)  # fix i & j
+            dkvm = dk[self.pix[m]]
+            dksm = self.dks[m]
             for mm in range(8):
-                _sum = 0.0
-                for m8 in range(8):
-                    _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                    c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-                b[self.ib[m][_is[mm]]] += _sum
+                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                b[self.ib[m][_is[mm]]] += _sumb
+                c += _sumc
+
         # x=nx z=nz edge
         i = nx - 1
         k = nz - 1
@@ -869,12 +897,12 @@ class FEM_Input_Cube:
                 xn[i8] = -1.0 * self.ez * nz - self.ex * nx
         for j in range(ny - 1):
             m = calc_m(i, j, k, nx, ny)  # fix i & k
+            dkvm = dk[self.pix[m]]
+            dksm = self.dks[m]
             for mm in range(8):
-                _sum = 0.0
-                for m8 in range(8):
-                    _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                    c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-                b[self.ib[m][_is[mm]]] += _sum
+                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                b[self.ib[m][_is[mm]]] += _sumb
+                c += _sumc
         # y=ny z=nz edge
         j = ny - 1
         k = nz - 1
@@ -888,12 +916,12 @@ class FEM_Input_Cube:
                 xn[i8] = -1.0 * self.ey * ny - self.ez * nz
         for i in range(nx - 1):
             m = calc_m(i, j, k, nx, ny)
+            dkvm = dk[self.pix[m]]
+            dksm = self.dks[m]
             for mm in range(8):
-                _sum = 0.0
-                for m8 in range(8):
-                    _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                    c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-                b[self.ib[m][_is[mm]]] += _sum
+                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                b[self.ib[m][_is[mm]]] += _sumb
+                c += _sumc
         # x=nx y=ny z=nz corner
         i = nx - 1
         j = ny - 1
@@ -915,12 +943,12 @@ class FEM_Input_Cube:
             if i8 == 6:
                 xn[i8] = -1.0 * self.ex * nx - self.ey * ny - self.ez * nz
         m = calc_m(i, j, k, nx, ny)
+        dkvm = dk[self.pix[m]]
+        dksm = self.dks[m]
         for mm in range(8):
-            _sum = 0.0
-            for m8 in range(8):
-                _sum += xn[m8] * dk[self.pix[m]][m8][mm]
-                c += 0.5 * xn[m8] * dk[self.pix[m]][m8][mm] * xn[mm]
-            b[self.ib[m][_is[mm]]] += _sum
+            _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+            b[self.ib[m][_is[mm]]] += _sumb
+            c += _sumc
 
         self.B = np.array(b, dtype=np.float64)
         self.C = np.float64(c)
@@ -929,7 +957,9 @@ class FEM_Input_Cube:
 
     def set_A(self) -> None:
         """Set global stiffness matrix"""
-        assert None not in (self.ib, self.dkv, self.pix)
+        assert self.ib is not None
+        assert self.dkv is not None
+        assert self.pix is not None
         ns = len(self.pix)
         # Av
         Av: List = [None for _ in range(ns)]
@@ -939,12 +969,15 @@ class FEM_Input_Cube:
         # As
         # Assuming matrices for the same face are equal
         # (e.g., dks[ib[0][1]]==dks[ib[1][0]])
-        As: List = [None for _ in range(ns)]
-        for m in range(ns):
-            self.__set_as_m(As=As, m=m, ib=self.ib, dk=self.dks)
-        self.As = np.array(Av, dtype=np.float64)
-
-        self.A = self.Av + self.As
+        if self.dks is not None:
+            As: List = [None for _ in range(ns)]
+            for m in range(ns):
+                self.__set_as_m(As=As, m=m, ib=self.ib, dk=self.dks)
+            self.As = np.array(As, dtype=np.float64)
+        if self.As is not None:
+            self.A = self.Av + self.As
+        else:
+            self.A = self.Av
 
     def __set_av_m(self, Av: List, m: int, ib: List, dk: List, pix: List) -> None:
         """Set self.Av[m] value
@@ -1056,7 +1089,7 @@ class FEM_Input_Cube:
         # Faces perpendicular to Z axis (counterclockwise from bottom left)
         z0, z1, z2, z3 = dk[ib_m[5]][4], dk[ib_m[4]][4], dk[ib_m[26]][4], dk[ib_m[6]][4]
 
-        am[0] = z2[3][1] + z3[2][1] + x1[2][3] + x2[1][0]
+        am[0] = z2[3][0] + z3[2][1] + x1[2][3] + x2[1][0]
         am[1] = z2[2][0]
         am[2] = z1[2][3] + z2[1][0] + y1[2][3] + y2[1][0]
         am[3] = z1[1][3]
@@ -1460,6 +1493,14 @@ class FEM_Input_Cube:
             return deepcopy(self.sigmas)
         return self.sigmas
 
+    def get_edge_length(self) -> float or None:
+        """Getter for the edge length (m) of cubic cell.
+
+        Returns:
+            float or None: Edge length of cubic cell (m)
+        """
+        return self.edge_length
+
     def get_ib(self) -> List or None:
         """Getter for the neighbor labelling list in 2d shape.
 
@@ -1661,6 +1702,125 @@ def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.
 
 def is_fluid(_instance) -> bool:
     return _instance.__class__.__base__ is Fluid
+
+
+def xm_index(i: int) -> None or int:
+    if i in (1, 2, 5, 6):
+        return None
+    if i == 0:
+        return 0
+    if i == 3:
+        return 1
+    if i == 4:
+        return 3
+    if i == 7:
+        return 2
+
+
+def xp_index(i: int) -> None or int:
+    if i in (0, 3, 4, 7):
+        return None
+    if i == 1:
+        return 0
+    if i == 2:
+        return 1
+    if i == 5:
+        return 3
+    if i == 6:
+        return 2
+
+
+def ym_index(i: int) -> None or int:
+    if i in (2, 3, 6, 7):
+        return None
+    if i == 0:
+        return 0
+    if i == 1:
+        return 1
+    if i == 4:
+        return 3
+    if i == 5:
+        return 2
+
+
+def yp_index(i: int) -> None or int:
+    if i in (0, 1, 4, 5):
+        return None
+    if i == 2:
+        return 1
+    if i == 3:
+        return 0
+    if i == 6:
+        return 2
+    if i == 7:
+        return 3
+
+
+def zm_index(i: int) -> None or int:
+    if i in (4, 5, 6, 7):
+        return None
+    if i == 0:
+        return 0
+    if i == 1:
+        return 1
+    if i == 2:
+        return 2
+    if i == 3:
+        return 3
+
+
+def zp_index(i: int) -> None or int:
+    if i in (0, 1, 2, 3):
+        return None
+    if i == 4:
+        return 0
+    if i == 5:
+        return 1
+    if i == 6:
+        return 2
+    if i == 7:
+        return 3
+
+
+def _energy_bounds(xn, mm, dkvm, dksm) -> Tuple[float, float]:
+    b, c = 0.0, 0.0
+    # volume
+    for m8 in range(8):
+        b += xn[m8] * dkvm[m8][mm]
+        c += 0.5 * xn[m8] * dkvm[m8][mm] * xn[mm]
+    # surface
+    jxm = xm_index(mm)
+    jxp = xp_index(mm)
+    jym = ym_index(mm)
+    jyp = yp_index(mm)
+    jzm = zm_index(mm)
+    jzp = zp_index(mm)
+    for m8 in range(8):
+        ixm = xm_index(m8)
+        ixp = xp_index(m8)
+        iym = ym_index(m8)
+        iyp = yp_index(m8)
+        izm = zm_index(m8)
+        izp = zp_index(m8)
+        if None not in (ixm, jxm):
+            b += xn[m8] * dksm[0][ixm][jxm]
+            c += 0.5 * xn[m8] * dksm[0][ixm][jxm] * xn[mm]
+        if None not in (ixp, jxp):
+            b += xn[m8] * dksm[1][ixp][jxp]
+            c += 0.5 * xn[m8] * dksm[1][ixp][jxp] * xn[mm]
+        if None not in (iym, jym):
+            b += xn[m8] * dksm[2][iym][jym]
+            c += 0.5 * xn[m8] * dksm[2][iym][jym] * xn[mm]
+        if None not in (iyp, jyp):
+            b += xn[m8] * dksm[3][iyp][jyp]
+            c += 0.5 * xn[m8] * dksm[3][iyp][jyp] * xn[mm]
+        if None not in (izm, jzm):
+            b += xn[m8] * dksm[4][izm][jzm]
+            c += 0.5 * xn[m8] * dksm[4][izm][jzm] * xn[mm]
+        if None not in (izp, jzp):
+            b += xn[m8] * dksm[5][izp][jzp]
+            c += 0.5 * xn[m8] * dksm[5][izp][izp] * xn[mm]
+    return b, c
 
 
 if __name__ == "__main__":

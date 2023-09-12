@@ -7,7 +7,7 @@ from warnings import warn
 
 import pickle
 import numpy as np
-from cube import FEM_Input_Cube, calc_m
+from cube import Cube, calc_m
 
 
 class FEM_Cube:
@@ -22,15 +22,15 @@ class FEM_Cube:
                     (Accessed January 20, 2023)
     """
 
-    def __init__(self, fem_input: FEM_Input_Cube = None, logger: Logger = None):
+    def __init__(self, fem_input: Cube = None, logger: Logger = None):
         """Initialize FEM_Cube class
 
         Args:
-            fem_input (FEM_Input_Cube): Input of FEM computation.
+            fem_input (Cube): Input of FEM computation.
             logger (Logger): logger to write debug information etc.
         """
         assert fem_input is not None
-        self.fem_input: FEM_Input_Cube = fem_input
+        self.fem_input: Cube = fem_input
         self.logger: Logger = logger
         self.u: np.ndarray = None
         self.u2d: np.ndarray = None
@@ -41,9 +41,12 @@ class FEM_Cube:
         self.h: np.ndarray = None
         self.h2d: np.ndarray = None
         self.__init_default()
-        self.currx_m: List = None
-        self.curry_m: List = None
-        self.currz_m: List = None
+        self.currxv: List = None
+        self.curryv: List = None
+        self.currzv: List = None
+        self.currxs: List = None
+        self.currys: List = None
+        self.currzs: List = None
         self.currx_ave: float = None
         self.curry_ave: float = None
         self.currz_ave: float = None
@@ -161,6 +164,13 @@ class FEM_Cube:
             self.logger.debug(f"cond x: {self.cond_x}")
             self.logger.debug(f"cond y: {self.cond_y}")
             self.logger.debug(f"cond z: {self.cond_z}")
+            if self.currxs is not None:
+                nx, ny, nz = self.fem_input.get_shape()
+                ns = nx * ny * nz
+                ex, ey, ez = self.fem_input.get_ex(), self.fem_input.get_ey(), self.fem_input.get_ez()
+                self.logger.debug(f"condxs: {sum(self.currxs) / (ns * ex)}")
+                self.logger.debug(f"condys: {sum(self.currys) / (ns * ey)}")
+                self.logger.debug(f"condzs: {sum(self.currzs) / (ns * ez)}")
 
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
@@ -218,7 +228,7 @@ class FEM_Cube:
 
     def __calc_current_and_cond(self):
         """Calculate and update macro currents (self.currx_ave, m_curry_ave, m_currz_ave)
-        and micro currents (self.currx_m, m_curry_m, m_currz_m) and macro conductivity
+        and micro currents (self.currxv, m_curryv, m_currzv) and macro conductivity
         (self.cond_x, self.cond_y, self.cond_z). af is the average field matrix, average
         field in a pixel is af*u(pixel). The matrix af relates the nodal voltages to the
         average field in the pixel.
@@ -261,9 +271,9 @@ class FEM_Cube:
         ez = self.fem_input.get_ez()
         sigmav = self.fem_input.get_sigmav()
         sigmas = self.fem_input.get_sigmas()
-        currx_m: List = list(range(ns))
-        curry_m: List = list(range(ns))
-        currz_m: List = list(range(ns))
+        currxv: List = list(range(ns))
+        curryv: List = list(range(ns))
+        currzv: List = list(range(ns))
         uu: List = list(range(8))
         for k in range(nz):
             for j in range(ny):
@@ -304,19 +314,87 @@ class FEM_Cube:
                             cur2 += sigmav[pix[m]][1][nn] * _e
                             cur3 += sigmav[pix[m]][2][nn] * _e
                     # sum into the global average currents
-                    currx_m[m] = cur1
-                    curry_m[m] = cur2
-                    currz_m[m] = cur3
+                    currxv[m] = cur1
+                    curryv[m] = cur2
+                    currzv[m] = cur3
+        self.currxv = currxv
+        self.curryv = curryv
+        self.currzv = currzv
 
-        self.currx_m = currx_m
-        self.curry_m = curry_m
-        self.currz_m = currz_m
+        # add surface current density
+        if sigmas is not None:
+            currxs: List = list(range(ns))
+            currys: List = list(range(ns))
+            currzs: List = list(range(ns))
+            d = self.fem_input.get_edge_length()
+            for k in range(nz):
+                for j in range(ny):
+                    for i in range(nx):
+                        m = calc_m(i, j, k, nx, ny)
+                        u0 = self.u[m]
+                        u1 = self.u[ib[m][2]]
+                        u2 = self.u[ib[m][1]]
+                        u3 = self.u[ib[m][0]]
+                        u4 = self.u[ib[m][25]]
+                        u5 = self.u[ib[m][18]]
+                        u6 = self.u[ib[m][17]]
+                        u7 = self.u[ib[m][16]]
+                        faces = sigmas[m]
+                        lxm, sxm = faces[0]
+                        lxp, sxp = faces[1]
+                        lym, sym = faces[2]
+                        lyp, syp = faces[3]
+                        lzm, szm = faces[4]
+                        lzp, szp = faces[5]
+                        currxs[m] = (
+                            0.25
+                            * (
+                                lzm * szm * (u0 - u1 - u2 + u3)
+                                + lzp * szp * (u4 - u5 - u6 + u7)
+                                + lym * sym * (u0 - u1 + u4 - u5)
+                                + lyp * syp * (u3 - u2 + u7 - u6)
+                            )
+                            / d
+                        )
+                        currys[m] = (
+                            0.25
+                            * (
+                                lxm * sxm * (u0 - u3 + u4 - u7)
+                                + lxp * sxp * (u1 - u2 + u5 - u6)
+                                + lzm * szm * (u0 + u1 - u2 - u3)
+                                + lzp * szp * (u4 + u5 - u6 - u7)
+                            )
+                            / d
+                        )
+                        currzs[m] += (
+                            0.25
+                            * (
+                                lxm * sxm * (u0 + u3 - u4 - u7)
+                                + lxp * sxp * (u1 + u2 - u5 - u6)
+                                + lym * sym * (u0 + u1 - u4 - u5)
+                                + lyp * syp * (u2 + u3 - u6 - u7)
+                            )
+                            / d
+                        )
+
+            self.currxs = currxs
+            self.currys = currys
+            self.currzs = currzs
 
         # Volume average currents
-        ns = nx * ny * nz
-        currx_ave = sum(currx_m) / float(ns)
-        curry_ave = sum(curry_m) / float(ns)
-        currz_ave = sum(currz_m) / float(ns)
+        currx_ave, curry_ave, currz_ave = None, None, None
+        if self.currxs is not None:
+            currx_ave = (sum(self.currxv) + sum(self.currxs)) / float(ns)
+        else:
+            currx_ave = sum(self.currxv) / float(ns)
+        if self.currys is not None:
+            curry_ave = (sum(self.curryv) + sum(self.currys)) / float(ns)
+        else:
+            curry_ave = sum(self.curryv) / float(ns)
+        if self.currzs is not None:
+            currz_ave = (sum(self.currzv) + sum(self.currzs)) / float(ns)
+        else:
+            currz_ave = sum(self.currzv) / float(ns)
         # set macroscopic values
         self.currx_ave = currx_ave
         self.curry_ave = curry_ave
@@ -330,7 +408,7 @@ class FEM_Cube:
 
     # getters methods for member variables
     # pylint: disable=missing-docstring
-    def get_fem_input(self) -> None or FEM_Input_Cube:
+    def get_fem_input(self) -> None or Cube:
         return deepcopy(self.fem_input)
 
     def get_logger(self) -> None or Logger:
@@ -361,13 +439,13 @@ class FEM_Cube:
         return deepcopy(self.h2d)
 
     def get_cuurx(self):
-        return deepcopy(self.currx_m)
+        return deepcopy(self.currxv)
 
     def get_cuury(self):
-        return deepcopy(self.curry_m)
+        return deepcopy(self.curryv)
 
     def get_cuurz(self):
-        return deepcopy(self.currz_m)
+        return deepcopy(self.currzv)
 
     def get_currx_ave(self):
         return deepcopy(self.currx_ave)

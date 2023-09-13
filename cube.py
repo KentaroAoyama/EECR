@@ -1,5 +1,6 @@
 """Create input to be passed to the solver class"""
 # TODO: 理論解がわかっている条件で, dksの実装が正しいかテストする
+# TODO: fix stiffness matrix index (pixを参照するか, mをインデックスとするか, 統一する)
 # TODO: docstring
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
@@ -434,7 +435,10 @@ class Cube:
         if self.sigmas is None:
             self.sigmas = [[(0.0, 0.0) for _ in range(6)] for _ in range(ns)]
         if self.dks is None:
-            self.dks = [[0.0 for _ in range(6)] for _ in range(ns)]
+            self.dks = [
+                [[[0.0, 0.0, 0.0, 0.0] for _ in range(4)] for _ in range(6)]
+                for _ in range(ns)
+            ]
 
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
@@ -792,8 +796,7 @@ class Cube:
         # pixels via the periodic boundary conditions and the condition that
         # an applied macroscopic field exists (see Sec. 2.2 in manual).
         nz, ny, nx, _, _ = np.array(self.pix_tensor).shape
-        nxy = nx * ny
-        ns = nxy * nz
+        ns = nx * ny * nz
         b: List = np.zeros(ns).tolist()
         c = 0.0
         # For all cases, correspondence between 0-7 finite element node labels
@@ -821,7 +824,7 @@ class Cube:
         for j in range(ny - 1):
             for k in range(nz - 1):
                 m = calc_m(i, j, k, nx, ny)  # fix i
-                dkvm = dk[self.pix[m]]
+                dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
                     _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -837,7 +840,7 @@ class Cube:
         for i in range(nx - 1):
             for k in range(nz - 1):
                 m = calc_m(i, j, k, nx, ny)  # fix j
-                dkvm = dk[self.pix[m]]
+                dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
                     _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -854,7 +857,7 @@ class Cube:
         for i in range(nx - 1):
             for j in range(ny - 1):
                 m = calc_m(i, j, k, nx, ny)  # fix k
-                dkvm = dk[self.pix[m]]
+                dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
                     _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -877,7 +880,7 @@ class Cube:
                 xn[i8] = dxy
         for k in range(nz - 1):
             m = calc_m(i, j, k, nx, ny)  # fix i & j
-            dkvm = dk[self.pix[m]]
+            dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
                 _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -897,7 +900,7 @@ class Cube:
                 xn[i8] = -1.0 * self.ez * nz - self.ex * nx
         for j in range(ny - 1):
             m = calc_m(i, j, k, nx, ny)  # fix i & k
-            dkvm = dk[self.pix[m]]
+            dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
                 _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -916,7 +919,7 @@ class Cube:
                 xn[i8] = -1.0 * self.ey * ny - self.ez * nz
         for i in range(nx - 1):
             m = calc_m(i, j, k, nx, ny)
-            dkvm = dk[self.pix[m]]
+            dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
                 _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -943,7 +946,7 @@ class Cube:
             if i8 == 6:
                 xn[i8] = -1.0 * self.ex * nx - self.ey * ny - self.ez * nz
         m = calc_m(i, j, k, nx, ny)
-        dkvm = dk[self.pix[m]]
+        dkvm = self.dkv[self.pix[m]]
         dksm = self.dks[m]
         for mm in range(8):
             _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
@@ -1803,23 +1806,23 @@ def _energy_bounds(xn, mm, dkvm, dksm) -> Tuple[float, float]:
         izm = zm_index(m8)
         izp = zp_index(m8)
         if None not in (ixm, jxm):
-            b += xn[m8] * dksm[0][ixm][jxm]
-            c += 0.5 * xn[m8] * dksm[0][ixm][jxm] * xn[mm]
+            b += 0.5 * xn[m8] * dksm[0][ixm][jxm]
+            c += 0.25 * xn[m8] * dksm[0][ixm][jxm] * xn[mm]
         if None not in (ixp, jxp):
-            b += xn[m8] * dksm[1][ixp][jxp]
-            c += 0.5 * xn[m8] * dksm[1][ixp][jxp] * xn[mm]
+            b += 0.5 * xn[m8] * dksm[1][ixp][jxp]
+            c += 0.25 * xn[m8] * dksm[1][ixp][jxp] * xn[mm]
         if None not in (iym, jym):
-            b += xn[m8] * dksm[2][iym][jym]
-            c += 0.5 * xn[m8] * dksm[2][iym][jym] * xn[mm]
+            b += 0.5 * xn[m8] * dksm[2][iym][jym]
+            c += 0.25 * xn[m8] * dksm[2][iym][jym] * xn[mm]
         if None not in (iyp, jyp):
-            b += xn[m8] * dksm[3][iyp][jyp]
-            c += 0.5 * xn[m8] * dksm[3][iyp][jyp] * xn[mm]
+            b += 0.5 * xn[m8] * dksm[3][iyp][jyp]
+            c += 0.25 * xn[m8] * dksm[3][iyp][jyp] * xn[mm]
         if None not in (izm, jzm):
-            b += xn[m8] * dksm[4][izm][jzm]
-            c += 0.5 * xn[m8] * dksm[4][izm][jzm] * xn[mm]
+            b += 0.5 * xn[m8] * dksm[4][izm][jzm]
+            c += 0.25 * xn[m8] * dksm[4][izm][jzm] * xn[mm]
         if None not in (izp, jzp):
-            b += xn[m8] * dksm[5][izp][jzp]
-            c += 0.5 * xn[m8] * dksm[5][izp][izp] * xn[mm]
+            b += 0.5 * xn[m8] * dksm[5][izp][jzp]
+            c += 0.25 * xn[m8] * dksm[5][izp][jzp] * xn[mm]
     return b, c
 
 

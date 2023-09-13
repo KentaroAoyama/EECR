@@ -158,16 +158,26 @@ class FEM_Cube:
 
         if self.logger is not None:
             self.logger.info("run done")
-            self.logger.debug(f"curr x: {self.currx_ave}")
-            self.logger.debug(f"curr y: {self.curry_ave}")
-            self.logger.debug(f"curr z: {self.currz_ave}")
-            self.logger.debug(f"cond x: {self.cond_x}")
-            self.logger.debug(f"cond y: {self.cond_y}")
-            self.logger.debug(f"cond z: {self.cond_z}")
+            self.logger.debug(f"currx_ave: {self.currx_ave}")
+            self.logger.debug(f"curry_ave: {self.curry_ave}")
+            self.logger.debug(f"curry_ave: {self.currz_ave}")
+            self.logger.debug(f"cond_x: {self.cond_x}")
+            self.logger.debug(f"cond_y: {self.cond_y}")
+            self.logger.debug(f"cond_z: {self.cond_z}")
             if self.currxs is not None:
                 nx, ny, nz = self.fem_input.get_shape()
                 ns = nx * ny * nz
-                ex, ey, ez = self.fem_input.get_ex(), self.fem_input.get_ey(), self.fem_input.get_ez()
+                ex, ey, ez = (
+                    self.fem_input.get_ex(),
+                    self.fem_input.get_ey(),
+                    self.fem_input.get_ez(),
+                )
+                self.logger.debug(f"currxv: {sum(self.currxv) / ns}")
+                self.logger.debug(f"curryv: {sum(self.curryv) / ns}")
+                self.logger.debug(f"currzv: {sum(self.currzv) / ns}")
+                self.logger.debug(f"currxs: {sum(self.currxs) / ns}")
+                self.logger.debug(f"currys: {sum(self.currys) / ns}")
+                self.logger.debug(f"currzs: {sum(self.currzs) / ns}")
                 self.logger.debug(f"condxs: {sum(self.currxs) / (ns * ex)}")
                 self.logger.debug(f"condys: {sum(self.currys) / (ns * ey)}")
                 self.logger.debug(f"condzs: {sum(self.currzs) / (ns * ez)}")
@@ -339,6 +349,21 @@ class FEM_Cube:
                         u5 = self.u[ib[m][18]]
                         u6 = self.u[ib[m][17]]
                         u7 = self.u[ib[m][16]]
+                        if i == nx - 1:
+                            u1 -= ex * nx
+                            u2 -= ex * nx
+                            u5 -= ex * nx
+                            u6 -= ex * nx
+                        if j == ny - 1:
+                            u2 -= ey * ny
+                            u3 -= ey * ny
+                            u6 -= ey * ny
+                            u7 -= ey * ny
+                        if k == nz - 1:
+                            u4 -= ez * nz
+                            u5 -= ez * nz
+                            u6 -= ez * nz
+                            u7 -= ez * nz
                         faces = sigmas[m]
                         lxm, sxm = faces[0]
                         lxp, sxp = faces[1]
@@ -366,7 +391,7 @@ class FEM_Cube:
                             )
                             / d
                         )
-                        currzs[m] += (
+                        currzs[m] = (
                             0.25
                             * (
                                 lxm * sxm * (u0 + u3 - u4 - u7)
@@ -384,15 +409,15 @@ class FEM_Cube:
         # Volume average currents
         currx_ave, curry_ave, currz_ave = None, None, None
         if self.currxs is not None:
-            currx_ave = (sum(self.currxv) + sum(self.currxs)) / float(ns)
+            currx_ave = np.mean(np.array(self.currxv) + np.array(self.currxs))
         else:
             currx_ave = sum(self.currxv) / float(ns)
         if self.currys is not None:
-            curry_ave = (sum(self.curryv) + sum(self.currys)) / float(ns)
+            curry_ave = np.mean(np.array(self.curryv) + np.array(self.currys))
         else:
             curry_ave = sum(self.curryv) / float(ns)
         if self.currzs is not None:
-            currz_ave = (sum(self.currzv) + sum(self.currzs)) / float(ns)
+            currz_ave = np.mean(np.array(self.currzv) + np.array(self.currzs))
         else:
             currz_ave = sum(self.currzv) / float(ns)
         # set macroscopic values

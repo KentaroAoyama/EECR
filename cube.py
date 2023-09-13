@@ -367,10 +367,8 @@ class Cube:
                         assert (
                             double_layer_length < self.edge_length
                         ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
-                        # Multiply by 0.5 to account for calculating energy for each volume element
                         _ds = (
-                            0.5
-                            * double_layer_length
+                            double_layer_length
                             * cond_surface
                             / (6.0 * self.edge_length)
                             * np.array(
@@ -827,7 +825,7 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True)
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -843,7 +841,7 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, ypoff=True)
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -860,7 +858,7 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, zpoff=True)
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -883,7 +881,7 @@ class Cube:
             dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
-                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True, ypoff=True)
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
 
@@ -903,9 +901,10 @@ class Cube:
             dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
-                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True, zpoff=True)
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
+
         # y=ny z=nz edge
         j = ny - 1
         k = nz - 1
@@ -922,9 +921,10 @@ class Cube:
             dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
-                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, ypoff=True, zpoff=True)
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
+
         # x=nx y=ny z=nz corner
         i = nx - 1
         j = ny - 1
@@ -949,7 +949,7 @@ class Cube:
         dkvm = self.dkv[self.pix[m]]
         dksm = self.dks[m]
         for mm in range(8):
-            _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm)
+            _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True, ypoff=True, zpoff=True)
             b[self.ib[m][_is[mm]]] += _sumb
             c += _sumc
 
@@ -1785,7 +1785,7 @@ def zp_index(i: int) -> None or int:
         return 3
 
 
-def _energy_bounds(xn, mm, dkvm, dksm) -> Tuple[float, float]:
+def _energy_bounds(xn, mm, dkvm, dksm, xpoff=False, ypoff=False, zpoff=False) -> Tuple[float, float]:
     b, c = 0.0, 0.0
     # volume
     for m8 in range(8):
@@ -1808,19 +1808,19 @@ def _energy_bounds(xn, mm, dkvm, dksm) -> Tuple[float, float]:
         if None not in (ixm, jxm):
             b += 0.5 * xn[m8] * dksm[0][ixm][jxm]
             c += 0.25 * xn[m8] * dksm[0][ixm][jxm] * xn[mm]
-        if None not in (ixp, jxp):
+        if None not in (ixp, jxp) and not xpoff:
             b += 0.5 * xn[m8] * dksm[1][ixp][jxp]
             c += 0.25 * xn[m8] * dksm[1][ixp][jxp] * xn[mm]
         if None not in (iym, jym):
             b += 0.5 * xn[m8] * dksm[2][iym][jym]
             c += 0.25 * xn[m8] * dksm[2][iym][jym] * xn[mm]
-        if None not in (iyp, jyp):
+        if None not in (iyp, jyp) and not ypoff:
             b += 0.5 * xn[m8] * dksm[3][iyp][jyp]
             c += 0.25 * xn[m8] * dksm[3][iyp][jyp] * xn[mm]
         if None not in (izm, jzm):
             b += 0.5 * xn[m8] * dksm[4][izm][jzm]
             c += 0.25 * xn[m8] * dksm[4][izm][jzm] * xn[mm]
-        if None not in (izp, jzp):
+        if None not in (izp, jzp) and not zpoff:
             b += 0.5 * xn[m8] * dksm[5][izp][jzp]
             c += 0.25 * xn[m8] * dksm[5][izp][jzp] * xn[mm]
     return b, c

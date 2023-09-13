@@ -358,7 +358,7 @@ if __name__ == "__main__":
     # experiment()
     # output_fig()
     exec_single_condition(0., 298.15, 0.1, 0.1, 42)
-    # with open(r"E:\EECR\output2\pickle\smec_frac-0.0_temperature-298.15_cnacl-0.1_porosity-0.1\42\2023-09-11\solver.pkl", "rb") as pkf:    
-    #     solver = pickle.load(pkf)
-    # plot_curr_all(solver, "y", 1.0e-6, "tmp/curr")
+    with open(r"E:\EECR\output2\pickle\smec_frac-0.0_temperature-298.15_cnacl-0.1_porosity-0.1\42\2023-09-13\solver.pkl", "rb") as pkf:    
+        solver = pickle.load(pkf)
+    plot_curr_all(solver, "y", 1.0e-6, "tmp/curr")
     pass

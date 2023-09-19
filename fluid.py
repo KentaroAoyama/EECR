@@ -196,8 +196,7 @@ class NaCl(Fluid):
         self.conductivity = _cond
 
     def calc_cond_tensor_cube_oxyz(self) -> np.ndarray:
-        """Calculate conductivity tensor. The T-O-T plane is the xy-plane,
-        and perpendicular to it is the z-axis.
+        """Calculate isotropic conductivity tensor.
 
         Returns:
             np.ndarray: 3 rows and 3 columns condutivity tensor

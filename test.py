@@ -42,7 +42,7 @@ from fluid import (
 )
 from msa import calc_mobility
 from solver import FEM_Cube
-from cube import Cube
+from cube import Cube, calc_m
 from output import plot_curr_all, plot_instance, plt_any_val
 
 # from main import exec_single_condition
@@ -414,7 +414,6 @@ def exec_etal_fig2_by_bulk(_r: float, molarity: float, fpth):
         shape=(20, 20, 20), volume_frac_dict={smectite: 1.0}
     )
     solver_input.femat()
-    solver_input.set_A()
     solver = FEM_Cube(solver_input)
     solver.run(kmax=100, gtest=1.0e-9)
 
@@ -1583,7 +1582,6 @@ def ws_single_1(
         ),
     )
     solver_input.femat()
-    solver_input.set_A()
 
     solver = FEM_Cube(solver_input, logger=logger)
     solver.run(100, 30, 1.0e-9)
@@ -1913,7 +1911,6 @@ def ws_single_2(
         seed=seed,
     )
     solver_input.femat()
-    solver_input.set_A()
 
     solver = FEM_Cube(solver_input, logger=logger)
     solver.run(100, 30, 1.0e-9)
@@ -2156,7 +2153,6 @@ def test_poros_distribution():
         seed=42,
     )
     solver_input.femat()
-    solver_input.set_A()
     # after
     m_initial_0, m_initial_1, m_remain, prob = _gamma
     prob = prob.tolist()
@@ -2374,7 +2370,6 @@ def assign_and_run(n: int, range_dct: Dict, seed, savepth: str):
         range_dct,
         seed,
     )
-    solver_input.set_A()
     solver = FEM_Cube(solver_input)
     solver.run(100, 30, 1.0e-9)
 
@@ -3844,6 +3839,108 @@ def compare_md_cond():
         bbox_inches="tight",
     )
 
+def assign_parallel(quartz: Quartz, nacl: NaCl):
+    # Test whether the dks implementation is correct under
+    # the condition that the theoretical solution is known.
+    dl, cs = quartz.get_double_layer_length(), quartz.get_cond_surface()
+    sq = quartz.get_cond_tensor()
+    sf = nacl.get_cond_tensor()
+    assert dl is not None, dl
+    assert cs is not None, cs
+    assert sq is not None, sq
+    assert sf is not None, sf
+    surfpair = (dl, cs)
+    edge_length = 1.0e-6
+    _ds = (
+            dl
+            * cs
+            / (6.0 * edge_length)
+            * np.array(
+                [
+                    [4.0, -1.0, -2.0, -1.0],
+                    [-1.0, 4.0, -1.0, -2.0],
+                    [-2.0, -1.0, 4.0, -1.0],
+                    [-1.0, -2.0, -1.0, 4.0],
+                ]
+            )
+        )
+    nz, ny, nx = 20, 20, 20
+    ns = nz * ny * nx
+    rotation_angle_ls = np.zeros(shape=(nz, ny, nx)).tolist()
+    cube = Cube()
+    # set cube's member variable
+    pix_tensor = np.zeros(shape=(nz, ny, nx)).tolist()
+    sigmav = list(range(ns))
+    pix = list(range(ns))
+    instance_ls = np.zeros(shape=(nz, ny, nx)).tolist()
+    sigmas = list(range(ns))
+    dks = list(range(ns))
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                m = calc_m(i, j, k, nx, ny)
+                _instance = None
+                if k % 2 == 0:
+                    _instance = quartz
+                else:
+                    _instance = nacl
+                rotation_angle_ls[k][j][i] = np.zeros(shape=(3,3))
+                pix[m] = m
+                pix_tensor[k][j][i] = _instance.get_cond_tensor()
+                sigmav[m] = _instance.get_cond_tensor()
+                instance_ls[k][j][i] = _instance
+                sigmas[m] = [(0.0, 0.0) for _ in range(6)]
+                sigmas[m][4] = surfpair
+                sigmas[m][5] = surfpair
+                dks[m] = [np.zeros(shape=(3,3)) for _ in range(6)]
+                dks[4] = _ds
+                dks[5] = _ds
+    pix_tensor = np.array(pix_tensor)
+    cube.set_edge_length(edge_length)
+    cube.set_rotation_angle_ls(rotation_angle_ls)
+    cube.set_sigmav(sigmav)
+    cube.set_pix_tensor(pix_tensor)
+    cube.set_pix(pix)
+    cube.set_instance_ls(instance_ls)
+    cube.set_ib()
+    cube.add_sigmas_by_ventcel()
+    cube.femat()
+    cube.set_A()
+
+    # Theoritical solution
+    l = edge_length
+    sth = 0.5 / l * ((l - dl) * sf[0][0] + dl * cs + l * sq[0][0])
+    solver = FEM_Cube(cube)
+    solver.run()
+    ssim = (solver.get_cond_x() + solver.get_cond_y()) * 0.5
+    print(sth, ssim)
+    return sth, ssim
+
+def test_dks():
+    print("test_dks")
+    t_ls = np.linspace(298.15, 498.15, 10).tolist()
+    m_ls = np.logspace(-3, 0.7, base=10.0, num=10).tolist()
+    result_ls = []
+    for _t in t_ls:
+        for _m in m_ls:
+            print(f"condition: {_t}, {_m}")
+            nacl = NaCl(temperature=_t, pressure=5.0e6, molarity=_m)
+            nacl.sen_and_goode_1992()
+            nacl.calc_cond_tensor_cube_oxyz()
+            quartz = Quartz(nacl=nacl)
+            result_ls.append(assign_parallel(quartz, nacl))
+    fig, ax = plt.subplots()
+    x_ls = [_r[1] for _r in result_ls]
+    y_ls = [_r[0] for _r in result_ls]
+    _min = min((min(x_ls), min(y_ls)))
+    _max = max((max(x_ls), max(y_ls)))
+    ax.plot(x_ls, y_ls)
+    ax.set_xlim(_min, _max)
+    ax.set_ylim(_min, _max)
+    ax.set_aspect("equal")
+    fig.savefig(path.join(test_dir(), "test_dks.png"), dpi=200)
+    with open(path.join(test_dir(), "test_dks_result.pkl"), "wb") as pkf:
+        pickle.dump(result_ls, pkf, pickle.HIGHEST_PROTOCOL)
 
 def tmp():
     nacl = NaCl(temperature=298.15, pressure=1.0e5, molarity=0.1)
@@ -3915,6 +4012,5 @@ if __name__ == "__main__":
     # test_dielec_RaspoandNeau2020()
     # reviletal1998()
     # compare_md_cond()
-    nacl = NaCl(molarity=0.1, temperature=298.15, pressure=5.0e6)
-    print(nacl.sen_and_goode_1992())
+    test_dks()
     pass

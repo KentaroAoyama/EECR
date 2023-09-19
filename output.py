@@ -57,14 +57,19 @@ def plot_smec_frac_cond(
             continue
 
         ax.errorbar(
-            _x, _y, _e, label=str(_label), capsize=3, color=cm.jet(float(i) / len(keys_sorted))
+            _x,
+            _y,
+            _e,
+            label=str(_label),
+            capsize=3,
+            color=cm.jet(float(i) / len(keys_sorted)),
         )
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
     if xlabel is not None:
-        ax.set_xlabel(xlabel, fontsize=14.)
+        ax.set_xlabel(xlabel, fontsize=14.0)
     if logscale:
         ax.set_xscale("log")
-    ax.set_ylabel("Conductivity (S/m)", fontsize=14.)
+    ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
     fig.savefig(save_pth, dpi=200, bbox_inches="tight")
 
     # close
@@ -185,14 +190,16 @@ def __plot_current_grid(
     plt.close()
 
 
-def plot_instance(solver_like: SolverLike,
-                  out_dir: str,):
+def plot_instance(
+    solver_like: SolverLike,
+    out_dir: str,
+):
     fem_input = None
     if isinstance(solver_like, FEM_Cube):
         fem_input = solver_like.get_fem_input()
     elif isinstance(solver_like, Cube):
         fem_input = solver_like
-    
+
     instance_ls = fem_input.instance_ls
     indicator_ls = np.zeros((np.array(instance_ls).shape)).tolist()
     title: str = ""
@@ -237,7 +244,14 @@ def plot_instance(solver_like: SolverLike,
     __plot_instance_main_axis(_tmp, grid_x, grid_y, out_dir, "z", title)
 
 
-def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.ndarray, dirpath: str, prefix: str, title: str = None):
+def __plot_instance_main_axis(
+    _arr: np.ndarray,
+    grid_x: np.ndarray,
+    grid_y: np.ndarray,
+    dirpath: str,
+    prefix: str,
+    title: str = None,
+):
     savedir = path.join(dirpath, prefix)
     if not path.exists(savedir):
         makedirs(savedir)
@@ -251,6 +265,7 @@ def __plot_instance_main_axis(_arr: np.ndarray, grid_x: np.ndarray, grid_y: np.n
         fig.savefig(path.join(savedir, str(i)), dpi=200, bbox_inches="tight")
         plt.clf()
         plt.close()
+
 
 def plot_cond_all(
     condx_ls: List,
@@ -352,7 +367,11 @@ def __plot_cond_grid(
     plt.clf()
     plt.close()
 
-def plt_any_val(val_ls: List[int], shape: Tuple[int], dirname: str, edge_length: float=1.0e-6):
+
+# TODO: fix index
+def plt_any_val(
+    val_ls: List[int], shape: Tuple[int], dirname: str, edge_length: float = 1.0e-6
+):
     nz, ny, nx = shape
     val_3d: List = np.zeros(shape=shape).tolist()
     for m, val in enumerate(val_ls):
@@ -384,7 +403,6 @@ def plt_any_val(val_ls: List[int], shape: Tuple[int], dirname: str, edge_length:
     for i, xy in enumerate(zxy):
         __plt_grid(xx, yy, xy, dirname, f"z_{i}")
 
-    
 
 def __plt_grid(xx, yy, val, dirname: str, fname: str):
     fig, ax = plt.subplots()

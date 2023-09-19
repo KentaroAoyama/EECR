@@ -73,7 +73,6 @@ def run():
     # print("set_ib")
     # print("femat")
     solver_input.femat()
-    solver_input.set_A()
 
     # run solver
     # print("run solver")
@@ -142,7 +141,6 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
         surface="boundary"
     )
     solver_input.femat()
-    solver_input.set_A()
 
     # run solver
     solver = FEM_Cube(solver_input, logger=logger)

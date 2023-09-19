@@ -1,12 +1,12 @@
 """Create input to be passed to the solver class"""
 # TODO: 理論解がわかっている条件で, dksの実装が正しいかテストする
 # TODO: fix stiffness matrix index (pixを参照するか, mをインデックスとするか, 統一する)
-# TODO: docstring
+# TODO: logger
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
 from logging import Logger
-from typing import Set, List, Dict, Tuple, OrderedDict, Union
+from typing import Set, List, Dict, Tuple, OrderedDict, Union, Any
 from math import isclose
 import random
 from sys import float_info
@@ -21,7 +21,6 @@ from sklearn.cluster import KMeans
 from fluid import Fluid
 
 DictLike = Union[Dict, OrderedDict]
-# TODO: ex, ey, ezは固定する
 # pylint: disable=invalid-name
 class Cube:
     """Class for creating finite element method inputs when using cubic elements.
@@ -165,6 +164,17 @@ class Cube:
                 are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
                 conductivity tensor are rotated based on these angles (Defaults to "random").
         """
+        # Set following member variables:
+        #   - self.edge_length
+        #   - self.ib
+        #   - self.rotation_angle_ls
+        #   - self.pix_tensor
+        #   - self.sigmav
+        #   - self.pix
+        #   - self.instance_ls
+        #   - self.sigmas
+        #   - self.dks
+
         self.edge_length = edge_length
         # TODO: 時間計測して高速化
         assert len(volume_frac_dict) > 0
@@ -305,115 +315,6 @@ class Cube:
             ), f"instance: {instance}, volume_frac_dict[instance]: {volume_frac_dict[instance]}, frac: {frac}"
 
         self.rotation_angle_ls = rotation_angle_ls
-
-        # If the cell is a fluid and there are minerals next to it, add the conductivities of
-        # the stern and diffusion layers.
-        if self.logger is not None:
-            self.logger.info(
-                f"Adding up the conductivity of the electrical double layer by method={surface}"
-            )
-        if surface == "average":
-            for k in range(nz):
-                for j in range(ny):
-                    for i in range(nx):
-                        # Checks whether instance has an attribute for the electric double layer.
-                        instance = instance_ls[k][j][i]
-                        # surface conductance (S/m)
-                        get_cond_surface = getattr(instance, "get_cond_surface", None)
-                        # debye length
-                        get_double_layer_length = getattr(
-                            instance, "get_double_layer_length", None
-                        )
-                        if None in (get_cond_surface, get_double_layer_length):
-                            continue
-                        cond_surface: float = get_cond_surface()
-                        double_layer_length: float = get_double_layer_length()
-                        assert (
-                            double_layer_length < self.edge_length
-                        ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
-                        self.__sum_double_layer_cond(
-                            pix_tensor,
-                            instance_ls,
-                            i,
-                            j,
-                            k,
-                            self.edge_length,
-                            cond_surface,
-                            double_layer_length,
-                        )
-        elif surface == "boundary":
-            # consruct self.dks and self.sigmas
-            _ds0 = np.zeros(shape=(4, 4))
-            dks: List[np.ndarray] = [[_ds0 for _ in range(6)] for _ in range(ns)]
-            sigmas: List[List[Tuple[float]]] = [
-                [(0.0, 0.0) for _ in range(6)] for _ in range(ns)
-            ]
-            for k in range(nz):
-                for j in range(ny):
-                    for i in range(nx):
-                        m = calc_m(i, j, k, nx, ny)
-                        # Checks whether instance has an attribute for the electric double layer.
-                        instance = instance_ls[k][j][i]
-                        # surface conductance (S/m)
-                        get_cond_surface = getattr(instance, "get_cond_surface", None)
-                        # debye length
-                        get_double_layer_length = getattr(
-                            instance, "get_double_layer_length", None
-                        )
-                        if None in (get_cond_surface, get_double_layer_length):
-                            continue
-                        cond_surface: float = get_cond_surface()
-                        double_layer_length: float = get_double_layer_length()
-                        assert (
-                            double_layer_length < self.edge_length
-                        ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
-                        _ds = (
-                            double_layer_length
-                            * cond_surface
-                            / (6.0 * self.edge_length)
-                            * np.array(
-                                [
-                                    [4.0, -1.0, -2.0, -1.0],
-                                    [-1.0, 4.0, -1.0, -2.0],
-                                    [-2.0, -1.0, 4.0, -1.0],
-                                    [-1.0, -2.0, -1.0, 4.0],
-                                ]
-                            )
-                        )
-                        dks_m = dks[m]
-                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][6], nx, ny)
-                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
-                            dks_m[0] = _ds  # x-
-                            dks[self.ib[m][6]][1] = _ds  # x+
-                            sigmas[m][0] = (double_layer_length, cond_surface)
-                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][2], nx, ny)
-                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
-                            dks_m[1] = _ds  # x+
-                            dks[self.ib[m][2]][0] = _ds  # x-
-                            sigmas[m][1] = (double_layer_length, cond_surface)
-                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][4], nx, ny)
-                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
-                            dks_m[2] = _ds  # y-
-                            dks[self.ib[m][4]][3] = _ds  # y+
-                            sigmas[m][2] = (double_layer_length, cond_surface)
-                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][0], nx, ny)
-                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
-                            dks_m[3] = _ds  # y+
-                            dks[self.ib[m][0]][2] = _ds  # y-
-                            sigmas[m][3] = (double_layer_length, cond_surface)
-                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][24], nx, ny)
-                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
-                            dks_m[4] = _ds  # z-
-                            dks[self.ib[m][24]][5] = _ds  # z+
-                            sigmas[m][4] = (double_layer_length, cond_surface)
-                        itmp, jtmp, ktmp = calc_ijk(self.ib[m][25], nx, ny)
-                        if is_fluid(instance_ls[ktmp][jtmp][itmp]):
-                            dks_m[5] = _ds  # z+
-                            dks[self.ib[m][25]][4] = _ds  # z-
-                            sigmas[m][5] = (double_layer_length, cond_surface)
-            self.sigmas = sigmas
-            self.dks = np.array(dks, dtype=np.float64)
-
         self.pix_tensor = np.array(pix_tensor)
 
         # construct self.sigmav and self.pix
@@ -437,9 +338,131 @@ class Cube:
                 [[[0.0, 0.0, 0.0, 0.0] for _ in range(4)] for _ in range(6)]
                 for _ in range(ns)
             ]
-
         if self.logger is not None:
             self.logger.info("create_pixel_by_macro_variable done")
+
+        # If the cell is a fluid and there are minerals next to it, add the conductivities of
+        # the stern and diffusion layers.
+        if self.logger is not None:
+            self.logger.info(
+                f"Adding up the conductivity of the electrical double layer by method={surface}"
+            )
+        if surface == "average":
+            self.add_sigmas_by_average()
+        elif surface == "boundary":
+            self.add_sigmas_by_ventcel()
+
+    def add_sigmas_by_average(self) -> None:
+        """Adding up the surface conductivity by volume average method"""
+        if self.logger is not None:
+            self.logger.info(
+                f"Adding up the surface conductivity by volume average method"
+            )
+        nz, ny, nx = self.get_shape()
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    # Checks whether instance has an attribute for the electric double layer.
+                    instance = self.instance_ls[k][j][i]
+                    # surface conductance (S/m)
+                    get_cond_surface = getattr(instance, "get_cond_surface", None)
+                    # debye length
+                    get_double_layer_length = getattr(
+                        instance, "get_double_layer_length", None
+                    )
+                    if None in (get_cond_surface, get_double_layer_length):
+                        continue
+                    cond_surface: float = get_cond_surface()
+                    double_layer_length: float = get_double_layer_length()
+                    assert (
+                        double_layer_length < self.edge_length
+                    ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
+                    self.__sum_double_layer_cond(
+                        self.pix_tensor,
+                        self.instance_ls,
+                        i,
+                        j,
+                        k,
+                        self.edge_length,
+                        cond_surface,
+                        double_layer_length,
+                    )
+
+    def add_sigmas_by_ventcel(self) -> None:
+        """Impose Ventcel's boundary conditions on the solid-liquid surface"""
+        # consruct self.dks and self.sigmas
+        nz, ny, nx = self.get_shape()
+        ns = nz * ny * nx
+        _ds0 = np.zeros(shape=(4, 4))
+        dks: List[np.ndarray] = [[_ds0 for _ in range(6)] for _ in range(ns)]
+        sigmas: List[List[Tuple[float]]] = [
+            [(0.0, 0.0) for _ in range(6)] for _ in range(ns)
+        ]
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    m = calc_m(i, j, k, nx, ny)
+                    # Checks whether instance has an attribute for the electric double layer.
+                    instance = self.instance_ls[k][j][i]
+                    # surface conductance (S/m)
+                    get_cond_surface = getattr(instance, "get_cond_surface", None)
+                    # debye length
+                    get_double_layer_length = getattr(
+                        instance, "get_double_layer_length", None
+                    )
+                    if None in (get_cond_surface, get_double_layer_length):
+                        continue
+                    cond_surface: float = get_cond_surface()
+                    double_layer_length: float = get_double_layer_length()
+                    assert (
+                        double_layer_length < self.edge_length
+                    ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
+                    _ds = (
+                        double_layer_length
+                        * cond_surface
+                        / (6.0 * self.edge_length)
+                        * np.array(
+                            [
+                                [4.0, -1.0, -2.0, -1.0],
+                                [-1.0, 4.0, -1.0, -2.0],
+                                [-2.0, -1.0, 4.0, -1.0],
+                                [-1.0, -2.0, -1.0, 4.0],
+                            ]
+                        )
+                    )
+                    dks_m = dks[m]
+                    itmp, jtmp, ktmp = calc_ijk(self.ib[m][6], nx, ny)
+                    if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
+                        dks_m[0] = _ds  # x-
+                        dks[self.ib[m][6]][1] = _ds  # x+
+                        sigmas[m][0] = (double_layer_length, cond_surface)
+                    itmp, jtmp, ktmp = calc_ijk(self.ib[m][2], nx, ny)
+                    if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
+                        dks_m[1] = _ds  # x+
+                        dks[self.ib[m][2]][0] = _ds  # x-
+                        sigmas[m][1] = (double_layer_length, cond_surface)
+                    itmp, jtmp, ktmp = calc_ijk(self.ib[m][4], nx, ny)
+                    if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
+                        dks_m[2] = _ds  # y-
+                        dks[self.ib[m][4]][3] = _ds  # y+
+                        sigmas[m][2] = (double_layer_length, cond_surface)
+                    itmp, jtmp, ktmp = calc_ijk(self.ib[m][0], nx, ny)
+                    if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
+                        dks_m[3] = _ds  # y+
+                        dks[self.ib[m][0]][2] = _ds  # y-
+                        sigmas[m][3] = (double_layer_length, cond_surface)
+                    itmp, jtmp, ktmp = calc_ijk(self.ib[m][24], nx, ny)
+                    if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
+                        dks_m[4] = _ds  # z-
+                        dks[self.ib[m][24]][5] = _ds  # z+
+                        sigmas[m][4] = (double_layer_length, cond_surface)
+                    itmp, jtmp, ktmp = calc_ijk(self.ib[m][25], nx, ny)
+                    if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
+                        dks_m[5] = _ds  # z+
+                        dks[self.ib[m][25]][4] = _ds  # z-
+                        sigmas[m][5] = (double_layer_length, cond_surface)
+        self.sigmas = sigmas
+        self.dks = np.array(dks, dtype=np.float64)
 
     def create_from_file(self, fpth: str) -> None:
         """Create 3d cubic elements from file as in Garboczi (1998)
@@ -612,83 +635,6 @@ class Cube:
         pix_tensor[kadj][jadj][iadj] = (
             ratio_edl * edl_tensor + ratio_fluid * pix_tensor[kadj][jadj][iadj]
         )
-
-    def set_ib(self, shape: Tuple[int, int, int]) -> None:
-        """set local indices (0~26) to global indices (0~m)"""
-        # Construct the neighbor table, ib(m,n)
-        # First construct 27 neighbor table in terms of delta i, delta j, delta k
-        # (See Table 3 in manual)
-        _in: List = [0 for _ in range(27)]
-        _jn: List = deepcopy(_in)
-        _kn: List = deepcopy(_in)
-
-        _in[0] = 0
-        _in[1] = 1
-        _in[2] = 1
-        _in[3] = 1
-        _in[4] = 0
-        _in[5] = -1
-        _in[6] = -1
-        _in[7] = -1
-
-        _jn[0] = 1
-        _jn[1] = 1
-        _jn[2] = 0
-        _jn[3] = -1
-        _jn[4] = -1
-        _jn[5] = -1
-        _jn[6] = 0
-        _jn[7] = 1
-        for n in range(8):
-            _kn[n] = 0
-            _kn[n + 8] = -1
-            _kn[n + 16] = 1
-            _in[n + 8] = _in[n]
-            _in[n + 16] = _in[n]
-            _jn[n + 8] = _jn[n]
-            _jn[n + 16] = _jn[n]
-        _in[24] = 0
-        _in[25] = 0
-        _in[26] = 0
-        _jn[24] = 0
-        _jn[25] = 0
-        _jn[26] = 0
-        _kn[24] = -1
-        _kn[25] = 1
-        _kn[26] = 0
-
-        nz, ny, nx = shape
-        nxy = nx * ny
-        nxyz = nxy * nz
-        ib = np.zeros(shape=(nxyz, 27)).tolist()
-        for k in range(nz):
-            for j in range(ny):
-                for i in range(nx):
-                    m = nxy * k + nx * j + i
-                    for n in range(27):
-                        i1 = i + _in[n]
-                        j1 = j + _jn[n]
-                        k1 = k + _kn[n]
-                        if i1 == -1:
-                            i1 += nx
-                        if i1 == nx:
-                            i1 -= nx
-                        if j1 == -1:
-                            j1 += ny
-                        if j1 == ny:
-                            j1 -= ny
-                        if k1 == -1:
-                            k1 += nz
-                        if k1 == nz:
-                            k1 -= nz
-                        assert -1 < i1 < nx
-                        assert -1 < j1 < ny
-                        assert -1 < k1 < nz
-                        m1 = calc_m(i1, j1, k1, nx, ny)
-                        ib[m][n] = m1
-        self.ib = ib
-        if self.logger is not None:
-            self.logger.info("set_ib done")
 
     def femat(self) -> None:
         """Subroutine that sets up the stiffness matrices, linear term in
@@ -881,7 +827,9 @@ class Cube:
             dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
-                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True, ypoff=True)
+                _sumb, _sumc = _energy_bounds(
+                    xn, mm, dkvm, dksm, xpoff=True, ypoff=True
+                )
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
 
@@ -901,7 +849,9 @@ class Cube:
             dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
-                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True, zpoff=True)
+                _sumb, _sumc = _energy_bounds(
+                    xn, mm, dkvm, dksm, xpoff=True, zpoff=True
+                )
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
 
@@ -921,7 +871,9 @@ class Cube:
             dkvm = self.dkv[self.pix[m]]
             dksm = self.dks[m]
             for mm in range(8):
-                _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, ypoff=True, zpoff=True)
+                _sumb, _sumc = _energy_bounds(
+                    xn, mm, dkvm, dksm, ypoff=True, zpoff=True
+                )
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
 
@@ -949,190 +901,19 @@ class Cube:
         dkvm = self.dkv[self.pix[m]]
         dksm = self.dks[m]
         for mm in range(8):
-            _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True, ypoff=True, zpoff=True)
+            _sumb, _sumc = _energy_bounds(
+                xn, mm, dkvm, dksm, xpoff=True, ypoff=True, zpoff=True
+            )
             b[self.ib[m][_is[mm]]] += _sumb
             c += _sumc
 
         self.B = np.array(b, dtype=np.float64)
         self.C = np.float64(c)
+
+        self.set_A()
+
         if self.logger is not None:
             self.logger.info("femat done")
-
-    def set_A(self) -> None:
-        """Set global stiffness matrix"""
-        assert self.ib is not None
-        assert self.dkv is not None
-        assert self.pix is not None
-        ns = len(self.pix)
-        # Av
-        Av: List = [None for _ in range(ns)]
-        for m in range(ns):
-            self.__set_av_m(Av=Av, m=m, ib=self.ib, dk=self.dkv, pix=self.pix)
-        self.Av = np.array(Av, dtype=np.float64)
-        # As
-        # Assuming matrices for the same face are equal
-        # (e.g., dks[ib[0][1]]==dks[ib[1][0]])
-        if self.dks is not None:
-            As: List = [None for _ in range(ns)]
-            for m in range(ns):
-                self.__set_as_m(As=As, m=m, ib=self.ib, dk=self.dks)
-            self.As = np.array(As, dtype=np.float64)
-        if self.As is not None:
-            self.A = self.Av + self.As
-        else:
-            self.A = self.Av
-
-    def __set_av_m(self, Av: List, m: int, ib: List, dk: List, pix: List) -> None:
-        """Set self.Av[m] value
-
-        Args:
-            Av (List): 2d list of global matrix A.
-            m (int): Global 1d labelling index.
-            ib (List): Neighbor labeling 2d list.
-            dk (List): Stiffness matrix (nphase, 8, 8)
-            pix (List): 1d list identifying conductivity tensors
-        """
-        ib_m: List = ib[m]
-        am: List = [0.0 for _ in range(27)]
-        am[0] = (
-            dk[pix[ib_m[26]]][0][3]
-            + dk[pix[ib_m[6]]][1][2]
-            + dk[pix[ib_m[24]]][4][7]
-            + dk[pix[ib_m[14]]][5][6]
-        )
-        am[1] = dk[pix[ib_m[26]]][0][2] + dk[pix[ib_m[24]]][4][6]
-        am[2] = (
-            dk[pix[ib_m[26]]][0][1]
-            + dk[pix[ib_m[4]]][3][2]
-            + dk[pix[ib_m[12]]][7][6]
-            + dk[pix[ib_m[24]]][4][5]
-        )
-        am[3] = dk[pix[ib_m[4]]][3][1] + dk[pix[ib_m[12]]][7][5]
-        am[4] = (
-            dk[pix[ib_m[5]]][2][1]
-            + dk[pix[ib_m[4]]][3][0]
-            + dk[pix[ib_m[13]]][5][6]
-            + dk[pix[ib_m[12]]][7][4]
-        )
-        am[5] = dk[pix[ib_m[5]]][2][0] + dk[pix[ib_m[13]]][6][4]
-        am[6] = (
-            dk[pix[ib_m[5]]][2][3]
-            + dk[pix[ib_m[6]]][1][0]
-            + dk[pix[ib_m[13]]][6][7]
-            + dk[pix[ib_m[14]]][5][4]
-        )
-        am[7] = dk[pix[ib_m[6]]][1][3] + dk[pix[ib_m[14]]][5][7]
-        am[8] = dk[pix[ib_m[24]]][4][3] + dk[pix[ib_m[14]]][5][2]
-        am[9] = dk[pix[ib_m[24]]][4][2]
-        am[10] = dk[pix[ib_m[12]]][7][2] + dk[pix[ib_m[24]]][4][1]
-        am[11] = dk[pix[ib_m[12]]][7][1]
-        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[13]]][6][1]
-        am[13] = dk[pix[ib_m[13]]][6][0]
-        am[14] = dk[pix[ib_m[13]]][6][3] + dk[pix[ib_m[14]]][5][0]
-        am[15] = dk[pix[ib_m[14]]][5][3]
-        am[16] = dk[pix[ib_m[26]]][0][7] + dk[pix[ib_m[6]]][1][6]
-        am[17] = dk[pix[ib_m[26]]][0][6]
-        am[18] = dk[pix[ib_m[26]]][0][5] + dk[pix[ib_m[4]]][3][6]
-        am[19] = dk[pix[ib_m[4]]][3][5]
-        am[20] = dk[pix[ib_m[4]]][3][4] + dk[pix[ib_m[5]]][2][5]
-        am[21] = dk[pix[ib_m[5]]][2][4]
-        am[22] = dk[pix[ib_m[5]]][2][7] + dk[pix[ib_m[6]]][1][4]
-        am[23] = dk[pix[ib_m[6]]][1][7]
-        am[24] = (
-            dk[pix[ib_m[13]]][6][2]
-            + dk[pix[ib_m[12]]][7][3]
-            + dk[pix[ib_m[14]]][5][1]
-            + dk[pix[ib_m[24]]][4][0]
-        )
-        am[25] = (
-            dk[pix[ib_m[5]]][2][6]
-            + dk[pix[ib_m[4]]][3][7]
-            + dk[pix[ib_m[26]]][0][4]
-            + dk[pix[ib_m[6]]][1][5]
-        )
-        am[26] = (
-            dk[pix[ib_m[26]]][0][0]
-            + dk[pix[ib_m[6]]][1][1]
-            + dk[pix[ib_m[5]]][2][2]
-            + dk[pix[ib_m[4]]][3][3]
-            + dk[pix[ib_m[24]]][4][4]
-            + dk[pix[ib_m[14]]][5][5]
-            + dk[pix[ib_m[13]]][6][6]
-            + dk[pix[ib_m[12]]][7][7]
-        )
-        Av[m] = am
-
-    def __set_as_m(
-        self, As: List, m: int, ib: List[List[int]], dk: List[List[np.ndarray]]
-    ) -> None:
-        """Set self.As[m] value
-
-        Args:
-            As (List): 2d list of global matrix A.
-            m (int): Global 1d labelling index.
-            ib (List): Neighbor labeling 2d list.
-            dk (List): Stiffness matrix (nxyz, 6, 4, 4)
-        """
-        ib_m = ib[m]
-        am = [None for _ in range(27)]
-        # Faces perpendicular to X axis (counterclockwise from bottom left)
-        x0, x1, x2, x3 = (
-            dk[ib_m[12]][0],
-            dk[ib_m[24]][0],
-            dk[ib_m[26]][0],
-            dk[ib_m[4]][0],
-        )
-        # Faces perpendicular to Y axis (counterclockwise from bottom left)
-        y0, y1, y2, y3 = (
-            dk[ib_m[14]][2],
-            dk[ib_m[24]][2],
-            dk[ib_m[26]][2],
-            dk[ib_m[6]][2],
-        )
-        # Faces perpendicular to Z axis (counterclockwise from bottom left)
-        z0, z1, z2, z3 = dk[ib_m[5]][4], dk[ib_m[4]][4], dk[ib_m[26]][4], dk[ib_m[6]][4]
-
-        am[0] = z2[3][0] + z3[2][1] + x1[2][3] + x2[1][0]
-        am[1] = z2[2][0]
-        am[2] = z1[2][3] + z2[1][0] + y1[2][3] + y2[1][0]
-        am[3] = z1[1][3]
-        am[4] = z0[1][2] + z1[0][3] + x0[3][2] + x3[0][1]
-        am[5] = z0[0][2]
-        am[6] = z0[3][2] + z3[0][1] + y0[3][2] + y3[0][1]
-        am[7] = z3[3][1]
-        am[8] = x1[1][3]
-        am[9] = 0.0
-        am[10] = y1[1][3]
-        am[11] = 0.0
-        am[12] = x0[0][2]
-        am[13] = 0.0
-        am[14] = y0[0][2]
-        am[15] = 0.0
-        am[16] = x2[2][0]
-        am[17] = 0.0
-        am[18] = y2[2][0]
-        am[19] = 0.0
-        am[20] = x3[3][1]
-        am[21] = 0.0
-        am[22] = y3[3][1]
-        am[23] = 0.0
-        am[24] = x0[1][2] + x1[0][3] + y0[1][2] + y1[0][3]
-        am[25] = x2[3][0] + x3[2][1] + y2[3][0] + y3[2][1]
-        am[26] = (
-            x0[2][2]
-            + x1[3][3]
-            + x2[0][0]
-            + x3[1][1]
-            + y0[2][2]
-            + y1[3][3]
-            + y2[0][0]
-            + y3[1][1]
-            + z0[2][2]
-            + z1[3][3]
-            + z2[0][0]
-            + z3[1][1]
-        )
-        As[m] = am
 
     def __assign_random(
         self,
@@ -1447,6 +1228,337 @@ class Cube:
         """
         return 0.5 * (1.0 - np.exp(-1.0 * c * _dist))
 
+    def set_ib(self, shape: Tuple[int, int, int] = None) -> None:
+        """set local indices (0~26) to global indices (0~m)"""
+        # Construct the neighbor table, ib(m,n)
+        # First construct 27 neighbor table in terms of delta i, delta j, delta k
+        # (See Table 3 in manual)
+        if shape is None:
+            nz, ny, nx, _, _ = self.get_pix_tensor().shape
+
+        shape = (nx, ny, nz)
+
+        _in: List = [0 for _ in range(27)]
+        _jn: List = deepcopy(_in)
+        _kn: List = deepcopy(_in)
+
+        _in[0] = 0
+        _in[1] = 1
+        _in[2] = 1
+        _in[3] = 1
+        _in[4] = 0
+        _in[5] = -1
+        _in[6] = -1
+        _in[7] = -1
+
+        _jn[0] = 1
+        _jn[1] = 1
+        _jn[2] = 0
+        _jn[3] = -1
+        _jn[4] = -1
+        _jn[5] = -1
+        _jn[6] = 0
+        _jn[7] = 1
+        for n in range(8):
+            _kn[n] = 0
+            _kn[n + 8] = -1
+            _kn[n + 16] = 1
+            _in[n + 8] = _in[n]
+            _in[n + 16] = _in[n]
+            _jn[n + 8] = _jn[n]
+            _jn[n + 16] = _jn[n]
+        _in[24] = 0
+        _in[25] = 0
+        _in[26] = 0
+        _jn[24] = 0
+        _jn[25] = 0
+        _jn[26] = 0
+        _kn[24] = -1
+        _kn[25] = 1
+        _kn[26] = 0
+
+        nz, ny, nx = shape
+        nxy = nx * ny
+        nxyz = nxy * nz
+        ib = np.zeros(shape=(nxyz, 27)).tolist()
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    m = nxy * k + nx * j + i
+                    for n in range(27):
+                        i1 = i + _in[n]
+                        j1 = j + _jn[n]
+                        k1 = k + _kn[n]
+                        if i1 == -1:
+                            i1 += nx
+                        if i1 == nx:
+                            i1 -= nx
+                        if j1 == -1:
+                            j1 += ny
+                        if j1 == ny:
+                            j1 -= ny
+                        if k1 == -1:
+                            k1 += nz
+                        if k1 == nz:
+                            k1 -= nz
+                        assert -1 < i1 < nx
+                        assert -1 < j1 < ny
+                        assert -1 < k1 < nz
+                        m1 = calc_m(i1, j1, k1, nx, ny)
+                        ib[m][n] = m1
+        self.ib = ib
+        if self.logger is not None:
+            self.logger.info("set_ib done")
+
+    def set_A(self) -> None:
+        """Set global stiffness matrix"""
+        assert self.ib is not None
+        assert self.dkv is not None
+        assert self.pix is not None
+        ns = len(self.pix)
+        # Av
+        Av: List = [None for _ in range(ns)]
+        for m in range(ns):
+            self.__set_av_m(Av=Av, m=m, ib=self.ib, dk=self.dkv, pix=self.pix)
+        self.Av = np.array(Av, dtype=np.float64)
+        # As
+        # Assuming matrices for the same face are equal
+        # (e.g., dks[ib[0][1]]==dks[ib[1][0]])
+        if self.dks is not None:
+            As: List = [None for _ in range(ns)]
+            for m in range(ns):
+                self.__set_as_m(As=As, m=m, ib=self.ib, dk=self.dks)
+            self.As = np.array(As, dtype=np.float64)
+        if self.As is not None:
+            self.A = self.Av + self.As
+        else:
+            self.A = self.Av
+
+    def __set_av_m(self, Av: List, m: int, ib: List, dk: List, pix: List) -> None:
+        """Set self.Av[m] value
+
+        Args:
+            Av (List): 2d list of global matrix A.
+            m (int): Global 1d labelling index.
+            ib (List): Neighbor labeling 2d list.
+            dk (List): Stiffness matrix (nphase, 8, 8)
+            pix (List): 1d list identifying conductivity tensors
+        """
+        ib_m: List = ib[m]
+        am: List = [0.0 for _ in range(27)]
+        am[0] = (
+            dk[pix[ib_m[26]]][0][3]
+            + dk[pix[ib_m[6]]][1][2]
+            + dk[pix[ib_m[24]]][4][7]
+            + dk[pix[ib_m[14]]][5][6]
+        )
+        am[1] = dk[pix[ib_m[26]]][0][2] + dk[pix[ib_m[24]]][4][6]
+        am[2] = (
+            dk[pix[ib_m[26]]][0][1]
+            + dk[pix[ib_m[4]]][3][2]
+            + dk[pix[ib_m[12]]][7][6]
+            + dk[pix[ib_m[24]]][4][5]
+        )
+        am[3] = dk[pix[ib_m[4]]][3][1] + dk[pix[ib_m[12]]][7][5]
+        am[4] = (
+            dk[pix[ib_m[5]]][2][1]
+            + dk[pix[ib_m[4]]][3][0]
+            + dk[pix[ib_m[13]]][5][6]
+            + dk[pix[ib_m[12]]][7][4]
+        )
+        am[5] = dk[pix[ib_m[5]]][2][0] + dk[pix[ib_m[13]]][6][4]
+        am[6] = (
+            dk[pix[ib_m[5]]][2][3]
+            + dk[pix[ib_m[6]]][1][0]
+            + dk[pix[ib_m[13]]][6][7]
+            + dk[pix[ib_m[14]]][5][4]
+        )
+        am[7] = dk[pix[ib_m[6]]][1][3] + dk[pix[ib_m[14]]][5][7]
+        am[8] = dk[pix[ib_m[24]]][4][3] + dk[pix[ib_m[14]]][5][2]
+        am[9] = dk[pix[ib_m[24]]][4][2]
+        am[10] = dk[pix[ib_m[12]]][7][2] + dk[pix[ib_m[24]]][4][1]
+        am[11] = dk[pix[ib_m[12]]][7][1]
+        am[12] = dk[pix[ib_m[12]]][7][0] + dk[pix[ib_m[13]]][6][1]
+        am[13] = dk[pix[ib_m[13]]][6][0]
+        am[14] = dk[pix[ib_m[13]]][6][3] + dk[pix[ib_m[14]]][5][0]
+        am[15] = dk[pix[ib_m[14]]][5][3]
+        am[16] = dk[pix[ib_m[26]]][0][7] + dk[pix[ib_m[6]]][1][6]
+        am[17] = dk[pix[ib_m[26]]][0][6]
+        am[18] = dk[pix[ib_m[26]]][0][5] + dk[pix[ib_m[4]]][3][6]
+        am[19] = dk[pix[ib_m[4]]][3][5]
+        am[20] = dk[pix[ib_m[4]]][3][4] + dk[pix[ib_m[5]]][2][5]
+        am[21] = dk[pix[ib_m[5]]][2][4]
+        am[22] = dk[pix[ib_m[5]]][2][7] + dk[pix[ib_m[6]]][1][4]
+        am[23] = dk[pix[ib_m[6]]][1][7]
+        am[24] = (
+            dk[pix[ib_m[13]]][6][2]
+            + dk[pix[ib_m[12]]][7][3]
+            + dk[pix[ib_m[14]]][5][1]
+            + dk[pix[ib_m[24]]][4][0]
+        )
+        am[25] = (
+            dk[pix[ib_m[5]]][2][6]
+            + dk[pix[ib_m[4]]][3][7]
+            + dk[pix[ib_m[26]]][0][4]
+            + dk[pix[ib_m[6]]][1][5]
+        )
+        am[26] = (
+            dk[pix[ib_m[26]]][0][0]
+            + dk[pix[ib_m[6]]][1][1]
+            + dk[pix[ib_m[5]]][2][2]
+            + dk[pix[ib_m[4]]][3][3]
+            + dk[pix[ib_m[24]]][4][4]
+            + dk[pix[ib_m[14]]][5][5]
+            + dk[pix[ib_m[13]]][6][6]
+            + dk[pix[ib_m[12]]][7][7]
+        )
+        Av[m] = am
+
+    def __set_as_m(
+        self, As: List, m: int, ib: List[List[int]], dk: List[List[np.ndarray]]
+    ) -> None:
+        """Set self.As[m] value
+
+        Args:
+            As (List): 2d list of global matrix A.
+            m (int): Global 1d labelling index.
+            ib (List): Neighbor labeling 2d list.
+            dk (List): Stiffness matrix (nxyz, 6, 4, 4)
+        """
+        ib_m = ib[m]
+        am = [None for _ in range(27)]
+        # Faces perpendicular to X axis (counterclockwise from bottom left)
+        x0, x1, x2, x3 = (
+            dk[ib_m[12]][0],
+            dk[ib_m[24]][0],
+            dk[ib_m[26]][0],
+            dk[ib_m[4]][0],
+        )
+        # Faces perpendicular to Y axis (counterclockwise from bottom left)
+        y0, y1, y2, y3 = (
+            dk[ib_m[14]][2],
+            dk[ib_m[24]][2],
+            dk[ib_m[26]][2],
+            dk[ib_m[6]][2],
+        )
+        # Faces perpendicular to Z axis (counterclockwise from bottom left)
+        z0, z1, z2, z3 = dk[ib_m[5]][4], dk[ib_m[4]][4], dk[ib_m[26]][4], dk[ib_m[6]][4]
+
+        am[0] = z2[3][0] + z3[2][1] + x1[2][3] + x2[1][0]
+        am[1] = z2[2][0]
+        am[2] = z1[2][3] + z2[1][0] + y1[2][3] + y2[1][0]
+        am[3] = z1[1][3]
+        am[4] = z0[1][2] + z1[0][3] + x0[3][2] + x3[0][1]
+        am[5] = z0[0][2]
+        am[6] = z0[3][2] + z3[0][1] + y0[3][2] + y3[0][1]
+        am[7] = z3[3][1]
+        am[8] = x1[1][3]
+        am[9] = 0.0
+        am[10] = y1[1][3]
+        am[11] = 0.0
+        am[12] = x0[0][2]
+        am[13] = 0.0
+        am[14] = y0[0][2]
+        am[15] = 0.0
+        am[16] = x2[2][0]
+        am[17] = 0.0
+        am[18] = y2[2][0]
+        am[19] = 0.0
+        am[20] = x3[3][1]
+        am[21] = 0.0
+        am[22] = y3[3][1]
+        am[23] = 0.0
+        am[24] = x0[1][2] + x1[0][3] + y0[1][2] + y1[0][3]
+        am[25] = x2[3][0] + x3[2][1] + y2[3][0] + y3[2][1]
+        am[26] = (
+            x0[2][2]
+            + x1[3][3]
+            + x2[0][0]
+            + x3[1][1]
+            + y0[2][2]
+            + y1[3][3]
+            + y2[0][0]
+            + y3[1][1]
+            + z0[2][2]
+            + z1[3][3]
+            + z2[0][0]
+            + z3[1][1]
+        )
+        As[m] = am
+
+    def set_edge_length(self, _edge_length: float) -> None:
+        """Setter of the self.edge_length
+
+        Args:
+            _edge_length (float): Edge length of the cube (m)
+        """
+        self.edge_length = _edge_length
+
+    def set_rotation_angle_ls(self, _rotation_angle_ls: List[np.ndarray]) -> None:
+        """Setter of the self.rotation_angle_ls
+
+        Args:
+            _rotation_angle_ls (List[np.ndarray]): List containing each element's
+                rotation matrix (m×3×3)
+        """
+        self.rotation_angle_ls = _rotation_angle_ls
+
+    def set_pix_tensor(self, _pix_tensor: List[List[List[np.ndarray]]]) -> None:
+        """Setter of the self.pix_tensor
+
+        Args:
+            _pix_tensor (List[List[List[np.ndarray]]]): List containing the
+                conductivity tensor corresponding to the element (int) of self.pix
+        """
+        self.pix_tensor = _pix_tensor
+
+    def set_sigmav(self, _sigmav: List[np.ndarray]) -> None:
+        """Setter of the self.sigmav
+
+        Args:
+            _sigmav (List[np.ndarray]): List containing the conductivity tensor
+                for each element (index: m)
+        """
+        self.sigmav = _sigmav
+
+    def set_pix(self, _pix: List[int]) -> None:
+        """Setter of the self.pix
+
+        Args:
+            _pix (List[int]): Index of conductivity tensors ordered by global index (m)
+        """
+        self.pix = _pix
+
+    def set_instance_ls(self, _instance_ls: List[Any]) -> None:
+        """Setter of the self.instance_ls
+
+        Args:
+            _instance_ls (List[Any]): List containing the instance (solid, fluid, etc.)
+                for each element (index: m)
+        """
+        self.instance_ls = _instance_ls
+
+    def set_sigmas(self, _sigmas: List[List[Tuple[float, float]]]) -> None:
+        """Setter of the self.sigmas
+
+        Args:
+            _sigmas (List[List[Tuple[float, float]]]): List containing the pair of the
+                Debye length (m) and surface conductivity tensor
+            1st index: Global index (m)
+            2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+        """
+        self.sigmas = _sigmas
+
+    def set_dks(self, _dks: List[List[np.ndarray]]) -> None:
+        """Setter of the self.dks
+
+        Args:
+            _dks (List[List[np.ndarray]]): List containing surface stiffness matrix
+            1st index: Global index (m)
+            2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+        """
+        self.dks = _dks
+
     def get_pix_tensor(self) -> np.ndarray or None:
         """Getter for the pix in 5d shape.
 
@@ -1619,7 +1731,7 @@ class Cube:
         """Getter for the shpe of the cubic FEM mesh
 
         Returns:
-            Tuple[int] or None: shape
+            Tuple[int] or None: shape (nz, ny, nx)
         """
         if self.pix_tensor is None:
             return
@@ -1703,11 +1815,27 @@ def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.
     return _arr
 
 
-def is_fluid(_instance) -> bool:
+def is_fluid(_instance: Any) -> bool:
+    """Function to return whether the parent class of _instance is Fluid or not.
+
+    Args:
+        _instance (Any): Instances generated from any class
+
+    Returns:
+        bool: If parant class of the _instance is Fluid, return True
+    """
     return _instance.__class__.__base__ is Fluid
 
 
 def xm_index(i: int) -> None or int:
+    """Index on the X- surface. If i is not on the X-, return None
+
+    Args:
+        i (int): Index of the node on each element.
+
+    Returns:
+        None or int: Index on the X- surface.
+    """
     if i in (1, 2, 5, 6):
         return None
     if i == 0:
@@ -1721,6 +1849,14 @@ def xm_index(i: int) -> None or int:
 
 
 def xp_index(i: int) -> None or int:
+    """Index on the X+ surface. If i is not on the X+, return None
+
+    Args:
+        i (int): Index of the node on each element.
+
+    Returns:
+        None or int: Index on the X+ surface.
+    """
     if i in (0, 3, 4, 7):
         return None
     if i == 1:
@@ -1734,6 +1870,14 @@ def xp_index(i: int) -> None or int:
 
 
 def ym_index(i: int) -> None or int:
+    """Index on the Y- surface. If i is not on the Y-, return None
+
+    Args:
+        i (int): Index of the node on each element.
+
+    Returns:
+        None or int: Index on the Y- surface.
+    """
     if i in (2, 3, 6, 7):
         return None
     if i == 0:
@@ -1747,6 +1891,14 @@ def ym_index(i: int) -> None or int:
 
 
 def yp_index(i: int) -> None or int:
+    """Index on the Y- surface. If i is not on the Y+, return None
+
+    Args:
+        i (int): Index of the node on each element.
+
+    Returns:
+        None or int: Index on the Y+ surface.
+    """
     if i in (0, 1, 4, 5):
         return None
     if i == 2:
@@ -1760,6 +1912,14 @@ def yp_index(i: int) -> None or int:
 
 
 def zm_index(i: int) -> None or int:
+    """Index on the Z- surface. If i is not on the Z- return None
+
+    Args:
+        i (int): Index of the node on each element.
+
+    Returns:
+        None or int: Index on the Z- surface.
+    """
     if i in (4, 5, 6, 7):
         return None
     if i == 0:
@@ -1773,6 +1933,14 @@ def zm_index(i: int) -> None or int:
 
 
 def zp_index(i: int) -> None or int:
+    """Index on the Z+ surface. If i is not on the Z+ return None
+
+    Args:
+        i (int): Index of the node on each element.
+
+    Returns:
+        None or int: Index on the Z+ surface.
+    """
     if i in (0, 1, 2, 3):
         return None
     if i == 4:
@@ -1785,7 +1953,30 @@ def zp_index(i: int) -> None or int:
         return 3
 
 
-def _energy_bounds(xn, mm, dkvm, dksm, xpoff=False, ypoff=False, zpoff=False) -> Tuple[float, float]:
+def _energy_bounds(
+    xn: List[float],
+    mm: int,
+    dkvm: np.ndarray,
+    dksm: List[np.ndarray],
+    xpoff: bool = False,
+    ypoff: bool = False,
+    zpoff: bool = False,
+) -> Tuple[float, float]:
+    """Calculate the energy produced by periodic boundary conditions
+        (b and c of eq.(10) in Garboczi, 1997)
+
+    Args:
+        xn (List[float]): Electric field at the boundary.
+        mm (int): Index of each node (corresponding to the index of b)
+        dkvm (np.ndarray): Volumetric stiffness matrix (8×8)
+        dksm (List[np.ndarray]): Surface stiffness matrix (6×4×4)
+        xpoff (bool): Whether to calculate the energy diverging in the plane of X+ or not
+        ypoff (bool): Whether to calculate the energy diverging in the plane of Y+ or not
+        zpoff (bool): Whether to calculate the energy diverging in the plane of Z+ or not
+
+    Returns:
+        Tuple[float, float]: Energy generated at the boundary (b and c)
+    """
     b, c = 0.0, 0.0
     # volume
     for m8 in range(8):

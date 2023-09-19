@@ -76,9 +76,10 @@ class Quartz:
             k_minus (float): Equilibrium constants of >SiOH ⇔ >SiO- + H+ at 25℃.
                 Default value is set based on Leroy et al. (2022).
             k_na (float): Equilibrium constants of >SiOH + Na+ ⇔ SiONa + H+ at 25℃.
-                Default value is set based on Leroy et al. (2022). NOTE: if "method" is
-                specified as "leroy2013" or "leroy2022", this value means equilibrium
-                constants of >SiO- + Na+ ⇔ >SiO- ー Na+ (eq.5 in Leroy et al., 2013).
+                Default value is set based on Leroy et al. (2022).
+                NOTE: if "method" is specified as "leroy2013" or "leroy2022", this
+                value means equilibrium constants of >SiO- + Na+ ⇔ >SiO- ー Na+
+                (eq.5 in Leroy et al., 2013).
             c1 (float): Capacitance of surface used in Leroy et al.(2013) (C/m2).
                 Default value is set based on Leroy et al. (2022).
             d (float): Distance (m) of stern plane to zeta plane in Leroy et al. (2022)

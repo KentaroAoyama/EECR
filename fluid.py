@@ -44,21 +44,27 @@ class NaCl(Fluid):
         ph: float = 7.0,
         conductivity: float = None,
         cond_tensor: np.ndarray = None,
+        method: str = "sen_and_goode",
         logger: Logger = None,
     ):
         """Initialize NaCl instance
 
         Args:
             temperature (float): Absolute temperature (K)
-            pressure (float): Absolute pressure (Pa).
+            pressure (float): Absolute pressure (Pa). NOTE: If you pass None,
+                 pressure is set to be on the vapor + liquid coexistence curve.
             molarity (float): Molarity (mol/l).
             molarity (float): Molality (mol/kg).
             ph (float, optional): pH.
             conductivity (float): Electrical conductivity of NaCl fluid
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
+            method (str): Method to calculate electrical conductivity
+                sen_and_goode: Sen and Goode (1992)
             logger (Logger): Logger
         """
         assert molarity is not None or molality is not None
+        if molarity is not None:
+            assert pressure is not None
 
         self.temperature = temperature
         self.pressure = pressure
@@ -87,6 +93,12 @@ class NaCl(Fluid):
             molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
         if molarity is None:
             xnacl = molality / (molality + 1.0 / MH2O)
+            if self.pressure is None:
+                # Set pressure on the vapor + liquid coexistence curve.
+                def __callback(__x) -> float:
+                    return xnacl - calc_X_VL_Liq(self.temperature, __x)
+                self.pressure = bisect(__callback, 0.0, 1.0e9)
+
             density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
 
             def __callback(__x) -> float:
@@ -94,6 +106,7 @@ class NaCl(Fluid):
                 return xnacl - __x / (__x + nh20 * 1.0e-3)
 
             molarity = bisect(__callback, 0.0, 10.0)
+
         self.density = density
         assert molality is not None and molarity is not None
 
@@ -171,6 +184,11 @@ class NaCl(Fluid):
                 + ion_props[Species.Cl.name][IonProp.Mobility.name]
             )
         )
+
+        # TODO: add Watanabe et al. (2021)
+        method = method.lower()
+        if method == "sen_and_goode":
+            self.conductivity = sen_and_goode_1992(self.temperature, self.ion_props[Species.Na.name][IonProp.Molality.name])
 
     def sen_and_goode_1992(self) -> float:
         """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
@@ -381,6 +399,23 @@ def __calc_pitzer_params_nacl(name: str, T: float) -> float:
     F = param["F"]
     return A / T + B + C * log(T) + D * T + E * T**2 + F / T**2
 
+
+def sen_and_goode_1992(T, M) -> float:
+    """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
+    The modified equation was in Watanabe et al. (2021).
+
+    Args:
+        T (float): Absolute temperature (K)
+        M (float): Molality
+
+    Returens:
+        float: Conductivity of NaCl fluid in liquid phase
+    """
+    # convert Kelvin to Celsius
+    T -= 273.15
+    left = (5.6 + 0.27 * T - 1.5 * 1.0e-4 * T**2) * M
+    right = (2.36 + 0.099 * T) / (1.0 + 0.214 * M**0.5) * M**1.5
+    return left - right
 
 def calc_nacl_activities(
     T: float, P: float, dielec_water: float, ion_props: Dict, method: str = "thereda"
@@ -1142,7 +1177,7 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
 
 
 def calc_P_Boil(T: float) -> float:
-    """Calculate pressure on halite boiling curve. This implementation is
+    """Calculate pressure liquid NaCl (PNaCl, liquid). This implementation is
     based on "P_Boil" in "Driesner_eqs" module of Klyukin et al.(2020).
 
     Args:

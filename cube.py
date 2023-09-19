@@ -1,7 +1,5 @@
 """Create input to be passed to the solver class"""
-# TODO: 理論解がわかっている条件で, dksの実装が正しいかテストする
 # TODO: fix stiffness matrix index (pixを参照するか, mをインデックスとするか, 統一する)
-# TODO: logger
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
@@ -248,18 +246,12 @@ class Cube:
                 assert _size <= nx and _size <= ny and _size <= nz, _size
                 assert _size**3 <= _num, _size**3
                 _m_selected = self.__calc_cluster_distribution(_num, shape, _size)
-                if self.logger is not None:
-                    self.logger.info(f"Adjust cluster size done for {_instance}")
             elif _instance in instance_range_dict:
                 # anisotoropic scale
                 range_yz = instance_range_dict[_instance]
                 _m_selected = self.__calc_anisotropic_distribution(
                     m_remain, _num, shape, range_yz, seed
                 )
-                if self.logger is not None:
-                    self.logger.info(
-                        f"Set by anisotoropic distoribution done for {_instance}"
-                    )
             elif _instance in instance_adj_rate_dict:
                 # adj rate
                 _instance_target, adj_rate = instance_adj_rate_dict[_instance]
@@ -272,12 +264,8 @@ class Cube:
                     adj_rate,
                     shape,
                 )
-                if self.logger is not None:
-                    self.logger.info(f"Set by adjacent rate done for {_instance}")
             else:
                 _m_selected = self.__assign_random(m_remain, _num)
-                if self.logger is not None:
-                    self.logger.info(f"Set by random done for {_instance}")
             instance_m_selected.setdefault(_instance, _m_selected)
             m_remain = m_remain.difference(_m_selected)
             tensor_center = getattr(_instance, "get_cond_tensor", None)()
@@ -338,15 +326,9 @@ class Cube:
                 [[[0.0, 0.0, 0.0, 0.0] for _ in range(4)] for _ in range(6)]
                 for _ in range(ns)
             ]
-        if self.logger is not None:
-            self.logger.info("create_pixel_by_macro_variable done")
 
         # If the cell is a fluid and there are minerals next to it, add the conductivities of
         # the stern and diffusion layers.
-        if self.logger is not None:
-            self.logger.info(
-                f"Adding up the conductivity of the electrical double layer by method={surface}"
-            )
         if surface == "average":
             self.add_sigmas_by_average()
         elif surface == "boundary":
@@ -390,6 +372,10 @@ class Cube:
 
     def add_sigmas_by_ventcel(self) -> None:
         """Impose Ventcel's boundary conditions on the solid-liquid surface"""
+        if self.logger is not None:
+            self.logger.info(
+                f"Adding up the surface conductivity by Ventcel's boundary condition"
+            )
         # consruct self.dks and self.sigmas
         nz, ny, nx = self.get_shape()
         ns = nz * ny * nx
@@ -419,7 +405,6 @@ class Cube:
                     ), f"double_layer_length: {double_layer_length}, edge_length: {self.edge_length}"
                     _ds = (
                         double_layer_length
-                        * cond_surface
                         / (6.0 * self.edge_length)
                         * np.array(
                             [
@@ -432,35 +417,54 @@ class Cube:
                     )
                     dks_m = dks[m]
                     itmp, jtmp, ktmp = calc_ijk(self.ib[m][6], nx, ny)
+                    cexcess: float = None
                     if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
-                        dks_m[0] = _ds  # x-
-                        dks[self.ib[m][6]][1] = _ds  # x+
-                        sigmas[m][0] = (double_layer_length, cond_surface)
+                        cexcess = (
+                            cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
+                        )
+                        dks_m[0] = cexcess * _ds  # x-
+                        dks[self.ib[m][6]][1] = cexcess * _ds  # x+
+                        sigmas[m][0] = (double_layer_length, cexcess)
                     itmp, jtmp, ktmp = calc_ijk(self.ib[m][2], nx, ny)
                     if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
-                        dks_m[1] = _ds  # x+
-                        dks[self.ib[m][2]][0] = _ds  # x-
-                        sigmas[m][1] = (double_layer_length, cond_surface)
+                        cexcess = (
+                            cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
+                        )
+                        dks_m[1] = cexcess * _ds  # x+
+                        dks[self.ib[m][2]][0] = cexcess * _ds  # x-
+                        sigmas[m][1] = (double_layer_length, cexcess)
                     itmp, jtmp, ktmp = calc_ijk(self.ib[m][4], nx, ny)
                     if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
-                        dks_m[2] = _ds  # y-
-                        dks[self.ib[m][4]][3] = _ds  # y+
-                        sigmas[m][2] = (double_layer_length, cond_surface)
+                        cexcess = (
+                            cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
+                        )
+                        dks_m[2] = cexcess * _ds  # y-
+                        dks[self.ib[m][4]][3] = cexcess * _ds  # y+
+                        sigmas[m][2] = (double_layer_length, cexcess)
                     itmp, jtmp, ktmp = calc_ijk(self.ib[m][0], nx, ny)
                     if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
-                        dks_m[3] = _ds  # y+
-                        dks[self.ib[m][0]][2] = _ds  # y-
-                        sigmas[m][3] = (double_layer_length, cond_surface)
+                        cexcess = (
+                            cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
+                        )
+                        dks_m[3] = cexcess * _ds  # y+
+                        dks[self.ib[m][0]][2] = cexcess * _ds  # y-
+                        sigmas[m][3] = (double_layer_length, cexcess)
                     itmp, jtmp, ktmp = calc_ijk(self.ib[m][24], nx, ny)
                     if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
-                        dks_m[4] = _ds  # z-
-                        dks[self.ib[m][24]][5] = _ds  # z+
-                        sigmas[m][4] = (double_layer_length, cond_surface)
+                        cexcess = (
+                            cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
+                        )
+                        dks_m[4] = cexcess * _ds  # z-
+                        dks[self.ib[m][24]][5] = cexcess * _ds  # z+
+                        sigmas[m][4] = (double_layer_length, cexcess)
                     itmp, jtmp, ktmp = calc_ijk(self.ib[m][25], nx, ny)
                     if is_fluid(self.instance_ls[ktmp][jtmp][itmp]):
-                        dks_m[5] = _ds  # z+
-                        dks[self.ib[m][25]][4] = _ds  # z-
-                        sigmas[m][5] = (double_layer_length, cond_surface)
+                        cexcess = (
+                            cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
+                        )
+                        dks_m[5] = cexcess * _ds  # z+
+                        dks[self.ib[m][25]][4] = cexcess * _ds  # z-
+                        sigmas[m][5] = (double_layer_length, cexcess)
         self.sigmas = sigmas
         self.dks = np.array(dks, dtype=np.float64)
 
@@ -756,7 +760,6 @@ class Cube:
         _is[5] = 18
         _is[6] = 17
         _is[7] = 16
-        # TODO: 高速化
         # δr in eq.(9), Garboczi (1997)
         xn: List = list(range(8))
         # x=nx face
@@ -1571,6 +1574,17 @@ class Cube:
         if self.pix_tensor is not None:
             return deepcopy(self.pix_tensor)
         return self.pix_tensor
+
+    def get_instance_ls(self) -> List or None:
+        """Getter for the instance_ls in 3d shape.
+
+        Returns:
+            List or None: List containing the instance (solid, fluid, etc.)
+                for each element (index: m)
+        """
+        if self.instance_ls is not None:
+            return deepcopy(self.instance_ls)
+        return self.instance_ls
 
     def get_dk(self) -> List or None:
         """Getter for the stiffness matrix in 3d shape.

@@ -372,7 +372,7 @@ class FEM_Cube:
                         lzm, szm = faces[4]
                         lzp, szp = faces[5]
                         currxs[m] = (
-                            0.25
+                            0.5
                             * (
                                 lzm * szm * (u0 - u1 - u2 + u3)
                                 + lzp * szp * (u4 - u5 - u6 + u7)
@@ -382,7 +382,7 @@ class FEM_Cube:
                             / d
                         )
                         currys[m] = (
-                            0.25
+                            0.5
                             * (
                                 lxm * sxm * (u0 - u3 + u4 - u7)
                                 + lxp * sxp * (u1 - u2 + u5 - u6)
@@ -392,7 +392,7 @@ class FEM_Cube:
                             / d
                         )
                         currzs[m] = (
-                            0.25
+                            0.5
                             * (
                                 lxm * sxm * (u0 + u3 - u4 - u7)
                                 + lxp * sxp * (u1 + u2 - u5 - u6)
@@ -463,14 +463,23 @@ class FEM_Cube:
     def get_h2d(self):
         return deepcopy(self.h2d)
 
-    def get_cuurx(self):
+    def get_currxv(self):
         return deepcopy(self.currxv)
 
-    def get_cuury(self):
+    def get_curryv(self):
         return deepcopy(self.curryv)
 
-    def get_cuurz(self):
+    def get_currzv(self):
         return deepcopy(self.currzv)
+    
+    def get_currxs(self):
+        return deepcopy(self.currxs)
+
+    def get_currys(self):
+        return deepcopy(self.currys)
+
+    def get_currzs(self):
+        return deepcopy(self.currzs)
 
     def get_currx_ave(self):
         return deepcopy(self.currx_ave)

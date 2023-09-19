@@ -3942,14 +3942,41 @@ def test_dks():
     with open(path.join(test_dir(), "test_dks_result.pkl"), "wb") as pkf:
         pickle.dump(result_ls, pkf, pickle.HIGHEST_PROTOCOL)
 
-def tmp():
-    nacl = NaCl(temperature=298.15, pressure=1.0e5, molarity=0.1)
-    nacl.sen_and_goode_1992()
-    print(nacl.conductivity)
+def test_pressure_dependence():
+    # T=25℃:
+    # γ: e-3,ρ: e-3, η: e-3, e-4
+    # 75℃:
+    # γ: e-3, ρ: e-3, η: e-3, e-4
+    # 125℃:
+    # γ: e-3, ρ: e-3, η: e-3, e-4
+    # 175℃:
+    # γ: e-3, ρ: e-3, η: e-3, e-4
+    # 200℃:
+    # γ: e-3, ρ: e-3, η: e-3, e-4
+    p_ls = np.linspace(1.0e6, 5.0e6, 15).tolist()
+    activity_ls = []
+    density_ls = []
+    viscosity_ls = []
+    dielec_ls = []
+    T, M = 448.15, 0.1
+    for p in p_ls:
+        nacl = NaCl(temperature=T, pressure=p, molarity=M)
+        activity_ls.append(nacl.ion_props["Na"]["Activity"]/M)
+        density_ls.append(nacl.density)
+        viscosity_ls.append(nacl.viscosity)
+        dielec_ls.append(nacl.dielec_fluid)
+    plt.plot(p_ls, activity_ls)
+    plt.show()
+    plt.plot(p_ls, density_ls)
+    plt.show()
+    plt.plot(p_ls, viscosity_ls)
+    plt.show()
+    plt.plot(p_ls, dielec_ls)
+    plt.show()
 
 
 if __name__ == "__main__":
-    # tmp()
+    tmp()
     # get_kaolinite_init_params()
     # get_smectite_init_params_inf()
     # get_smectite_init_params_truncated()
@@ -4012,5 +4039,5 @@ if __name__ == "__main__":
     # test_dielec_RaspoandNeau2020()
     # reviletal1998()
     # compare_md_cond()
-    test_dks()
+    # test_dks()
     pass

@@ -1,7 +1,8 @@
 # TODO: docker化
-# TODO: pyrite実装する
 # TODO: pycacheはコミットからignoreする
 # TODO: 高温域における初期値の作成
+# TODO: 表面を流れる電流の量と, 塩濃度, スメクタイト量の関係を調べる
+# TODO: 電流がどの相をどれくらい流れているのか、可視化する
 # pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
@@ -37,10 +38,10 @@ def run():
     # set external condition
     print("set external condition")
     ph = 7.0
-    cnacl = 1.0e-3
+    molality = 1.0e-3
     temperature = 298.15
     # set fluid instance
-    nacl = NaCl(temperature=temperature, molarity=cnacl, ph=ph)
+    nacl = NaCl(temperature=temperature, molality=molality, ph=ph)
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
 
@@ -80,11 +81,11 @@ def run():
     solver.run(100, 30, 1.0e-9)
 
 
-def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None:
+def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> None:
     dirname = ""
     dirname += f"smec_frac-{smec_frac}"
     dirname += f"_temperature-{temperature}"
-    dirname += f"_cnacl-{cnacl}"
+    dirname += f"_molality-{molality}"
     dirname += f"_porosity-{porosity}"
     outdir_seed = path.join("E:\EECR", "output2", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
@@ -102,7 +103,7 @@ def exec_single_condition(smec_frac, temperature, cnacl, porosity, seed) -> None
 
     # set NaCl instance
     ph = 7.0
-    nacl = NaCl(temperature=temperature, molarity=cnacl, ph=ph, logger=logger, pressure=5.0e6)
+    nacl = NaCl(temperature=temperature, molality=molality, ph=ph, logger=logger, pressure=5.0e6)
     nacl.sen_and_goode_1992()
     nacl.calc_cond_tensor_cube_oxyz()
 
@@ -193,10 +194,10 @@ def experiment():
     if temperature_ls is None:
         temperature_ls = [293.15]  # default value
 
-    # cnacl
-    cnacl_ls: List or None = conditions.get("cnacl", None)
-    if cnacl_ls is None:
-        cnacl_ls = [1.0e-3]  # default value
+    # molality
+    molality_ls: List or None = conditions.get("molality", None)
+    if molality_ls is None:
+        molality_ls = [1.0e-3]  # default value
 
     # porosity
     porosity_ls: List or None = conditions.get("porosity", None)
@@ -212,18 +213,18 @@ def experiment():
         pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
         for smec_frac in smec_frac_ls:
             for temperature in temperature_ls:
-                for cnacl in cnacl_ls:
+                for molality in molality_ls:
                     for porosity in porosity_ls:
                         # exec_single_condition(smec_frac=smec_frac,
                         #     temperature=temperature,
-                        #     cnacl=cnacl,
+                        #     molality=molality,
                         #     porosity=porosity,
                         #     seed=seed,)
                         pool.submit(
                             exec_single_condition,
                             smec_frac=smec_frac,
                             temperature=temperature,
-                            cnacl=cnacl,
+                            molality=molality,
                             porosity=porosity,
                             seed=seed,
                         )
@@ -237,7 +238,7 @@ def output_fig():
         _ls = condition_dirname.split("_")
         del _ls[0]  # smec
         _ls[0] = _ls[0].replace("frac", "smec_frac")
-        # smec_frac, temperature, cnacl, porosity
+        # smec_frac, temperature, molality, porosity
         val_ls: List = []
         for condition_val in _ls:
             _, val = condition_val.split("-")
@@ -272,11 +273,11 @@ def output_fig():
     # plot temperature variation
     tempe_dir = path.join(fig_dir, "temperature")
     makedirs(tempe_dir, exist_ok=True)
-    cnacl_poros_xyel: Dict = {}
+    molality_poros_xyel: Dict = {}
     for conditions, _ye in conditions_ye.items():
-        smec_frac, tempe, cnacl, poros = conditions
+        smec_frac, tempe, molality, poros = conditions
         cond, error = _ye
-        _ls = cnacl_poros_xyel.setdefault((cnacl, poros), [[], [], [], []])
+        _ls = molality_poros_xyel.setdefault((molality, poros), [[], [], [], []])
         if float("nan") in (cond, error):
             continue
         if np.isnan(cond) or np.isnan(error):
@@ -289,18 +290,18 @@ def output_fig():
         _ls[1].append(cond)
         _ls[2].append(error)
         _ls[3].append(tempe - 273.15)
-    for cnacl_poros, _xyel in cnacl_poros_xyel.items():
-        cnacl, poros = cnacl_poros
-        save_pth = path.join(tempe_dir, f"cnacl-{cnacl}_porosity-{poros}.png")
+    for molality_poros, _xyel in molality_poros_xyel.items():
+        molality, poros = molality_poros
+        save_pth = path.join(tempe_dir, f"molality-{molality}_porosity-{poros}.png")
         # lateral: temperature, ledgend: smectite fraction
         plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Temperature (℃)")
 
-    # plot Cnacl variation
-    cnacl_dir = path.join(fig_dir, "cnacl")
-    makedirs(cnacl_dir, exist_ok=True)
+    # plot molality variation
+    molality_dir = path.join(fig_dir, "molality")
+    makedirs(molality_dir, exist_ok=True)
     tempe_poros_xyel: Dict = {}
     for conditions, _ye in conditions_ye.items():
-        smec_frac, tempe, cnacl, poros = conditions
+        smec_frac, tempe, molality, poros = conditions
         cond, error = _ye
         _ls = tempe_poros_xyel.setdefault((tempe, poros), [[], [], [], []])
         if float("nan") in (cond, error):
@@ -314,21 +315,21 @@ def output_fig():
         _ls[0].append(smec_frac)
         _ls[1].append(cond)
         _ls[2].append(error)
-        _ls[3].append(cnacl)
+        _ls[3].append(molality)
     for tempe_poros, _xyel in tempe_poros_xyel.items():
         tempe, poros = tempe_poros
-        save_pth = path.join(cnacl_dir, f"temperature-{tempe}_porosity-{poros}.png")
-        # lateral: cnacl, ledgend: smectite fraction
+        save_pth = path.join(molality_dir, f"temperature-{tempe}_porosity-{poros}.png")
+        # lateral: molality, ledgend: smectite fraction
         plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Salinity (M)", logscale=True)
 
     # plot porosity variation
     poros_dir = path.join(fig_dir, "poros")
     makedirs(poros_dir, exist_ok=True)
-    tempe_cnacl_xyel: Dict = {}
+    tempe_molality_xyel: Dict = {}
     for conditions, _ye in conditions_ye.items():
-        smec_frac, tempe, cnacl, poros = conditions
+        smec_frac, tempe, molality, poros = conditions
         cond, error = _ye
-        _ls = tempe_cnacl_xyel.setdefault((tempe, cnacl), [[], [], [], []])
+        _ls = tempe_molality_xyel.setdefault((tempe, molality), [[], [], [], []])
         if float("nan") in (cond, error):
             continue
         if np.isnan(cond) or np.isnan(error):
@@ -341,9 +342,9 @@ def output_fig():
         _ls[1].append(cond)
         _ls[2].append(error)
         _ls[3].append(poros)
-    for tempe_cnacl, _xyel in tempe_cnacl_xyel.items():
-        tempe, cnacl = tempe_cnacl
-        save_pth = path.join(poros_dir, f"temperature-{tempe}_cnacl-{cnacl}.png")
+    for tempe_molality, _xyel in tempe_molality_xyel.items():
+        tempe, molality = tempe_molality
+        save_pth = path.join(poros_dir, f"temperature-{tempe}_molality-{molality}.png")
         plot_smec_frac_cond(_xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Porosity")
 
 
@@ -356,7 +357,7 @@ if __name__ == "__main__":
     # experiment()
     # output_fig()
     exec_single_condition(0., 298.15, 0.1, 0.1, 42)
-    with open(r"E:\EECR\output2\pickle\smec_frac-0.0_temperature-298.15_cnacl-0.1_porosity-0.1\42\2023-09-13\solver.pkl", "rb") as pkf:    
+    with open(r"E:\EECR\output2\pickle\smec_frac-0.0_temperature-298.15_molality-0.1_porosity-0.1\42\2023-09-13\solver.pkl", "rb") as pkf:    
         solver = pickle.load(pkf)
     plot_curr_all(solver, "y", 1.0e-6, "tmp/curr")
     pass

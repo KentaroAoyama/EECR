@@ -300,7 +300,7 @@ class Phyllosilicate:
         if self.logger is not None:
             self.logger.info("Initialize phyllosilicate")
             for name, value in vars(self).items():
-                _msg = f"name: {name}, value: {value}"
+                _msg = f"{name}: {value}"
                 self.logger.debug(_msg)
 
     def __init_default(self) -> None:
@@ -1072,12 +1072,12 @@ class Phyllosilicate:
                 "Finished the calculation of electrical "
                 "properties for an infinite diffusion layer"
             )
-            self.logger.debug(f"m_potential_0_o: {self.potential_0_o}")
-            self.logger.debug(f"m_potential_stern_o: {self.potential_stern_o}")
-            self.logger.debug(f"m_potential_zeta_o: {self.potential_zeta_o}")
-            self.logger.debug(f"m_charge_0_o: {self.charge_0_o}")
-            self.logger.debug(f"m_charge_stern_o: {self.charge_stern_o}")
-            self.logger.debug(f"m_charge_diffuse_o: {self.charge_diffuse_o}")
+            self.logger.debug(f"potential_0_o: {self.potential_0_o}")
+            self.logger.debug(f"potential_stern_o: {self.potential_stern_o}")
+            self.logger.debug(f"potential_zeta_o: {self.potential_zeta_o}")
+            self.logger.debug(f"charge_0_o: {self.charge_0_o}")
+            self.logger.debug(f"charge_stern_o: {self.charge_stern_o}")
+            self.logger.debug(f"charge_diffuse_o: {self.charge_diffuse_o}")
 
         # calc length to the zeta plane
         self.calc_xd()
@@ -1250,13 +1250,13 @@ class Phyllosilicate:
                 "Finished the calculation of electrical "
                 "properties for an truncated diffusion layer"
             )
-            self.logger.debug(f"m_potential_0_i: {self.potential_0_i}")
-            self.logger.debug(f"m_potential_stern: {self.potential_stern_i}")
-            self.logger.debug(f"m_potential_zeta: {self.potential_zeta_i}")
-            self.logger.debug(f"m_potential_r: {self.potential_r_i}")
-            self.logger.debug(f"m_charge_0: {self.charge_0_i}")
-            self.logger.debug(f"m_charge_stern: {self.charge_stern_i}")
-            self.logger.debug(f"m_charge_diffuse: {self.charge_diffuse_i}")
+            self.logger.debug(f"potential_0_i: {self.potential_0_i}")
+            self.logger.debug(f"potential_stern_i: {self.potential_stern_i}")
+            self.logger.debug(f"potential_zeta_i: {self.potential_zeta_i}")
+            self.logger.debug(f"potential_r_i: {self.potential_r_i}")
+            self.logger.debug(f"charge_0_i: {self.charge_0_i}")
+            self.logger.debug(f"charge_stern_i: {self.charge_stern_i}")
+            self.logger.debug(f"charge_diffuse_i: {self.charge_diffuse_i}")
 
         return xn, is_norm_converged
 
@@ -1697,8 +1697,7 @@ class Phyllosilicate:
 
         # log
         if self.logger is not None:
-            self.logger.info("Finished the calculation of interlayer conductivity")
-            self.logger.debug(f"cond_ohmic_diffuse: {cond_intra}")
+            self.logger.debug(f"cond_intra: {cond_intra}")
 
         self.cond_intra = cond_intra
         return self.cond_intra, (cond_stern, cond_diffuse)
@@ -1742,8 +1741,7 @@ class Phyllosilicate:
 
         # log
         if self.logger is not None:
-            self.logger.info("Finished the calculation of interlayer conductivity")
-            self.logger.debug(f"cond_ohmic_diffuse: {cond_diffuse}")
+            self.logger.debug(f"cond_diffuse: {cond_diffuse}")
 
         self.cond_infdiffuse = cond_diffuse
         self.double_layer_length = xdl
@@ -1810,7 +1808,7 @@ class Phyllosilicate:
         self.cond_tensor = tensor
 
         if self.logger is not None:
-            self.logger.info(f"{__name__} cond tensor: {self.cond_tensor}")
+            self.logger.info(f"phyllosilicate: {self.cond_tensor}")
 
     def __calc_na_density_at_x(self, x: float) -> float:
         phix = self.potential_zeta_i * np.exp(-self.kappa_truncated * x)
@@ -1835,7 +1833,7 @@ class Phyllosilicate:
             gamma_na_stern + gamma_na_diffuse
         )
         return self.partition_coefficient
-    
+
     def calc_cation_density(self, xy_unit: float) -> float:
         # TODO:
         if self.xd is None:
@@ -1850,8 +1848,11 @@ class Phyllosilicate:
             * quad(self.__calc_na_density_at_x, self.xd, _xdl)[0]
         )
         gamma_stern = self.__calc_n_stern("inner")
-        return (gamma_na_diffuse + gamma_stern) * 1.0e-18 / (xy_unit * self.layer_width * const.AVOGADRO_CONST)
-
+        return (
+            (gamma_na_diffuse + gamma_stern)
+            * 1.0e-18
+            / (xy_unit * self.layer_width * const.AVOGADRO_CONST)
+        )
 
     def get_logger(self) -> Logger:
         """Getter for the logging.Logger

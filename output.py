@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple, Union
 from os import path, makedirs
 from copy import deepcopy
+from math import sqrt
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -8,12 +9,69 @@ import matplotlib.cm as cm
 
 from solver import FEM_Cube
 from cube import Cube
-from cube import calc_ijk
+from cube import calc_ijk, calc_m
 
 SolverLike = Union[FEM_Cube, Cube]
 
 # TODO: docstring
 # TODO: plot electrical potential
+# TODO: 電流密度の矢印 & インスタンス
+def plot_current_arrow(solver: FEM_Cube, savedir: str, ax: str = "X"):
+    ax = ax.lower()
+    cube = solver.get_fem_input()
+    l = cube.get_edge_length()
+    nz, ny, nx = cube.get_shape()
+    instance_ls = cube.get_instance_ls()
+    nh, nv, nax = None, None, None
+    xx, yy = None, None
+    instance_int = {"quartz": 0, "smectite": 1, "nacl": 2}
+    currhv, currhs, currh = None, None, None
+    currvv, currvs, currv = None, None, None
+    if ax == "x":
+        nh, nv, nax = ny, nz, nx
+        currhv, currhs = solver.get_curryv(), solver.get_currys()
+        currvv, currvs = solver.get_currzv(), solver.get_currzs()
+    elif ax == "y":
+        nh, nv, nax = nx, nz, ny
+        currhv, currhs = solver.get_currxv(), solver.get_currxs()
+        currvv, currvs = solver.get_currzv(), solver.get_currzs()
+    elif ax == "z":
+        nh, nv, nax = nx, ny, nz
+        currhv, currhs = solver.get_currxv(), solver.get_currxs()
+        currvv, currvs = solver.get_curryv(), solver.get_currys()
+    else:
+        raise
+    x_ls, y_ls = [l * i + 0.5 for i in range(nh)], [l * i + 0.5 for i in range(nv)]
+    xx, yy = np.meshgrid(x_ls, y_ls)
+    currh = [(_v + _s) / 2.0 for _v, _s in zip(currhv, currhs)]
+    currv = [(_v + _s) / 2.0 for _v, _s in zip(currvv, currvs)]
+    makedirs(savedir, exist_ok=True)
+    for iax in range(nax):
+        dx_ls, dy_ls = [], []
+        ist2d = np.zeros(xx.shape).tolist()
+        for iv in range(nv):
+            for ih in range(nh):
+                i, j, k = None, None, None
+                m: int = None
+                if ax == "x":
+                    i, j, k = iax, ih, iv
+                elif ax == "y":
+                    i, j, k = ih, iax, iv
+                else:
+                    i, j, k = ih, iv, iax
+                m = calc_m(i, j, k, nx, ny)
+                dx_ls.append(currh[m])
+                dy_ls.append(currv[m])
+                ist2d[iv][ih] = instance_int[instance_ls[k][j][i].__class__.__name__]
+        c_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dx_ls, dy_ls)]
+        fig, ax = plt.subplots()
+        mappable1 = ax.pcolormesh(xx, yy, np.array(ist2d), alpha=0.5, cmap=cm.binary)
+        ax.quiver(x_ls, y_ls, dx_ls, dy_ls, c_ls, cmap="Reds")
+        fig.colorbar(mappable1)
+        mappable1.set_clim(0, 2)
+        ax.set_aspect("equal")
+        fig.savefig(path.join(savedir, f"{iax}.pmg"), dpi=200)
+
 def plot_smec_frac_cond(
     smectite_frac_ls: List[float],
     cond_ls: List[float],

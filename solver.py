@@ -1,6 +1,6 @@
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
-from typing import List
+from typing import List, Dict
 from copy import deepcopy
 from logging import Logger
 from warnings import warn
@@ -47,6 +47,7 @@ class FEM_Cube:
         self.currxs: List = None
         self.currys: List = None
         self.currzs: List = None
+        self.currs: List[Dict] = None
         self.currx_ave: float = None
         self.curry_ave: float = None
         self.currz_ave: float = None
@@ -178,9 +179,12 @@ class FEM_Cube:
                 self.logger.debug(f"currxs: {sum(self.currxs) / ns}")
                 self.logger.debug(f"currys: {sum(self.currys) / ns}")
                 self.logger.debug(f"currzs: {sum(self.currzs) / ns}")
-                self.logger.debug(f"condxs: {sum(self.currxs) / (ns * ex)}")
-                self.logger.debug(f"condys: {sum(self.currys) / (ns * ey)}")
-                self.logger.debug(f"condzs: {sum(self.currzs) / (ns * ez)}")
+                if abs(ex) > 0.0:
+                    self.logger.debug(f"condxs: {sum(self.currxs) / (ns * ex)}")
+                if abs(ey) > 0.0:
+                    self.logger.debug(f"condys: {sum(self.currys) / (ns * ey)}")
+                if abs(ez) > 0.0:
+                    self.logger.debug(f"condzs: {sum(self.currzs) / (ns * ez)}")
 
     def __calc_energy(self) -> None:
         """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
@@ -333,6 +337,7 @@ class FEM_Cube:
 
         # add surface current density
         if sigmas is not None:
+            currs: List = list(range(ns))
             currxs: List = list(range(ns))
             currys: List = list(range(ns))
             currzs: List = list(range(ns))
@@ -371,37 +376,43 @@ class FEM_Cube:
                         lyp, syp = faces[3]
                         lzm, szm = faces[4]
                         lzp, szp = faces[5]
-                        currxs[m] = (
-                            0.5
-                            * (
-                                lzm * szm * (u0 - u1 - u2 + u3)
-                                + lzp * szp * (u4 - u5 - u6 + u7)
-                                + lym * sym * (u0 - u1 + u4 - u5)
-                                + lyp * syp * (u3 - u2 + u7 - u6)
-                            )
-                            / d
-                        )
-                        currys[m] = (
-                            0.5
-                            * (
-                                lxm * sxm * (u0 - u3 + u4 - u7)
-                                + lxp * sxp * (u1 - u2 + u5 - u6)
-                                + lzm * szm * (u0 + u1 - u2 - u3)
-                                + lzp * szp * (u4 + u5 - u6 - u7)
-                            )
-                            / d
-                        )
-                        currzs[m] = (
-                            0.5
-                            * (
-                                lxm * sxm * (u0 + u3 - u4 - u7)
-                                + lxp * sxp * (u1 + u2 - u5 - u6)
-                                + lym * sym * (u0 + u1 - u4 - u5)
-                                + lyp * syp * (u2 + u3 - u6 - u7)
-                            )
-                            / d
-                        )
+                        # key is direction and the value is surface ccurent
+                        _is = {
+                            "x": {
+                                "zm": 0.25 * lzm * szm * (u0 - u1 - u2 + u3) / d,
+                                "zp": 0.25 * lzp * szp * (u4 - u5 - u6 + u7) / d,
+                                "ym": 0.25 * lym * sym * (u0 - u1 + u4 - u5) / d,
+                                "yp": 0.25 * lyp * syp * (u3 - u2 + u7 - u6) / d,
+                            },
+                            "y": {
+                                "xm": 0.25 * lxm * sxm * (u0 - u3 + u4 - u7) / d,
+                                "xp": 0.25 * lxp * sxp * (u1 - u2 + u5 - u6) / d,
+                                "zm": 0.25 * lzm * szm * (u0 + u1 - u2 - u3) / d,
+                                "zp": 0.25 * lzp * szp * (u4 + u5 - u6 - u7) / d,
+                            },
+                            "z": {
+                                "xm": 0.25 * lxm * sxm * (u0 + u3 - u4 - u7) / d,
+                                "xp": 0.25 * lxp * sxp * (u1 + u2 - u5 - u6) / d,
+                                "ym": 0.25 * lym * sym * (u0 + u1 - u4 - u5) / d,
+                                "yp": 0.25 * lyp * syp * (u2 + u3 - u6 - u7) / d,
+                            },
+                        }
+                        ix = 0.0
+                        for _, v in _is["x"].items():
+                            ix += v
+                        iy = 0.0
+                        for _, v in _is["y"].items():
+                            iy += v
+                        iz = 0.0
+                        for _, v in _is["z"].items():
+                            iz += v
+                        
+                        currs[m] = _is
+                        currxs[m] = ix
+                        currys[m] = iy
+                        currzs[m] = iz
 
+            self.currs = currs
             self.currxs = currxs
             self.currys = currys
             self.currzs = currzs
@@ -471,7 +482,12 @@ class FEM_Cube:
 
     def get_currzv(self):
         return deepcopy(self.currzv)
-    
+
+    def get_currs(self) -> Dict or None:
+        if self.currs is not None:
+            return deepcopy(self.currs)
+        return self.currs
+
     def get_currxs(self):
         return deepcopy(self.currxs)
 
@@ -507,3 +523,6 @@ class FEM_Cube:
         """
         with open(_pth, "wb") as pkf:
             pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)
+
+if __name__ == "__main__":
+    pass

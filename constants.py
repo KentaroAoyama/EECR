@@ -3,10 +3,28 @@ from math import log, exp
 from typing import Dict
 
 def calc_standard_gibbs_energy(k_25: float, t: float = 298.15) -> float:
+    """Calculate standard Gibbs free energy at 298.15K (25℃)
+
+    Args:
+        k_25 (float): Equilibrium constant at 298.15K
+        t (float): Absolute temperature (K)
+
+    Returns:
+        float: Standard Gibbs free energy at 298.15K (25℃)
+    """
     return -log(k_25) * GAS_CONST * t
 
 
-def calc_equibilium_const(dg_25, temperature) -> float:
+def calc_equibilium_const(dg_25: float, temperature: float) -> float:
+    """Calculate equilibrium constant at given temperature
+
+    Args:
+        dg_25 (float): Standard Gibbs free energy at 298.15K (25℃)
+        temperature (float): Absolute temperature (K)
+
+    Returns:
+        float: Equilibrium constant at given temperature
+    """
     return exp(-dg_25 / (GAS_CONST * temperature))
 
 

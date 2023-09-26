@@ -21,7 +21,7 @@ temperature:
 - 433.15
 - 453.15
 - 473.15
-cnacl:
+molality:
 - 1.0e-4
 - 1.0e-3
 - 1.0e-2

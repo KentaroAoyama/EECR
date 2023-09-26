@@ -2,6 +2,7 @@ from typing import List, Dict, Tuple, Union
 from os import path, makedirs
 from copy import deepcopy
 from math import sqrt
+import pickle
 
 import numpy as np
 from matplotlib import pyplot as plt
@@ -15,62 +16,148 @@ SolverLike = Union[FEM_Cube, Cube]
 
 # TODO: docstring
 # TODO: plot electrical potential
-# TODO: 電流密度の矢印 & インスタンス
-def plot_current_arrow(solver: FEM_Cube, savedir: str, ax: str = "X"):
-    ax = ax.lower()
+def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
+    axis = axis.lower()
     cube = solver.get_fem_input()
-    l = cube.get_edge_length()
     nz, ny, nx = cube.get_shape()
+    ns = nz * ny * nx
     instance_ls = cube.get_instance_ls()
     nh, nv, nax = None, None, None
     xx, yy = None, None
     instance_int = {"quartz": 0, "smectite": 1, "nacl": 2}
-    currhv, currhs, currh = None, None, None
-    currvv, currvs, currv = None, None, None
-    if ax == "x":
+    chv, cvv = None, None
+    hlabel, vlabel = None, None
+    _s = [0 for _ in range(ns)]
+    svp, svm, shp, shm = _s.copy(), _s.copy(), _s.copy(), _s.copy()
+    currs = solver.get_currs()
+    if axis == "x":
         nh, nv, nax = ny, nz, nx
-        currhv, currhs = solver.get_curryv(), solver.get_currys()
-        currvv, currvs = solver.get_currzv(), solver.get_currzs()
-    elif ax == "y":
+        chv, cvv = solver.get_curryv(), solver.get_currzv()
+        if currs is not None:
+            svp = [currs[m]["y"]["zp"] for m in range(ns)]
+            svm = [currs[m]["y"]["zm"] for m in range(ns)]
+            shp = [currs[m]["z"]["yp"] for m in range(ns)]
+            shm = [currs[m]["z"]["ym"] for m in range(ns)]
+        hlabel, vlabel = "Y", "Z"
+    elif axis == "y":
         nh, nv, nax = nx, nz, ny
-        currhv, currhs = solver.get_currxv(), solver.get_currxs()
-        currvv, currvs = solver.get_currzv(), solver.get_currzs()
-    elif ax == "z":
+        chv, cvv = solver.get_currxv(), solver.get_currzv()
+        if currs is not None:
+            svp = [currs[m]["x"]["zp"] for m in range(ns)]
+            svm = [currs[m]["x"]["zm"] for m in range(ns)]
+            shp = [currs[m]["z"]["xp"] for m in range(ns)]
+            shm = [currs[m]["z"]["xm"] for m in range(ns)]
+        hlabel, vlabel = "X", "Z"
+    elif axis == "z":
         nh, nv, nax = nx, ny, nz
-        currhv, currhs = solver.get_currxv(), solver.get_currxs()
-        currvv, currvs = solver.get_curryv(), solver.get_currys()
+        chv, cvv = solver.get_currxv(), solver.get_curryv()
+        if currs is not None:
+            svp = [currs[m]["x"]["yp"] for m in range(ns)]
+            svm = [currs[m]["x"]["ym"] for m in range(ns)]
+            shp = [currs[m]["y"]["xp"] for m in range(ns)]
+            shm = [currs[m]["y"]["xm"] for m in range(ns)]
+        hlabel, vlabel = "X", "Y"
     else:
         raise
-    x_ls, y_ls = [l * i + 0.5 for i in range(nh)], [l * i + 0.5 for i in range(nv)]
+    x_ls, y_ls = [i + 0.5 for i in range(nh)], [i + 0.5 for i in range(nv)]
     xx, yy = np.meshgrid(x_ls, y_ls)
-    currh = [(_v + _s) / 2.0 for _v, _s in zip(currhv, currhs)]
-    currv = [(_v + _s) / 2.0 for _v, _s in zip(currvv, currvs)]
+    cmax = max(
+        (
+            max([sqrt(ch**2 + cv**2) for ch, cv in zip(chv, cvv)]),
+            max(max(svp), max(svm), max(shp), max(shm)),
+        )
+    )
+
     makedirs(savedir, exist_ok=True)
     for iax in range(nax):
-        dx_ls, dy_ls = [], []
+        xv_ls, yv_ls = [], []
+        dxv_ls, dyv_ls = [], []
+        xs_ls, ys_ls = [], []
+        dxs_ls, dys_ls = [], []
         ist2d = np.zeros(xx.shape).tolist()
         for iv in range(nv):
             for ih in range(nh):
                 i, j, k = None, None, None
                 m: int = None
-                if ax == "x":
+                if axis == "x":
                     i, j, k = iax, ih, iv
-                elif ax == "y":
+                elif axis == "y":
                     i, j, k = ih, iax, iv
                 else:
                     i, j, k = ih, iv, iax
                 m = calc_m(i, j, k, nx, ny)
-                dx_ls.append(currh[m])
-                dy_ls.append(currv[m])
-                ist2d[iv][ih] = instance_int[instance_ls[k][j][i].__class__.__name__]
-        c_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dx_ls, dy_ls)]
+                xv_ls.append(ih + 0.5)
+                yv_ls.append(iv + 0.5)
+                dxv_ls.append(chv[m])
+                dyv_ls.append(cvv[m])
+                ist2d[iv][ih] = instance_int[
+                    instance_ls[k][j][i].__class__.__name__.lower()
+                ]
+                # vp
+                xs_ls.append(ih + 0.5)
+                ys_ls.append(iv + 1.0)
+                dxs_ls.append(svp[m])
+                dys_ls.append(0.0)
+                # vm
+                xs_ls.append(ih + 0.5)
+                ys_ls.append(iv)
+                dxs_ls.append(svm[m])
+                dys_ls.append(0.0)
+                # hp
+                xs_ls.append(ih + 1.0)
+                ys_ls.append(iv + 0.5)
+                dxs_ls.append(0.0)
+                dys_ls.append(shp[m])
+                # hm
+                xs_ls.append(ih)
+                ys_ls.append(iv + 0.5)
+                dxs_ls.append(0.0)
+                dys_ls.append(shm[m])
+        cv_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dxv_ls, dyv_ls)]
+        cs_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dxs_ls, dys_ls)]
         fig, ax = plt.subplots()
-        mappable1 = ax.pcolormesh(xx, yy, np.array(ist2d), alpha=0.5, cmap=cm.binary)
-        ax.quiver(x_ls, y_ls, dx_ls, dy_ls, c_ls, cmap="Reds")
-        fig.colorbar(mappable1)
+        mappable1 = ax.pcolormesh(xx, yy, np.array(ist2d), alpha=0.5, cmap=cm.gray)
+        # current (volume)
+        mappable2 = ax.quiver(
+            xv_ls,
+            yv_ls,
+            dxv_ls,
+            dyv_ls,
+            cv_ls,
+            cmap="Reds",
+            angles="xy",
+            units="xy",
+            scale=cmax,
+        )
+        # current (surface)
+        mappable3 = ax.quiver(
+            xs_ls,
+            ys_ls,
+            dxs_ls,
+            dys_ls,
+            cs_ls,
+            cmap="Reds",
+            angles="xy",
+            units="xy",
+            scale=cmax,
+            linestyle="dashed",
+        )
         mappable1.set_clim(0, 2)
+        mappable2.set_clim(0, cmax)
+        mappable3.set_clim(0, cmax)
+        fig.colorbar(mappable2).set_label(
+            r"Current Density (A·m$^{2}$)", fontsize=14, labelpad=10.0
+        )
         ax.set_aspect("equal")
-        fig.savefig(path.join(savedir, f"{iax}.pmg"), dpi=200)
+        ax.set_xlabel(str(hlabel) + r" (μm)", fontsize=14, labelpad=10.0)  #! TODO
+        ax.set_ylabel(str(vlabel) + r" (μm)", fontsize=14, labelpad=10.0)  #! TODO
+        ax.set_xlim(0, max(xv_ls))
+        ax.set_ylim(0, max(yv_ls))
+        ax.set_yticks(ax.get_xticks())
+        fig.savefig(path.join(savedir, f"{iax}.png"), dpi=500, bbox_inches="tight")
+        plt.clf()
+        plt.close()
+
 
 def plot_smec_frac_cond(
     smectite_frac_ls: List[float],
@@ -469,3 +556,7 @@ def __plt_grid(xx, yy, val, dirname: str, fname: str):
     fig.savefig(path.join(dirname, fname), dpi=200, bbox_inches="tight")
     plt.clf()
     plt.close()
+
+
+if __name__ == "__main__":
+    pass

@@ -1,4 +1,4 @@
-"""Calculate electrical propertis of quartz by model of Revil & Glover (1997)
+"""Calculate electrical properties of quartz
 
     Reference:
         A.Revil and P.W.J.Glover, Theory of ionic-surface electrical conduction
@@ -112,6 +112,9 @@ class Quartz:
             self.ion_props[Species.H.name][IonProp.Activity.name]
         )
         self.method: str = method.lower()
+
+        if self.logger is not None:
+            self.logger.info("=== Initialize Quartz ===")
 
         # parameters in eq.(106)
         self.delta: float = None
@@ -243,6 +246,10 @@ class Quartz:
 
         # calculate conductivity tensor
         self.__calc_cond_tensor()
+
+        if self.logger is not None:
+            self.logger.debug(f"cond_tensor: {self.cond_tensor}")
+            self.logger.debug(f"cond surface: {self.cond_surface}")
 
     def __calc_eq_44(self, phid: float) -> float:
         """Calculate eq.(44) (Qs+Qs0) in Revil & Glover (1997)
@@ -698,6 +705,7 @@ class Quartz:
             float: Surface charge density (C/m2)
         """
         return self.charge_0
+
 
 if __name__ == "__main__":
     pass

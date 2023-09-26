@@ -3,7 +3,7 @@
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Set
 from logging import Logger
 from sys import float_info
 from os import path, PathLike
@@ -72,6 +72,7 @@ class TLMParams:
         c1o: float = 2.1,
         c2o: float = 0.55,
     ) -> None:
+        # TODO: docstring
         """
         Args:
             T (float): Absolute temperature (K)
@@ -88,6 +89,7 @@ class TLMParams:
         ※ >X stands for surface site >Al-O-Si<
         NOTE: "i" and "o" suffix denote innner and outer surface.
         """
+         # TODO: innerとouterの設定方法を統一する
         # Inner
         self.gamma_1i = gamma_1i
         self.gamma_2i = gamma_2i
@@ -140,8 +142,8 @@ class TLMParams:
 class Phyllosilicate:
     """
     Phyllosilicate Class
-    It has a function to calculate the conductivity of phyllosilicate particles and
-    the member variables necessary for the calculation.
+    It has a function to calculate the EDL properties and electrical conductivity of inner and
+    outer plane.
 
     To calculate the surface potential, we use the equations proposed by
     Gonçalvès et al. (2007). The equations have been modified in the following points:
@@ -196,7 +198,6 @@ class Phyllosilicate:
         cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
-        # TODO: rが1.0e-9付近で収束が悪い → 初期値追加
         """Initialize phyllosilicate class.
 
         Args:
@@ -293,15 +294,12 @@ class Phyllosilicate:
         ####################################################
         self.logger = logger
 
-        # Calculate frequently used constants and parameters.
-        self.__init_default()
-
         # START DEBUGGING
         if self.logger is not None:
-            self.logger.info("Initialize phyllosilicate")
-            for name, value in vars(self).items():
-                _msg = f"{name}: {value}"
-                self.logger.debug(_msg)
+            self.logger.info("=== Initialize Phyllosilicate ===")
+
+        # Calculate frequently used constants and parameters.
+        self.__init_default()
 
     def __init_default(self) -> None:
         """Calculate constants and parameters commonly used when computing
@@ -332,7 +330,7 @@ class Phyllosilicate:
 
     def __calc_mobility_stern(self) -> float:
         """Calculate mobility of Na+ at stern plane"""
-        # Mobility of stern layer is half of bulk water
+        # Mobility of the stern layer is assumed to be half of the bulk water
         d_cf = self.ion_props[Species.Na.name][IonProp.Mobility.name] * 0.5
         return d_cf
 
@@ -860,6 +858,7 @@ class Phyllosilicate:
         return fn
 
     def __calc_qs_inf(self, _x: float) -> float:
+        # TODO: should remove?
         """Calculate the amount of charge (C/m3) at _x distance from the
         surface in the case of infinite diffuse layer development
 
@@ -916,6 +915,7 @@ class Phyllosilicate:
         Returns:
             float: xd (m)
         """
+        # TODO: simplify
         xd: float = None
         r = self.layer_width * 1.0e10
         if r < 9.4:
@@ -989,11 +989,6 @@ class Phyllosilicate:
         self.c1 = self.tlm_params.c1o
         self.c2 = self.tlm_params.c2o
 
-        # # TODO: May need to consider other cases (e.g., illite, etc.)
-        # if self.qi < 0.0 and self.gamma_1 == 0.0:
-        #     self.__set_constant_for_smectite_inf()
-        # else:
-        #     self.__set_constant_for_kaolinite()
         if x_init is None:
             # Set initial electrical parameters
             if self.qi < 0.0 and self.gamma_1 == 0.0:
@@ -1808,7 +1803,7 @@ class Phyllosilicate:
         self.cond_tensor = tensor
 
         if self.logger is not None:
-            self.logger.info(f"phyllosilicate: {self.cond_tensor}")
+            self.logger.info(f"cond_tensor: {self.cond_tensor}")
 
     def __calc_na_density_at_x(self, x: float) -> float:
         phix = self.potential_zeta_i * np.exp(-self.kappa_truncated * x)
@@ -1957,7 +1952,6 @@ class Smectite(Phyllosilicate):
             cond_intra (float, optional): Inter layer conductivity (unit: S/m).
             cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
-            flag_truncated (bool): True if truncated parameters will be calculate.
         """
 
         if tlm_params is None:

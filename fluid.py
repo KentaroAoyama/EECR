@@ -72,6 +72,9 @@ class NaCl(Fluid):
         self.cond_tensor = cond_tensor
         self.logger = logger
 
+        if self.logger is not None:
+            self.logger.info("=== Initialize NaCl ===")
+
         # Set ion_props and activities other than mobility
         ion_props: Dict = deepcopy(ion_props_default)
 
@@ -97,6 +100,7 @@ class NaCl(Fluid):
                 # Set pressure on the vapor + liquid coexistence curve.
                 def __callback(__x) -> float:
                     return xnacl - calc_X_VL_Liq(self.temperature, __x)
+
                 self.pressure = bisect(__callback, 0.0, 1.0e9)
 
             density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
@@ -188,22 +192,10 @@ class NaCl(Fluid):
         # TODO: add Watanabe et al. (2021)
         method = method.lower()
         if method == "sen_and_goode":
-            self.conductivity = sen_and_goode_1992(self.temperature, self.ion_props[Species.Na.name][IonProp.Molality.name])
-
-    def sen_and_goode_1992(self) -> float:
-        """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
-        The modified equation was in Watanabe et al. (2021).
-
-        Returens:
-            float: Conductivity of NaCl fluid in liquid phase
-        """
-        # convert Kelvin to Celsius
-        temperature = self.temperature - 273.15
-        _m = self.ion_props[Species.Na.name][IonProp.Molality.name]
-        left = (5.6 + 0.27 * temperature - 1.5 * 1.0e-4 * temperature**2) * _m
-        right = (2.36 + 0.099 * temperature) / (1.0 + 0.214 * _m**0.5) * _m**1.5
-        self.conductivity = left - right
-        return self.conductivity
+            self.conductivity = sen_and_goode_1992(
+                self.temperature, self.ion_props[Species.Na.name][IonProp.Molality.name]
+            )
+            self.calc_cond_tensor_cube_oxyz()
 
     def set_cond(self, _cond: float) -> None:
         """Set fluid conductivity
@@ -228,7 +220,7 @@ class NaCl(Fluid):
         )
         self.cond_tensor = cond_tensor
         if self.logger is not None:
-            self.logger.info(f"{__name__} cond tensor: {self.cond_tensor}")
+            self.logger.info(f"cond tensor: {self.cond_tensor}")
         return deepcopy(self.cond_tensor)
 
     def get_ion_props(self) -> Dict:
@@ -401,7 +393,7 @@ def __calc_pitzer_params_nacl(name: str, T: float) -> float:
 
 
 def sen_and_goode_1992(T, M) -> float:
-    """Calculate conductivity of NaCl fluid based on Sen & Goode, 1992 equation.
+    """Calculate conductivity of NaCl fluid based on Sen & Goode (1992) equation.
     The modified equation was in Watanabe et al. (2021).
 
     Args:
@@ -416,6 +408,7 @@ def sen_and_goode_1992(T, M) -> float:
     left = (5.6 + 0.27 * T - 1.5 * 1.0e-4 * T**2) * M
     right = (2.36 + 0.099 * T) / (1.0 + 0.214 * M**0.5) * M**1.5
     return left - right
+
 
 def calc_nacl_activities(
     T: float, P: float, dielec_water: float, ion_props: Dict, method: str = "thereda"

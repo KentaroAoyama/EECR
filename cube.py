@@ -318,7 +318,7 @@ class Cube:
         self.pix = pix_ls
         self.instance_ls = instance_ls
 
-        # For simplicity, set default values for sigmas and dks
+        # For simplicity, set default values of sigmas and dks
         if self.sigmas is None:
             self.sigmas = [[(0.0, 0.0) for _ in range(6)] for _ in range(ns)]
         if self.dks is None:
@@ -422,6 +422,7 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
+                        #if cexcess > 0.0:
                         dks_m[0] = cexcess * _ds  # x-
                         dks[self.ib[m][6]][1] = cexcess * _ds  # x+
                         sigmas[m][0] = (double_layer_length, cexcess)
@@ -430,6 +431,7 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
+                        # if cexcess > 0.0:
                         dks_m[1] = cexcess * _ds  # x+
                         dks[self.ib[m][2]][0] = cexcess * _ds  # x-
                         sigmas[m][1] = (double_layer_length, cexcess)
@@ -438,6 +440,7 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
+                        # if cexcess > 0.0:
                         dks_m[2] = cexcess * _ds  # y-
                         dks[self.ib[m][4]][3] = cexcess * _ds  # y+
                         sigmas[m][2] = (double_layer_length, cexcess)
@@ -446,6 +449,7 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
+                        # if cexcess > 0.0:
                         dks_m[3] = cexcess * _ds  # y+
                         dks[self.ib[m][0]][2] = cexcess * _ds  # y-
                         sigmas[m][3] = (double_layer_length, cexcess)
@@ -454,6 +458,7 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
+                        # if cexcess > 0.0:
                         dks_m[4] = cexcess * _ds  # z-
                         dks[self.ib[m][24]][5] = cexcess * _ds  # z+
                         sigmas[m][4] = (double_layer_length, cexcess)
@@ -462,6 +467,7 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
+                        # if cexcess > 0.0:
                         dks_m[5] = cexcess * _ds  # z+
                         dks[self.ib[m][25]][4] = cexcess * _ds  # z-
                         sigmas[m][5] = (double_layer_length, cexcess)
@@ -1238,8 +1244,7 @@ class Cube:
         # (See Table 3 in manual)
         if shape is None:
             nz, ny, nx, _, _ = self.get_pix_tensor().shape
-
-        shape = (nx, ny, nz)
+            shape = (nz, ny, nx)
 
         _in: List = [0 for _ in range(27)]
         _jn: List = deepcopy(_in)

@@ -94,25 +94,29 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
                     instance_ls[k][j][i].__class__.__name__.lower()
                 ]
                 # vp
-                xs_ls.append(ih + 0.5)
-                ys_ls.append(iv + 1.0)
-                dxs_ls.append(svp[m])
-                dys_ls.append(0.0)
+                if svp[m] > 0.0:
+                    xs_ls.append(ih + 0.5)
+                    ys_ls.append(iv + 1.0)
+                    dxs_ls.append(svp[m])
+                    dys_ls.append(0.0)
                 # vm
-                xs_ls.append(ih + 0.5)
-                ys_ls.append(iv)
-                dxs_ls.append(svm[m])
-                dys_ls.append(0.0)
+                if svm[m] > 0.0:
+                    xs_ls.append(ih + 0.5)
+                    ys_ls.append(iv)
+                    dxs_ls.append(svm[m])
+                    dys_ls.append(0.0)
                 # hp
-                xs_ls.append(ih + 1.0)
-                ys_ls.append(iv + 0.5)
-                dxs_ls.append(0.0)
-                dys_ls.append(shp[m])
+                if shp[m] > 0.0:
+                    xs_ls.append(ih + 1.0)
+                    ys_ls.append(iv + 0.5)
+                    dxs_ls.append(0.0)
+                    dys_ls.append(shp[m])
                 # hm
-                xs_ls.append(ih)
-                ys_ls.append(iv + 0.5)
-                dxs_ls.append(0.0)
-                dys_ls.append(shm[m])
+                if shm[m] > 0.0:
+                    xs_ls.append(ih)
+                    ys_ls.append(iv + 0.5)
+                    dxs_ls.append(0.0)
+                    dys_ls.append(shm[m])
         cv_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dxv_ls, dyv_ls)]
         cs_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dxs_ls, dys_ls)]
         fig, ax = plt.subplots()
@@ -146,13 +150,13 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
         mappable2.set_clim(0, cmax)
         mappable3.set_clim(0, cmax)
         fig.colorbar(mappable2).set_label(
-            r"Current Density (A·m$^{2}$)", fontsize=14, labelpad=10.0
+            r"Current Density (A/m$^{2}$)", fontsize=14, labelpad=10.0
         )
         ax.set_aspect("equal")
         ax.set_xlabel(str(hlabel) + r" (μm)", fontsize=14, labelpad=10.0)  #! TODO
         ax.set_ylabel(str(vlabel) + r" (μm)", fontsize=14, labelpad=10.0)  #! TODO
-        ax.set_xlim(0, max(xv_ls))
-        ax.set_ylim(0, max(yv_ls))
+        ax.set_xlim(0, max(xv_ls) + 0.5)
+        ax.set_ylim(0, max(yv_ls) + 0.5)
         ax.set_yticks(ax.get_xticks())
         fig.savefig(path.join(savedir, f"{iax}.png"), dpi=500, bbox_inches="tight")
         plt.clf()

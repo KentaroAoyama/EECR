@@ -422,7 +422,6 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
-                        #if cexcess > 0.0:
                         dks_m[0] = cexcess * _ds  # x-
                         dks[self.ib[m][6]][1] = cexcess * _ds  # x+
                         sigmas[m][0] = (double_layer_length, cexcess)
@@ -431,7 +430,6 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
-                        # if cexcess > 0.0:
                         dks_m[1] = cexcess * _ds  # x+
                         dks[self.ib[m][2]][0] = cexcess * _ds  # x-
                         sigmas[m][1] = (double_layer_length, cexcess)
@@ -440,7 +438,6 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
-                        # if cexcess > 0.0:
                         dks_m[2] = cexcess * _ds  # y-
                         dks[self.ib[m][4]][3] = cexcess * _ds  # y+
                         sigmas[m][2] = (double_layer_length, cexcess)
@@ -449,7 +446,6 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
-                        # if cexcess > 0.0:
                         dks_m[3] = cexcess * _ds  # y+
                         dks[self.ib[m][0]][2] = cexcess * _ds  # y-
                         sigmas[m][3] = (double_layer_length, cexcess)
@@ -458,7 +454,6 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
-                        # if cexcess > 0.0:
                         dks_m[4] = cexcess * _ds  # z-
                         dks[self.ib[m][24]][5] = cexcess * _ds  # z+
                         sigmas[m][4] = (double_layer_length, cexcess)
@@ -467,7 +462,6 @@ class Cube:
                         cexcess = (
                             cond_surface - self.instance_ls[ktmp][jtmp][itmp].get_cond()
                         )
-                        # if cexcess > 0.0:
                         dks_m[5] = cexcess * _ds  # z+
                         dks[self.ib[m][25]][4] = cexcess * _ds  # z-
                         sigmas[m][5] = (double_layer_length, cexcess)
@@ -780,7 +774,7 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xpoff=True)
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, ymoff=True, zmoff=True)
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -796,7 +790,7 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, ypoff=True)
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xmoff=True, zmoff=True)
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -813,7 +807,7 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, zpoff=True)
+                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xmoff=True, ymoff=True)
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -837,7 +831,7 @@ class Cube:
             dksm = self.dks[m]
             for mm in range(8):
                 _sumb, _sumc = _energy_bounds(
-                    xn, mm, dkvm, dksm, xpoff=True, ypoff=True
+                    xn, mm, dkvm, dksm, xmoff=True, ymoff=True, zmoff=True
                 )
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
@@ -859,7 +853,7 @@ class Cube:
             dksm = self.dks[m]
             for mm in range(8):
                 _sumb, _sumc = _energy_bounds(
-                    xn, mm, dkvm, dksm, xpoff=True, zpoff=True
+                    xn, mm, dkvm, dksm, xmoff=True, ymoff=True, zmoff=True
                 )
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
@@ -881,7 +875,7 @@ class Cube:
             dksm = self.dks[m]
             for mm in range(8):
                 _sumb, _sumc = _energy_bounds(
-                    xn, mm, dkvm, dksm, ypoff=True, zpoff=True
+                    xn, mm, dkvm, dksm, xmoff=True, ymoff=True, zmoff=True
                 )
                 b[self.ib[m][_is[mm]]] += _sumb
                 c += _sumc
@@ -911,7 +905,7 @@ class Cube:
         dksm = self.dks[m]
         for mm in range(8):
             _sumb, _sumc = _energy_bounds(
-                xn, mm, dkvm, dksm, xpoff=True, ypoff=True, zpoff=True
+                xn, mm, dkvm, dksm, xmoff=True, ymoff=True, zmoff=True
             )
             b[self.ib[m][_is[mm]]] += _sumb
             c += _sumc
@@ -1977,21 +1971,21 @@ def _energy_bounds(
     mm: int,
     dkvm: np.ndarray,
     dksm: List[np.ndarray],
-    xpoff: bool = False,
-    ypoff: bool = False,
-    zpoff: bool = False,
+    xmoff: bool = False,
+    ymoff: bool = False,
+    zmoff: bool = False,
 ) -> Tuple[float, float]:
     """Calculate the energy produced by periodic boundary conditions
         (b and c of eq.(10) in Garboczi, 1997)
 
     Args:
-        xn (List[float]): Electric field at the boundary.
+        xn (List[float]): Electric potential at the boundary.
         mm (int): Index of each node (corresponding to the index of b)
         dkvm (np.ndarray): Volumetric stiffness matrix (8×8)
         dksm (List[np.ndarray]): Surface stiffness matrix (6×4×4)
-        xpoff (bool): Whether to calculate the energy diverging in the plane of X+ or not
-        ypoff (bool): Whether to calculate the energy diverging in the plane of Y+ or not
-        zpoff (bool): Whether to calculate the energy diverging in the plane of Z+ or not
+        xmoff (bool): Whether to calculate the energy diverging in the plane of X- or not
+        ymoff (bool): Whether to calculate the energy diverging in the plane of Y- or not
+        zmoff (bool): Whether to calculate the energy diverging in the plane of Z- or not
 
     Returns:
         Tuple[float, float]: Energy generated at the boundary (b and c)
@@ -2015,24 +2009,24 @@ def _energy_bounds(
         iyp = yp_index(m8)
         izm = zm_index(m8)
         izp = zp_index(m8)
-        if None not in (ixm, jxm):
-            b += 0.5 * xn[m8] * dksm[0][ixm][jxm]
-            c += 0.25 * xn[m8] * dksm[0][ixm][jxm] * xn[mm]
-        if None not in (ixp, jxp) and not xpoff:
-            b += 0.5 * xn[m8] * dksm[1][ixp][jxp]
-            c += 0.25 * xn[m8] * dksm[1][ixp][jxp] * xn[mm]
-        if None not in (iym, jym):
-            b += 0.5 * xn[m8] * dksm[2][iym][jym]
-            c += 0.25 * xn[m8] * dksm[2][iym][jym] * xn[mm]
-        if None not in (iyp, jyp) and not ypoff:
-            b += 0.5 * xn[m8] * dksm[3][iyp][jyp]
-            c += 0.25 * xn[m8] * dksm[3][iyp][jyp] * xn[mm]
-        if None not in (izm, jzm):
-            b += 0.5 * xn[m8] * dksm[4][izm][jzm]
-            c += 0.25 * xn[m8] * dksm[4][izm][jzm] * xn[mm]
-        if None not in (izp, jzp) and not zpoff:
-            b += 0.5 * xn[m8] * dksm[5][izp][jzp]
-            c += 0.25 * xn[m8] * dksm[5][izp][jzp] * xn[mm]
+        if None not in (ixm, jxm) and not xmoff:
+            b += xn[m8] * dksm[0][ixm][jxm]
+            c += 0.5 * xn[m8] * dksm[0][ixm][jxm] * xn[mm]
+        if None not in (ixp, jxp):
+            b += xn[m8] * dksm[1][ixp][jxp]
+            c += 0.5 * xn[m8] * dksm[1][ixp][jxp] * xn[mm]
+        if None not in (iym, jym) and not ymoff:
+            b += xn[m8] * dksm[2][iym][jym]
+            c += 0.5 * xn[m8] * dksm[2][iym][jym] * xn[mm]
+        if None not in (iyp, jyp):
+            b += xn[m8] * dksm[3][iyp][jyp]
+            c += 0.5 * xn[m8] * dksm[3][iyp][jyp] * xn[mm]
+        if None not in (izm, jzm) and not zmoff:
+            b += xn[m8] * dksm[4][izm][jzm]
+            c += 0.5 * xn[m8] * dksm[4][izm][jzm] * xn[mm]
+        if None not in (izp, jzp):
+            b += xn[m8] * dksm[5][izp][jzp]
+            c += 0.5 * xn[m8] * dksm[5][izp][jzp] * xn[mm]
     return b, c
 
 

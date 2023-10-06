@@ -3913,13 +3913,15 @@ def assign_parallel(quartz: Quartz, nacl: NaCl):
 def test_dks():
     print("test_dks")
     t_ls = np.linspace(298.15, 498.15, 10).tolist()
-    m_ls = np.logspace(-3, 0.7, base=10.0, num=10).tolist()
+    m_ls = np.logspace(-4, 0.7, base=10.0, num=10).tolist()
     result_ls = []
     for _t in t_ls:
         for _m in m_ls:
             print(f"condition: {_t}, {_m}")
             nacl = NaCl(temperature=_t, pressure=5.0e6, molarity=_m)
             quartz = Quartz(nacl=nacl)
+            print(quartz.get_double_layer_length(), quartz.get_cond_surface())
+            print(nacl.get_cond())
             result_ls.append(assign_parallel(quartz, nacl))
     fig, ax = plt.subplots()
     x_ls = [_r[1] for _r in result_ls]

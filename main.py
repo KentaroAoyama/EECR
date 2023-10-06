@@ -33,11 +33,11 @@ def create_logger(fpth="./debug.txt", logger_name: str = "log"):
     return logger
 
 
-def run():
+def run(outpth):
     # set external condition
     print("set external condition")
     ph = 7.0
-    molality = 1.0e-3
+    molality = 1.0e-4
     temperature = 298.15
     # set fluid instance
     nacl = NaCl(temperature=temperature, molality=molality, ph=ph)
@@ -47,30 +47,31 @@ def run():
 
     # set mineral instance
     print("set mineral instance")
-    smectite = Smectite(nacl=deepcopy(nacl))
-    kaolinite = Kaolinite(nacl=deepcopy(nacl))
-    smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
-    kaolinite.calc_potentials_and_charges_inf()
-    kaolinite.calc_cond_infdiffuse()  # to get self.double_layer_length
-    kaolinite.calc_cond_tensor()
+    # smectite = Smectite(nacl=deepcopy(nacl))
+    # smectite.calc_potentials_and_charges_truncated()
+    # smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
+    # smectite.calc_cond_interlayer()
+    # smectite.calc_cond_tensor()
+    quartz = Quartz(nacl)
 
     # set solver input
     solver_input = Cube()
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20),
         edge_length=edge_length,
-        volume_frac_dict={nacl: 0.9, smectite: 0.1},
+        volume_frac_dict={nacl: 0.5, quartz: 0.5},
         seed=42,
         rotation_setting="random",
+        surface="boundary",
     )
     solver_input.femat()
 
     # run solver
     solver = FEM_Cube(solver_input)
     solver.run(100, 30, 1.0e-9)
+
+    with open(outpth, "wb") as pkf:
+        pickle.dump(solver, pkf, pickle.HIGHEST_PROTOCOL)
 
 
 def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> None:
@@ -79,14 +80,14 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
     dirname += f"_temperature-{temperature}"
     dirname += f"_molality-{molality}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join("E:\EECR", "output5", "pickle", dirname, str(seed))
+    outdir_seed = path.join("E:\EECR", "output6", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
     makedirs(outdir, exist_ok=True)
-    # for date_dirname in listdir(outdir):
-    #     if len(listdir(path.join(outdir, date_dirname))) > 1:
-    #         return None
+    for date_dirname in listdir(outdir):
+        if len(listdir(path.join(outdir, date_dirname))) > 1:
+            return None
     print(outdir)
     logger_pth = path.join(outdir, "log.txt")
 
@@ -157,9 +158,9 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
         pickle.dump(quartz, pkf, pickle.HIGHEST_PROTOCOL)
 
     # solver
-    solver_fpth: str = path.join(outdir, "solver.pkl")
-    with open(solver_fpth, "wb") as pkf:
-        pickle.dump(solver, pkf, pickle.HIGHEST_PROTOCOL)
+    # solver_fpth: str = path.join(outdir, "solver.pkl")
+    # with open(solver_fpth, "wb") as pkf:
+    #     pickle.dump(solver, pkf, pickle.HIGHEST_PROTOCOL)
 
     # cond
     cond_fpth: str = path.join(outdir, "cond.pkl")
@@ -209,6 +210,7 @@ def experiment():
 
     for seed in seed_ls:
         pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
+        # pool = futures.ProcessPoolExecutor(4)
         for smec_frac in smec_frac_ls:
             for temperature in temperature_ls:
                 for molality in molality_ls:
@@ -230,7 +232,7 @@ def experiment():
 
 
 def output_fig():
-    pickle_dir = path.join("E:\EECR", "output5", "pickle")
+    pickle_dir = path.join("E:\EECR", "output6", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -289,7 +291,7 @@ def output_fig():
                 continue
             conditions_ye.setdefault(tuple(val_ls), []).extend([cond_x, cond_y, cond_z])
 
-    fig_dir = path.join(getcwd(), "output", "fig")
+    fig_dir = path.join(getcwd(), "output", "fig2")
     makedirs(fig_dir, exist_ok=True)
     # plot temperature variation
     tempe_dir = path.join(fig_dir, "temperature")
@@ -349,7 +351,7 @@ def output_fig():
             save_pth,
             _xyel[0],
             _xyel[2],
-            "Salinity (M)",
+            "Molality (mol/kg)",
             logscale=True,
         )
 
@@ -390,5 +392,9 @@ def plt_curr(pth_solver, pth_out, axis):
 if __name__ == "__main__":
     # main()
     experiment()
-    # output_fig()
+    output_fig()
+    # run("tmp.pkl")
+    # cond = "smec_frac-0.0_temperature-473.15_molality-5.0_porosity-0.2"
+    # date = "2023-09-26"
+    # plt_curr(f"E:\EECR\output6\pickle\{cond}\{60}\{date}\solver.pkl", f"./output/curr/{cond}", "Z")
     pass

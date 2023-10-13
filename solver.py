@@ -27,7 +27,7 @@ class FEM_Cube:
 
         Args:
             fem_input (Cube): Input of FEM computation.
-            logger (Logger): logger to write debug information etc.
+            logger (Logger): Logger to write debug information etc.
         """
         assert fem_input is not None
         self.fem_input: Cube = fem_input
@@ -406,7 +406,7 @@ class FEM_Cube:
                         iz = 0.0
                         for _, v in _is["z"].items():
                             iz += v
-                        
+
                         currs[m] = _is
                         currxs[m] = ix
                         currys[m] = iy
@@ -523,6 +523,7 @@ class FEM_Cube:
         """
         with open(_pth, "wb") as pkf:
             pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)
+
 
 if __name__ == "__main__":
     pass

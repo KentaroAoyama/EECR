@@ -30,8 +30,8 @@ from tqdm import tqdm
 import pandas as pd
 from scipy.optimize import least_squares, curve_fit, bisect
 
-from clay import Smectite, Kaolinite
-from mineral import Quartz
+from phyllosilicate import Smectite, Kaolinite
+from quartz import Quartz
 import constants as const
 from fluid import (
     NaCl,
@@ -43,7 +43,7 @@ from fluid import (
 from msa import calc_mobility
 from solver import FEM_Cube
 from cube import Cube, calc_m
-from output import plot_curr_all, plot_instance, plt_any_val
+from output import plot_instance, plt_any_val
 
 # from main import exec_single_condition
 
@@ -715,7 +715,7 @@ def fit_KNa():
     print(k)
 
 
-from clay import TLMParams
+from phyllosilicate import TLMParams
 
 
 def fit_TLM_params_smec_inf():
@@ -3588,17 +3588,17 @@ def compare_md_cond():
         ion_props = deepcopy(const.ion_props_default)
         cna, cca = None, None
         if cf == 0.34:
-            cna = cf * 12/8
-            cca = cf * 6/8
+            cna = cf * 12 / 8
+            cca = cf * 6 / 8
         elif cf == 0.67:
             cna = cf
-            cca = cf * 8/12
+            cca = cf * 8 / 12
         elif cf == 1.25:
-            cna = cf * 24/32
-            cca = cf * 12/32
+            cna = cf * 24 / 32
+            cca = cf * 12 / 32
         elif cf == 1.83:
-            cna = cf * 32/48
-            cca = cf * 16/48
+            cna = cf * 32 / 48
+            cca = cf * 16 / 48
         else:
             raise
         ion_props["Na"]["Molarity"] = cna
@@ -3816,10 +3816,10 @@ def compare_md_cond():
     fig, ax = plt.subplots()
     for ref, result in results.items():
         ax.scatter(result["TLM"], result["MD"], label=ref)
-    ax.plot([0, 17], [0,17])
+    ax.plot([0, 17], [0, 17])
     ax.legend()
     ax.set_xlim(0, 17)
-    ax.set_ylim(0,17)
+    ax.set_ylim(0, 17)
     ax.set_aspect("equal")
     fig.savefig(
         path.join(test_dir(), "cond_MD.png"),

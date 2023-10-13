@@ -12,46 +12,14 @@ import numpy as np
 import networkx
 
 from solver import FEM_Cube
+from cube import Cube
 
-
-def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
+def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
     # TODO: スケルトン処理を加えて計算効率を上げる
-    # TODO: periodic boundaryを考慮して (計)
-    # TODO: criteria → lower
+    axis = axis.lower()
     # instance
-    cube = solver.get_fem_input()
     instance_ls: List = cube.get_instance_ls()
-    nz, ny, nx = cube.get_shape()
-
-    # Generate graphs formed from Smectite and Fluid nodes
-    addnodes: List[Tuple[int, Dict]] = []
-    addedges: List[Tuple[Tuple[int], Dict]] = []
-
-    # # Convert to skelton image
-    # # x
-    # idx_changed = []
-    # binx = np.zeros(shape=(nx, nz*2, ny*2), dtype=np.int64)
-    # for i in range(nx):
-    #     bin2d = np.zeros(shape=(nz*2, ny*2), dtype=np.int64)
-    #     for k in range(nz * 2):
-    #         kits = k
-    #         if kits > nz - 1:
-    #             kits -= nz
-    #         for j in range(ny * 2):
-    #             jits = j
-    #             if jits > ny - 1:
-    #                 jits -= ny
-    #             if instance_ls[kits][jits][i].__class__.__name__.lower() in criteria:
-    #                 bin2d[k][j] = np.int64(1)
-    #     bin2d, idxs = Zhang_Suen_thinning(bin2d)
-    #     binx[i] = bin2d
-    #     idx_changed.append(idxs)
-
-    # # generate Graph
-    # for i in range(nx):
-    #     for k in range(nz * 2):
-    #         for j in range(ny * 2):
-                
+    NZ, NY, NX = cube.get_shape()                
 
     addnodes_fs: List[Tuple[int, Dict]] = []
     addedges_fs: List[Tuple[Tuple[int], Dict]] = []
@@ -59,10 +27,33 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
     addedges_f: List[Tuple[Tuple[int], Dict]] = []
     addnodes_s: List[Tuple[int, Dict]] = []
     addedges_s: List[Tuple[Tuple[int], Dict]] = []
+
+    nx, ny, nz = None, None, None
+    if axis == "x":
+        nx, ny, nz = NX, 2 * NY, 2 * NZ
+    if axis == "y":
+        nx, ny, nz = 2 * NX, NY, 2 * NZ
+    if axis == "z":
+        nx, ny, nz = 2 * NX, 2 * NY, NZ
+
     for k in range(nz):
         for j in range(ny):
             for i in range(nx):
-                instance = instance_ls[k][j][i]
+                ii, ji, ki = i, j, k
+                if ii > NX - 1:
+                    ii -= NX
+                if ji > NY - 1:
+                    ji -= NY
+                if ki > NZ - 1:
+                    ki -= NZ
+                iip, jip, kip = ii + 1, ji + 1, ki + 1
+                if iip > NX - 1:
+                    iip -= NX
+                if jip > NY - 1:
+                    jip -= NY
+                if kip > NZ - 1:
+                    kip -= NZ
+                instance = instance_ls[ki][ji][ii]
                 name = instance.__class__.__name__.lower()
                 if name not in ("nacl", "smectite"):
                     continue
@@ -72,10 +63,9 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                     addnodes_f.append((n, {"name": name}))
                 if name == "smectite":
                     addnodes_s.append((n, {"name": name}))
-
                 # x+
                 if i != nx - 1:
-                    name = instance_ls[k][j][i + 1].__class__.__name__.lower()
+                    name = instance_ls[ki][ji][iip].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -87,7 +77,7 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             addedges_s.append((n, (i + 1, j, k), {"dist": 1.0}))
                 # y+
                 if j != ny - 1:
-                    name = instance_ls[k][j + 1][i].__class__.__name__.lower()
+                    name = instance_ls[ki][jip][ii].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -99,7 +89,7 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             addedges_s.append((n, (i, j + 1, k), {"dist": 1.0}))
                 # z+
                 if k != nz - 1:
-                    name = instance_ls[k + 1][j][i].__class__.__name__.lower()
+                    name = instance_ls[kip][ji][ii].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -111,7 +101,7 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             addedges_s.append((n, (i, j, k + 1), {"dist": 1.0}))
                 # xy+
                 if i != nx - 1 and j != ny - 1:
-                    name = instance_ls[k][j + 1][i + 1].__class__.__name__.lower()
+                    name = instance_ls[ki][jip][iip].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -127,7 +117,7 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             )
                 # yz+
                 if j != ny - 1 and k != nz - 1:
-                    name = instance_ls[k + 1][j + 1][i].__class__.__name__.lower()
+                    name = instance_ls[kip][jip][ii].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -143,7 +133,7 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             )
                 # zx+
                 if i != nx - 1 and k != nz - 1:
-                    name = instance_ls[k + 1][j][i + 1].__class__.__name__.lower()
+                    name = instance_ls[kip][ji][iip].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -159,7 +149,7 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             )
                 # xyz+
                 if i != nx - 1 and j != ny - 1 and k != nz - 1:
-                    name = instance_ls[k + 1][j + 1][i + 1].__class__.__name__.lower()
+                    name = instance_ls[kip][jip][iip].__class__.__name__.lower()
                     if name in (
                         "nacl",
                         "smectite",
@@ -177,20 +167,20 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                             )
 
     # Graph
-    Gf = networkx.Graph()
-    Gf.add_nodes_from(addnodes_f)
-    Gf.add_edges_from(addedges_f)
-    Gs = networkx.Graph()
-    Gs.add_nodes_from(addnodes_s)
-    Gs.add_edges_from(addedges_s)
+    # Gf = networkx.Graph()
+    # Gf.add_nodes_from(addnodes_f)
+    # Gf.add_edges_from(addedges_f)
+    # Gs = networkx.Graph()
+    # Gs.add_nodes_from(addnodes_s)
+    # Gs.add_edges_from(addedges_s)
     Gfs = networkx.Graph()
     Gfs.add_nodes_from(addnodes_fs)
     Gfs.add_edges_from(addedges_fs)
 
     # remove small subgraph
     criteria = min(nx, ny, nz)
-    Gf = remove_small_subgraph(Gf, criteria)
-    Gs = remove_small_subgraph(Gs, criteria)
+    # Gf = remove_small_subgraph(Gf, criteria)
+    # Gs = remove_small_subgraph(Gs, criteria)
     Gfs = remove_small_subgraph(Gfs, criteria)
 
     # remove unconnected part
@@ -203,26 +193,25 @@ def analyse_tortuosity(solver: FEM_Cube, criteria: List[str]) -> Tuple[float]:
                 if i == nx - 1 or j == ny - 1 or k == nz - 1:
                     n1_set.add((i, j, k))
 
-    Gf = remove_unconnected_subgraph(Gf, n0_set, n1_set)
-    Gs = remove_unconnected_subgraph(Gs, n0_set, n1_set)
+    # Gf = remove_unconnected_subgraph(Gf, n0_set, n1_set)
+    # Gs = remove_unconnected_subgraph(Gs, n0_set, n1_set)
     Gfs = remove_unconnected_subgraph(Gfs, n0_set, n1_set)
 
     # calculate tortuosity
-    txf, tyf, tzf = calc_shortest_dist(Gf, (nx, ny, nz))
-    txs, tys, tzs = calc_shortest_dist(Gs, (nx, ny, nz))
-    txfs, tyfs, tzfs = calc_shortest_dist(Gfs, (nx, ny, nz))
+    tfs = has_path(Gfs, (nx, ny, nz), axis=axis)
 
-    return txfs, tyfs, tzfs, txf, tyf, tzf, txs, tys, tzs
+    return tfs
 
 
 def calc_shortest_dist(
     G: networkx.DiGraph,
     shape: Tuple,
+    axis: str,
 ) -> Tuple[float, float, float]:
     nx, ny, nz = shape
     node_ls = list(G.nodes)
     if len(node_ls) == 0:
-        return np.inf, np.inf, np.inf
+        return np.inf
 
     A = networkx.floyd_warshall_numpy(G, node_ls, "dist")
     node_set = set(node_ls)
@@ -230,97 +219,190 @@ def calc_shortest_dist(
     taux, tauy, tauz = np.inf, np.inf, np.inf
 
     # x axis
-    i0, i1 = 0, nx - 1
-    nx0_ls, nx1_ls = [], []
-    for j in range(ny):
-        for k in range(nz):
-            nx0_ls.append((i0, j, k))
-            nx1_ls.append((i1, j, k))
-    if (
-        len(set(nx0_ls).intersection(node_set)) == 0
-        and len(set(nx1_ls).intersection(node_set)) == 0
-    ):
-        taux = np.inf
-    else:
-        tau_ls: List[float] = []
-        for nx0 in nx0_ls:
-            if nx0 not in node_ls:
-                continue
-            i0 = node_ls.index(nx0)
-            for nx1 in nx1_ls:
-                if nx1 not in node_ls:
-                    continue
-                i1 = node_ls.index(nx1)
-                tau = A[i0][i1]
-                if not np.isinf(tau):
-                    tau_ls.append(tau)
-        if len(tau_ls) > 0:
-            taux = (mean(tau_ls) + 1.0) / float(nx)
-        else:
+    if axis == "x":
+        i0, i1 = 0, nx - 1
+        nx0_ls, nx1_ls = [], []
+        for j in range(ny):
+            for k in range(nz):
+                nx0_ls.append((i0, j, k))
+                nx1_ls.append((i1, j, k))
+        if (
+            len(set(nx0_ls).intersection(node_set)) == 0
+            and len(set(nx1_ls).intersection(node_set)) == 0
+        ):
             taux = np.inf
+        else:
+            tau_ls: List[float] = []
+            for nx0 in nx0_ls:
+                if nx0 not in node_ls:
+                    continue
+                i0 = node_ls.index(nx0)
+                for nx1 in nx1_ls:
+                    if nx1 not in node_ls:
+                        continue
+                    i1 = node_ls.index(nx1)
+                    tau = A[i0][i1]
+                    if not np.isinf(tau):
+                        tau_ls.append(tau)
+            if len(tau_ls) > 0:
+                taux = (mean(tau_ls) + 1.0) / float(nx)
+            else:
+                taux = np.inf
+        return taux
 
     # y axis
-    j0, j1 = 0, ny - 1
-    ny0_ls, ny1_ls = [], []
-    for i in range(nx):
-        for k in range(nz):
-            ny0_ls.append((i, j0, k))
-            ny1_ls.append((i, j1, k))
-    if (
-        len(set(ny0_ls).intersection(node_set)) == 0
-        and len(set(ny1_ls).intersection(node_set)) == 0
-    ):
-        tauy = np.inf
-    else:
-        tau_ls: List[float] = []
-        for ny0 in ny0_ls:
-            if ny0 not in node_ls:
-                continue
-            i0 = node_ls.index(ny0)
-            for ny1 in ny1_ls:
-                if ny1 not in node_ls:
-                    continue
-                i1 = node_ls.index(ny1)
-                tau = A[i0][i1]
-                if not np.isinf(tau):
-                    tau_ls.append(tau)
-        if len(tau_ls) > 0:
-            tauy = (mean(tau_ls) + 1.0) / float(ny)
-        else:
-            tauy = np.inf
-
-    # z axis
-    k0, k1 = 0, nz - 1
-    nz0_ls, nz1_ls = [], []
-    for j in range(ny):
+    if axis == "y":
+        j0, j1 = 0, ny - 1
+        ny0_ls, ny1_ls = [], []
         for i in range(nx):
-            nz0_ls.append((i, j, k0))
-            nz1_ls.append((i, j, k1))
-    if (
-        len(set(nz0_ls).intersection(node_set)) == 0
-        and len(set(nz1_ls).intersection(node_set)) == 0
-    ):
-        tauz = np.inf
-    else:
-        tau_ls: List[float] = []
-        for nz0 in nz0_ls:
-            if nz0 not in node_ls:
-                continue
-            i0 = node_ls.index(nz0)
-            for nz1 in nz1_ls:
-                if nz1 not in node_ls:
-                    continue
-                i1 = node_ls.index(nz1)
-                tau = A[i0][i1]
-                if not np.isinf(tau):
-                    tau_ls.append(tau)
-        if len(tau_ls) > 0:
-            tauz = (mean(tau_ls) + 1.0) / float(nz)
+            for k in range(nz):
+                ny0_ls.append((i, j0, k))
+                ny1_ls.append((i, j1, k))
+        if (
+            len(set(ny0_ls).intersection(node_set)) == 0
+            and len(set(ny1_ls).intersection(node_set)) == 0
+        ):
+            tauy = np.inf
         else:
+            tau_ls: List[float] = []
+            for ny0 in ny0_ls:
+                if ny0 not in node_ls:
+                    continue
+                i0 = node_ls.index(ny0)
+                for ny1 in ny1_ls:
+                    if ny1 not in node_ls:
+                        continue
+                    i1 = node_ls.index(ny1)
+                    tau = A[i0][i1]
+                    if not np.isinf(tau):
+                        tau_ls.append(tau)
+            if len(tau_ls) > 0:
+                tauy = (mean(tau_ls) + 1.0) / float(ny)
+            else:
+                tauy = np.inf
+        return tauy
+    
+    # z axis
+    if axis == "z":
+        k0, k1 = 0, nz - 1
+        nz0_ls, nz1_ls = [], []
+        for j in range(ny):
+            for i in range(nx):
+                nz0_ls.append((i, j, k0))
+                nz1_ls.append((i, j, k1))
+        if (
+            len(set(nz0_ls).intersection(node_set)) == 0
+            and len(set(nz1_ls).intersection(node_set)) == 0
+        ):
             tauz = np.inf
+        else:
+            tau_ls: List[float] = []
+            for nz0 in nz0_ls:
+                if nz0 not in node_ls:
+                    continue
+                i0 = node_ls.index(nz0)
+                for nz1 in nz1_ls:
+                    if nz1 not in node_ls:
+                        continue
+                    i1 = node_ls.index(nz1)
+                    tau = A[i0][i1]
+                    if not np.isinf(tau):
+                        tau_ls.append(tau)
+            if len(tau_ls) > 0:
+                tauz = (mean(tau_ls) + 1.0) / float(nz)
+            else:
+                tauz = np.inf
+            return tauz
 
-    return taux, tauy, tauz
 
+def has_path(
+    G: networkx.DiGraph,
+    shape: Tuple,
+    axis: str,
+) -> Tuple[float, float, float]:
+    nx, ny, nz = shape
+    node_ls = list(G.nodes)
+    if len(node_ls) == 0:
+        return False
+    
+    node_set = set(node_ls)
+
+    # x axis
+    if axis == "x":
+        i0, i1 = 0, nx - 1
+        nx0_ls, nx1_ls = [], []
+        for j in range(ny):
+            for k in range(nz):
+                nx0_ls.append((i0, j, k))
+                nx1_ls.append((i1, j, k))
+        if (
+            len(set(nx0_ls).intersection(node_set)) == 0
+            and len(set(nx1_ls).intersection(node_set)) == 0
+        ):
+            return False
+        else:
+            for nx0 in nx0_ls:
+                if nx0 not in node_ls:
+                    continue
+                i0 = node_ls.index(nx0)
+                for nx1 in nx1_ls:
+                    if nx1 not in node_ls:
+                        continue
+                    if networkx.has_path(G, nx0, nx1):
+                        return True
+        return False
+
+    # y axis
+    if axis == "y":
+        j0, j1 = 0, ny - 1
+        ny0_ls, ny1_ls = [], []
+        for i in range(nx):
+            for k in range(nz):
+                ny0_ls.append((i, j0, k))
+                ny1_ls.append((i, j1, k))
+        if (
+            len(set(ny0_ls).intersection(node_set)) == 0
+            and len(set(ny1_ls).intersection(node_set)) == 0
+        ):
+            return False
+        else:
+            for ny0 in ny0_ls:
+                if ny0 not in node_ls:
+                    continue
+                i0 = node_ls.index(ny0)
+                for ny1 in ny1_ls:
+                    if ny1 not in node_ls:
+                        continue
+                    i1 = node_ls.index(ny1)
+                    if networkx.has_path(G, ny0, ny1):
+                        return True
+        return False
+    
+    # z axis
+    if axis == "z":
+        k0, k1 = 0, nz - 1
+        nz0_ls, nz1_ls = [], []
+        for j in range(ny):
+            for i in range(nx):
+                nz0_ls.append((i, j, k0))
+                nz1_ls.append((i, j, k1))
+        if (
+            len(set(nz0_ls).intersection(node_set)) == 0
+            and len(set(nz1_ls).intersection(node_set)) == 0
+        ):
+            return True
+        else:
+            for nz0 in nz0_ls:
+                if nz0 not in node_ls:
+                    continue
+                i0 = node_ls.index(nz0)
+                for nz1 in nz1_ls:
+                    if nz1 not in node_ls:
+                        continue
+                    i1 = node_ls.index(nz1)
+                    if networkx.has_path(G, nz0, nz1):
+                        return True
+        return False
 
 def floyd_warshall(G):
     A = networkx.to_numpy_array(G, multigraph_weight=min, weight="dist", nonedge=np.inf)
@@ -406,37 +488,41 @@ def count_transition(neighbours):
 
 
 import pickle
-
+from fluid import NaCl
+from quartz import Quartz
+from phyllosilicate import Smectite
 if __name__ == "__main__":
-    pickle_dir = path.join("E:\EECR", "output6", "pickle")
-    for condition_dirname in listdir(pickle_dir):
-        print(condition_dirname)  #!
-        _ls = condition_dirname.split("_")
-        del _ls[0]  # smec
-        _ls[0] = _ls[0].replace("frac", "smec_frac")
-        # smec_frac, temperature, molality, porosity
-        val_ls: List = []
-        for condition_val in _ls:
-            _, val = condition_val.split("-")
-            val_ls.append(float(val))
-        # get average conductivity
-        condition_dir = path.join(pickle_dir, condition_dirname)
-        for seed_dirname in listdir(condition_dir):
-            seed_dir = path.join(condition_dir, seed_dirname)
-            # get latest dir for now
-            date_dirname_ls = listdir(seed_dir)
-            datetime_ls = [
-                datetime.strptime(_name, "%Y-%m-%d") for _name in date_dirname_ls
-            ]
-            date_dirname: str = date_dirname_ls[datetime_ls.index(max(datetime_ls))]
-            date_dir = path.join(seed_dir, date_dirname)
-            solver_pth = path.join(date_dir, "solver.pkl")
-            if not path.exists(solver_pth):
-                continue  #!
-            with open(solver_pth, "rb") as pkf:
-                solver = pickle.load(pkf)
-            tau_ls = analyse_tortuosity(solver, ("nacl"))
-            print(tau_ls)
-            tau_pth = path.join(date_dir, "tau.pkl")
-            with open(tau_pth, "wb") as pkf:
-                pickle.dump(tau_ls, pkf, pickle.HIGHEST_PROTOCOL)
+    p_ls = np.linspace(0.0, 0.2, 21).tolist()
+    xsmec_ls = p_ls.copy()
+    seed_ls = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+    nacl = NaCl(temperature=298.15, pressure=5.0e6, molality=1.0e-4)
+    quartz = Quartz(nacl=nacl)
+    smectite = Smectite(nacl=nacl)
+    smectite.calc_potentials_and_charges_inf()
+    smectite.calc_cond_infdiffuse()
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    xsmec_poros_bool: Dict = {}
+    for seed in seed_ls:
+        print(f"seed: {seed}")
+        for xsmec in xsmec_ls:
+            print(f"xsmec: {xsmec}")
+            poros_bool: Dict = xsmec_poros_bool.setdefault(xsmec, {})
+            for poros in p_ls:
+                print(f"poros: {poros}")
+                cube = Cube()
+                cube.create_pixel_by_macro_variable(shape=(20, 20, 20),
+                                                    edge_length=1.0e-6,
+                                                    volume_frac_dict={nacl: poros,
+                                                                      quartz: (1.0-poros) * (1.0 - xsmec),
+                                                                      smectite: (1.0-poros) * xsmec},
+                                                    seed=seed)
+                bx = analyse_tortuosity(cube, axis="x")
+                by = analyse_tortuosity(cube, axis="y")
+                bz = analyse_tortuosity(cube, axis="z")
+
+                bool_ls: List = poros_bool.setdefault(poros, [])
+                bool_ls.extend([bx, by, bz])
+                print(bool_ls)
+                

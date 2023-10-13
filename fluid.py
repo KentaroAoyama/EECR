@@ -32,7 +32,7 @@ class Fluid:
 
 
 class NaCl(Fluid):
-    """Class of fluid dissolved only in NaCl"""
+    """Class of H2O-NaCl fluid"""
 
     # pylint: disable=dangerous-default-value
     def __init__(

@@ -1,5 +1,4 @@
 """Calculate electrical properties of phyllosilicate"""
-# TODO: add setter
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
@@ -72,14 +71,13 @@ class TLMParams:
         c1o: float = 2.1,
         c2o: float = 0.55,
     ) -> None:
-        # TODO: docstring
         """
         Args:
             T (float): Absolute temperature (K)
-            gamma_1 (float): Surface site densities of aluminol (unit: sites/nm2).
-            gamma_2 (float): Surface site densities of sianol (unit: sites/nm2).
-            gamma_3 (float): Surface site densities of >Si-O-Al< (unit: sites/nm2).
-            qi (float): Layer charge density (charge/nm2).
+            gamma_1 (float): Surface site densities of aluminol (unit: sites/nm^2).
+            gamma_2 (float): Surface site densities of sianol (unit: sites/nm^2).
+            gamma_3 (float): Surface site densities of >Si-O-Al< (unit: sites/nm^2).
+            qi (float): Layer charge density (charge/nm^2).
             k1 (float): Equilibrium constant of >AlOH2 ⇔ >AlOH + H+
             k2 (float): Equilibrium constant of >SiOH ⇔ >SiO + H+
             k3 (float): Equilibrium constant of >XH ⇔ >X + H+ (※)
@@ -87,28 +85,19 @@ class TLMParams:
             c1 (float): Capacitance of stern layer (unit: F/m2).
             c2 (float): Capacitance of diffuse layer (unit: F/m2).
         ※ >X stands for surface site >Al-O-Si<
-        NOTE: "i" and "o" suffix denote innner and outer surface.
+        ※ The subscript i means that it is used to calculate the properties of the
+        interlayer, and o means that it is used to calculate the properties of the
+        EDLs that develop in the bulk solution
         """
-         # TODO: innerとouterの設定方法を統一する
         # Inner
         self.gamma_1i = gamma_1i
         self.gamma_2i = gamma_2i
         self.gamma_3i = gamma_3i
-        self.qii = qii
-        if qii is not None:
-            self.qii = qii * 1.0e18 * const.ELEMENTARY_CHARGE
-        self.k1i = k1i
-        if k1i is not None:
-            self.k1i = self.calc_K_T(k1i, T)
-        self.k2i = k2i
-        if k2i is not None:
-            self.k2i = self.calc_K_T(k2i, T)
-        self.k3i = k3i
-        if k3i is not None:
-            self.k3i = self.calc_K_T(k3i, T)
-        self.k4i = k4i
-        if k4i is not None:
-            self.k4i = self.calc_K_T(k4i, T)
+        self.qii = qii * 1.0e18 * const.ELEMENTARY_CHARGE
+        self.k1i = self.calc_K_T(k1i, T)
+        self.k2i = self.calc_K_T(k2i, T)
+        self.k3i = self.calc_K_T(k3i, T)
+        self.k4i = self.calc_K_T(k4i, T)
         self.c1i = c1i
         self.c2i = c2i
 
@@ -116,7 +105,7 @@ class TLMParams:
         self.gamma_1o = gamma_1o
         self.gamma_2o = gamma_2o
         self.gamma_3o = gamma_3o
-        self.qio = qio
+        self.qio = qio * 1.0e18 * const.ELEMENTARY_CHARGE
         self.k1o = self.calc_K_T(k1o, T)
         self.k2o = self.calc_K_T(k2o, T)
         self.k3o = self.calc_K_T(k3o, T)
@@ -207,18 +196,18 @@ class Phyllosilicate:
             potential_0_o (float, optional): Surface potential (unit: V).
             potential_stern_o (float, optional): Stern plane potential (unit: V).
             potential_zeta_o (float, optional): Zeta plane potential (unit: V).
-            charge_0_o (float, optional): Charges in surface layer (unit: C/m3).
-            charge_stern_o (float, optional): Charges in stern layer (unit: C/m3).
-            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m3).
+            charge_0_o (float, optional): Charges in surface layer (unit: C/m^3).
+            charge_stern_o (float, optional): Charges in stern layer (unit: C/m^3).
+            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m^3).
             potential_0_i (float, optional): Surface potential (unit: V).
             potential_stern_i (float, optional): Stern plane potential (unit: V).
             potential_zeta_i (float, optional): Zeta plane potential (unit: V).
             potential_r_i (float, optional): Potential at the position truncated
                 inside the inter layer (unit: V).
-            charge_0_i (float, optional): Charges in surface layer (unit: C/m3).
-            charge_stern_i (float, optional): Charges in stern layer (unit: C/m3).
-            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m3).
-            xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
+            charge_0_i (float, optional): Charges in surface layer (unit: C/m^3).
+            charge_stern_i (float, optional): Charges in stern layer (unit: C/m^3).
+            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m^3).
+            xd (float, optional): Distance from quartz surface to zeta plane (unit: V).
             cond_intra (float): Inter layer conductivity (unit: S/m).
             cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
@@ -1849,6 +1838,18 @@ class Phyllosilicate:
             / (xy_unit * self.layer_width * const.AVOGADRO_CONST)
         )
 
+    def set_cond_tensor(self, cond_tensor: np.ndarray) -> None:
+        """Setter of the conductivity tensor"""
+        self.cond_tensor = cond_tensor
+
+    def set_cond_surface(self, cond_surface: float) -> None:
+        """Setter of the conductivity of EDL developped at bulk liquid"""
+        self.cond_infdiffuse = cond_surface
+
+    def set_double_layer_length(self, double_layer_length: float) -> None:
+        """Setter of the Debye length of EDL developped at bulk liquid"""
+        self.double_layer_length = double_layer_length
+
     def get_logger(self) -> Logger:
         """Getter for the logging.Logger
 
@@ -1948,7 +1949,7 @@ class Smectite(Phyllosilicate):
             charge_0_i (float, optional): Charges in surface layer (unit: C/m3).
             charge_stern_i (float, optional): Charges in stern layer (unit: C/m3).
             charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m3).
-            xd (float, optional): Distance from mineral surface to zeta plane (unit: V).
+            xd (float, optional): Distance from quartz surface to zeta plane (unit: V).
             cond_intra (float, optional): Inter layer conductivity (unit: S/m).
             cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
             logger (Logger): Logger for debugging.
@@ -1970,7 +1971,7 @@ class Smectite(Phyllosilicate):
                 gamma_1o=0.0,
                 gamma_2o=5.5,
                 gamma_3o=5.5,
-                qio=-0.44016148,
+                qio=-2.747271878506929,
                 k1o=1.0e-10,
                 k2o=1.3e-6,
                 k3o=1.0e-2,

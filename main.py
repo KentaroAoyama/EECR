@@ -7,6 +7,8 @@ from os import path, getcwd, makedirs, listdir, cpu_count
 from typing import Dict, List
 from datetime import datetime
 from copy import deepcopy
+from statistics import stdev, mean
+from math import log10
 import re
 
 from yaml import safe_load
@@ -14,12 +16,12 @@ import pickle
 import numpy as np
 from tqdm import tqdm
 
-from clay import Smectite, Kaolinite
-from mineral import Quartz
+from phyllosilicate import Smectite, Kaolinite
+from quartz import Quartz
 from fluid import NaCl
 from cube import Cube
 from solver import FEM_Cube
-from output import plot_smec_frac_cond, plot_curr_all, plot_current_arrow
+from output import plot_smec_frac_cond, plot_current_arrow
 
 
 def create_logger(fpth="./debug.txt", logger_name: str = "log"):
@@ -231,7 +233,7 @@ def experiment():
         pool.shutdown(wait=True)
 
 
-def output_fig():
+def load_result() -> Dict:
     pickle_dir = path.join("E:\EECR", "output6", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
@@ -245,7 +247,6 @@ def output_fig():
             val_ls.append(float(val))
         # get average conductivity
         condition_dir = path.join(pickle_dir, condition_dirname)
-        cond_ave_ls: List = []
         for seed_dirname in listdir(condition_dir):
             seed_dir = path.join(condition_dir, seed_dirname)
             # get latest dir for now
@@ -290,9 +291,14 @@ def output_fig():
             if None in (cond_x, cond_y, cond_z):
                 continue
             conditions_ye.setdefault(tuple(val_ls), []).extend([cond_x, cond_y, cond_z])
+    return conditions_ye
 
+
+def output_fig():
+    conditions_ye = load_result()
     fig_dir = path.join(getcwd(), "output", "fig2")
     makedirs(fig_dir, exist_ok=True)
+
     # plot temperature variation
     tempe_dir = path.join(fig_dir, "temperature")
     makedirs(tempe_dir, exist_ok=True)
@@ -383,6 +389,25 @@ def output_fig():
         )
 
 
+def plt_hittorf():
+    conditions_ye = load_result()
+    xsmec_poros_cond: Dict = {}
+    for (smec_frac, tempe, molality, poros), cond_ls in conditions_ye.items():
+        _dict: Dict = xsmec_poros_cond.setdefault(smec_frac, {})
+        _ls: List = _dict.setdefault(poros, [])
+        _ls.extend(cond_ls)
+
+    xsmec_pc: Dict = {}
+    for xsmec, _dict in xsmec_poros_cond.items():
+        poros_ls, std_ls = [], []
+        for poros, cond_ls in _dict.items():
+            poros_ls.append(poros)
+            std_ls.append(abs(log10(stdev(cond_ls))))
+        print(std_ls) #!
+        xsmec_pc.setdefault(xsmec, poros_ls[std_ls.index(max(std_ls))])
+    print(xsmec_pc)
+
+
 def plt_curr(pth_solver, pth_out, axis):
     with open(pth_solver, "rb") as pkf:
         solver = pickle.load(pkf)
@@ -391,8 +416,9 @@ def plt_curr(pth_solver, pth_out, axis):
 
 if __name__ == "__main__":
     # main()
-    experiment()
-    output_fig()
+    # experiment()
+    # output_fig()
+    plt_hittorf()
     # run("tmp.pkl")
     # cond = "smec_frac-0.0_temperature-473.15_molality-5.0_porosity-0.2"
     # date = "2023-09-26"

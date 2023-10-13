@@ -1,18 +1,4 @@
 """Calculate electrical properties of quartz
-
-    Reference:
-        A.Revil and P.W.J.Glover, Theory of ionic-surface electrical conduction
-            in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
-            DOI:https://doi.org/10.1103/PhysRevB.55.1757
-        A.Revil and P.W.J.Glover, Nature of surface electrical conductivity 
-            in natural sands, sandstones, and clays, 1998, https://doi.org/10.1029/98GL00296
-        P.J. Scales, Electrokinetics of the Muscovite Mica-Aqueous Solution Interface,
-            1989, https://doi.org/10.1021/la00093a012
-        Leroy P., Devau N., Revil A., Bizi M., Influence of surface conductivity on the apparent
-            zeta potential of amorphous silica nanoparticles, 2013, https://doi.org/10.1016/j.jcis.2013.08.012
-        Leroy P., Maineult A., Li S., Vinogradov J., The zeta potential of quartz. Surface
-            complexation modelling to elucidate high salinity measurements, 2022,
-            https://doi.org/10.1016/j.colsurfa.2022.129507
 """
 
 from typing import Dict
@@ -43,7 +29,21 @@ with open(init_pth, "rb") as pkf:
 
 
 class Quartz:
-    """Containing electrical properties of quartz"""
+    """Quartz class
+    Reference:
+        A.Revil and P.W.J.Glover, Theory of ionic-surface electrical conduction
+            in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
+            DOI:https://doi.org/10.1103/PhysRevB.55.1757
+        A.Revil and P.W.J.Glover, Nature of surface electrical conductivity 
+            in natural sands, sandstones, and clays, 1998, https://doi.org/10.1029/98GL00296
+        P.J. Scales, Electrokinetics of the Muscovite Mica-Aqueous Solution Interface,
+            1989, https://doi.org/10.1021/la00093a012
+        Leroy P., Devau N., Revil A., Bizi M., Influence of surface conductivity on the apparent
+            zeta potential of amorphous silica nanoparticles, 2013, https://doi.org/10.1016/j.jcis.2013.08.012
+        Leroy P., Maineult A., Li S., Vinogradov J., The zeta potential of quartz. Surface
+            complexation modelling to elucidate high salinity measurements, 2022,
+            https://doi.org/10.1016/j.colsurfa.2022.129507
+    """
 
     def __init__(
         self,

@@ -491,38 +491,56 @@ import pickle
 from fluid import NaCl
 from quartz import Quartz
 from phyllosilicate import Smectite
+from matplotlib import pyplot as plt
 if __name__ == "__main__":
-    p_ls = np.linspace(0.0, 0.2, 21).tolist()
-    xsmec_ls = p_ls.copy()
-    seed_ls = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
-    nacl = NaCl(temperature=298.15, pressure=5.0e6, molality=1.0e-4)
-    quartz = Quartz(nacl=nacl)
-    smectite = Smectite(nacl=nacl)
-    smectite.calc_potentials_and_charges_inf()
-    smectite.calc_cond_infdiffuse()
-    smectite.calc_potentials_and_charges_truncated()
-    smectite.calc_cond_interlayer()
-    smectite.calc_cond_tensor()
-    xsmec_poros_bool: Dict = {}
-    for seed in seed_ls:
-        print(f"seed: {seed}")
-        for xsmec in xsmec_ls:
-            print(f"xsmec: {xsmec}")
-            poros_bool: Dict = xsmec_poros_bool.setdefault(xsmec, {})
-            for poros in p_ls:
-                print(f"poros: {poros}")
-                cube = Cube()
-                cube.create_pixel_by_macro_variable(shape=(20, 20, 20),
-                                                    edge_length=1.0e-6,
-                                                    volume_frac_dict={nacl: poros,
-                                                                      quartz: (1.0-poros) * (1.0 - xsmec),
-                                                                      smectite: (1.0-poros) * xsmec},
-                                                    seed=seed)
-                bx = analyse_tortuosity(cube, axis="x")
-                by = analyse_tortuosity(cube, axis="y")
-                bz = analyse_tortuosity(cube, axis="z")
+    # p_ls = np.linspace(0.0, 0.2, 21).tolist()
+    # xsmec_ls = p_ls.copy()
+    # seed_ls = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
+    # nacl = NaCl(temperature=298.15, pressure=5.0e6, molality=1.0e-4)
+    # quartz = Quartz(nacl=nacl)
+    # smectite = Smectite(nacl=nacl)
+    # smectite.calc_potentials_and_charges_inf()
+    # smectite.calc_cond_infdiffuse()
+    # smectite.calc_potentials_and_charges_truncated()
+    # smectite.calc_cond_interlayer()
+    # smectite.calc_cond_tensor()
+    # xsmec_poros_bool: Dict = {}
+    # for seed in seed_ls:
+    #     print(f"seed: {seed}")
+    #     for xsmec in xsmec_ls:
+    #         print(f"xsmec: {xsmec}")
+    #         poros_bool: Dict = xsmec_poros_bool.setdefault(xsmec, {})
+    #         for poros in p_ls:
+    #             print(f"poros: {poros}")
+    #             cube = Cube()
+    #             cube.create_pixel_by_macro_variable(shape=(20, 20, 20),
+    #                                                 edge_length=1.0e-6,
+    #                                                 volume_frac_dict={nacl: poros,
+    #                                                                   quartz: (1.0-poros) * (1.0 - xsmec),
+    #                                                                   smectite: (1.0-poros) * xsmec},
+    #                                                 seed=seed)
+    #             bx = analyse_tortuosity(cube, axis="x")
+    #             by = analyse_tortuosity(cube, axis="y")
+    #             bz = analyse_tortuosity(cube, axis="z")
 
-                bool_ls: List = poros_bool.setdefault(poros, [])
-                bool_ls.extend([bx, by, bz])
-                print(bool_ls)
-                
+    #             bool_ls: List = poros_bool.setdefault(poros, [])
+    #             bool_ls.extend([bx, by, bz])
+    
+
+    # with open("tmp.pkl", "wb") as pkf:
+    #     pickle.dump(xsmec_poros_bool, pkf)
+
+    with open("tmp.pkl", "rb") as pkf:
+        xsmec_poros_bool = pickle.load(pkf)
+    xsmec_ls = []
+    pc_ls = []
+    for xsmec, poros_bool in xsmec_poros_bool.items():
+        for poros, bool_ls in poros_bool.items():
+            print(len(bool_ls)) #!
+            if bool_ls.count(True) >= 15:
+                pc_ls.append(poros)
+                xsmec_ls.append(xsmec)
+                break
+
+    plt.plot(xsmec_ls, pc_ls)
+    plt.show()

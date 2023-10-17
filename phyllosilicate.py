@@ -277,6 +277,7 @@ class Phyllosilicate:
         self.partition_coefficient: float = None
         self.swelling_pressure: float = None
         self.osmotic_coefficient: float = None
+        self.osmotic_pressure: float = None
 
         ####################################################
         # DEBUG LOGGER
@@ -1540,7 +1541,6 @@ class Phyllosilicate:
         return flag
 
     def __calc_kappa_truncated(self) -> None:
-        # TODO? this should be called in potential & charge calculation stage?
         """Calculate the kappa of the potential (instead of Eq. 11
         of Gonçalvès et al., 2007) when the diffuse layer is truncated
         """
@@ -1779,11 +1779,7 @@ class Phyllosilicate:
         return cond_tensor
 
     def calc_cond_tensor(self) -> None:
-        """Calculate conductivity tensor. Separate cases by smectite and kaolinite.
-
-        Args:
-            edge_length (float): Length of one side of a cube cell (unit: m)
-        """
+        """Calculate conductivity tensor. Separate cases by smectite and kaolinite."""
         if self.qi < 0.0 and self.gamma_1 == 0.0:
             tensor = self.calc_smec_cond_tensor_cube_oxyz()
         else:
@@ -1801,7 +1797,11 @@ class Phyllosilicate:
         )
 
     def calc_partition_coefficient(self) -> float:
-        # TODO:
+        """Calculate (charge of the stern layer)/(total charge of the EDL)
+
+        Returns:
+            float: Partition coefficient
+        """
         if self.xd is None:
             self.calc_xd()
         if self.kappa_truncated is None:
@@ -1818,25 +1818,23 @@ class Phyllosilicate:
         )
         return self.partition_coefficient
 
-    def calc_cation_density(self, xy_unit: float) -> float:
-        # TODO:
-        if self.xd is None:
-            self.calc_xd()
-        if self.kappa_truncated is None:
-            self.__calc_kappa_truncated()
-        _xdl = self.layer_width * 0.5
-        gamma_na_diffuse = (
-            1000.0
-            * const.AVOGADRO_CONST
-            * self.ion_props[Species.Na.name][IonProp.Molarity.name]
-            * quad(self.__calc_na_density_at_x, self.xd, _xdl)[0]
+    def calc_osmotic_pressure(self) -> float:
+        """Calculate the osmotic pressure of the truncated EDL
+
+        Returns:
+            float: Osmotic pressure (Pa)
+        """
+        assert isinstance(self.potential_r_i, float), self.potential_r_i
+        kb = const.BOLTZMANN_CONST
+        T = self.temperature
+        e = const.ELEMENTARY_CHARGE
+        Na = const.AVOGADRO_CONST
+        Cf = self.ion_props[Species.Na.name][IonProp.Molarity.name]
+        phir = self.potential_r_i
+        self.osmotic_pressure = (
+            2000.0 * kb * T * Na * Cf * (np.cosh(e * phir / (kb * T)) - 1.0)
         )
-        gamma_stern = self.__calc_n_stern("inner")
-        return (
-            (gamma_na_diffuse + gamma_stern)
-            * 1.0e-18
-            / (xy_unit * self.layer_width * const.AVOGADRO_CONST)
-        )
+        return self.osmotic_pressure
 
     def set_cond_tensor(self, cond_tensor: np.ndarray) -> None:
         """Setter of the conductivity tensor"""

@@ -132,7 +132,7 @@ class Cube:
         cluster_size: DictLike = {},
         surface: str = "boundary",
         seed: int = 42,
-        rotation_setting: str or Tuple[float] = "random",
+        rotation_setting: str or Dict[Any, Tuple[float]] = "random",
     ) -> None:
         """Create a pixel based on macroscopic physical properties such as porosity and mineral
         mass fractions.
@@ -157,10 +157,11 @@ class Cube:
                 "boundary": Build surface stiffness matrix (4×4)
                 None: Ignore surface conductivity.
             seed (int): Seed for assigning elements
-            (OUTDATED) rotation_setting (str or Tuple): Argument that control the rotation of the
-                conductivity tensor of each element. If you set as "rondom", conductivity tensor
-                are rotated by randomly generated angle. Else if you set as (angle_x, angle_y, angle_z),
-                conductivity tensor are rotated based on these angles (Defaults to "random").
+            rotation_setting (str or Dict): Argument that control the rotation of the conductivity
+                tensor of each element. If you set as "rondom", conductivity tensor are rotated
+                by randomly generated angle. Else if you set dict whose keys are instance of each
+                element and values are rotation angles for axis x, y, and z in degree, conductivity
+                tensors are rotated based on these angles (Defaults to "random").
         """
         # Set following member variables:
         #   - self.edge_length
@@ -174,7 +175,6 @@ class Cube:
         #   - self.dks
 
         self.edge_length = edge_length
-        # TODO: 時間計測して高速化
         assert len(volume_frac_dict) > 0
         # Check to see if the volume fractions sum to 1
         _sum = 0.0
@@ -188,11 +188,37 @@ class Cube:
         nx, ny, nz = shape
         shape = (nz, ny, nx)  # change order
 
-        rot_mat_const = None
-        if isinstance(rotation_setting, tuple):
-            if len(rotation_setting) == 3:
-                # TODO: consider another implementation
-                rot_mat_const: np.ndarray = random_rotation_matrix()
+        # set rotation matrix for each element
+        rot_mat_const: Dict = {}
+        if isinstance(rotation_setting, Dict):
+            c = np.pi / 180.0
+            for _instance, rot_angles in rotation_setting.items():
+                phi, theta, psi = rot_angles
+                phi *= c
+                theta *= c
+                psi *= c
+                rx = np.array(
+                    [
+                        [1.0, 0.0, 0.0],
+                        [0.0, np.cos(phi), -np.sin(phi)],
+                        [0.0, np.sin(phi), np.cos(phi)],
+                    ]
+                )
+                ry = np.array(
+                    [
+                        [np.cos(theta), 0.0, np.sin(theta)],
+                        [0.0, 1.0, 0.0],
+                        [-np.sin(theta), 0.0, np.cos(theta)],
+                    ]
+                )
+                rz = np.array(
+                    [
+                        [np.cos(psi), -np.sin(psi), 0.0],
+                        [np.sin(psi), np.cos(psi), 0.0],
+                        [0.0, 0.0, 1.0],
+                    ]
+                )
+                rot_mat_const.setdefault(_instance, np.matmul(np.matmul(rx, ry), rz))
 
         # ib
         self.set_ib(shape)
@@ -273,12 +299,10 @@ class Cube:
             _rot_mat: np.ndarray = None
             for _m in list(_m_selected):
                 i, j, k = calc_ijk(_m, nx, ny)
-                if rot_mat_const is not None:
-                    _rot_mat = rot_mat_const
-                elif rotation_setting == "random":
-                    _rot_mat = random_rotation_matrix()
+                if rot_mat_const.get(_instance, None) is not None:
+                    _rot_mat = rot_mat_const[_instance]
                 else:
-                    raise RuntimeError("rotation_setting argument is not valid")
+                    _rot_mat = random_rotation_matrix()
                 assert _rot_mat is not None
                 pix_tensor[k][j][i] = np.matmul(
                     np.matmul(_rot_mat, tensor_center), _rot_mat.T
@@ -774,7 +798,9 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, ymoff=True, zmoff=True)
+                    _sumb, _sumc = _energy_bounds(
+                        xn, mm, dkvm, dksm, ymoff=True, zmoff=True
+                    )
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -790,7 +816,9 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xmoff=True, zmoff=True)
+                    _sumb, _sumc = _energy_bounds(
+                        xn, mm, dkvm, dksm, xmoff=True, zmoff=True
+                    )
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -807,7 +835,9 @@ class Cube:
                 dkvm = self.dkv[self.pix[m]]
                 dksm = self.dks[m]
                 for mm in range(8):
-                    _sumb, _sumc = _energy_bounds(xn, mm, dkvm, dksm, xmoff=True, ymoff=True)
+                    _sumb, _sumc = _energy_bounds(
+                        xn, mm, dkvm, dksm, xmoff=True, ymoff=True
+                    )
                     b[self.ib[m][_is[mm]]] += _sumb
                     c += _sumc
 
@@ -1010,7 +1040,7 @@ class Cube:
         # wn = S(X)^-1 S(X - xn)
         nx, ny, nz = nxyz
         ay, az = range_yz
-        range_scale: np.ndarray = np.array([1.0, ay, az])
+        range_scale: np.ndarray = np.array([1.0, 1.0/ay, 1.0/az])
         # initial point (observation points)
         num_initial = 2 * min(nxyz)
         if num_initial == 0:

@@ -417,8 +417,8 @@ def plt_curr(pth_solver, pth_out, axis):
 if __name__ == "__main__":
     # main()
     # experiment()
-    # output_fig()
-    plt_hittorf()
+    output_fig()
+    # plt_hittorf()
     # run("tmp.pkl")
     # cond = "smec_frac-0.0_temperature-473.15_molality-5.0_porosity-0.2"
     # date = "2023-09-26"

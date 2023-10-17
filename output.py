@@ -218,6 +218,7 @@ def plot_smec_frac_cond(
         ax.set_xlabel(xlabel, fontsize=14.0)
     if logscale:
         ax.set_xscale("log")
+    ax.set_yscale("log")
     ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
     fig.savefig(save_pth, dpi=200, bbox_inches="tight")
 

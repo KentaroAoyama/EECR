@@ -1,25 +1,20 @@
 """Analyze results"""
 from typing import List, Tuple, Dict
-import time
-from datetime import datetime
-from os import path, listdir
-from tqdm import tqdm
-from sys import float_info
 from math import sqrt
 from statistics import mean
 
 import numpy as np
 import networkx
 
-from solver import FEM_Cube
 from cube import Cube
+
 
 def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
     # TODO: スケルトン処理を加えて計算効率を上げる
     axis = axis.lower()
     # instance
     instance_ls: List = cube.get_instance_ls()
-    NZ, NY, NX = cube.get_shape()                
+    NZ, NY, NX = cube.get_shape()
 
     addnodes_fs: List[Tuple[int, Dict]] = []
     addedges_fs: List[Tuple[Tuple[int], Dict]] = []
@@ -281,7 +276,7 @@ def calc_shortest_dist(
             else:
                 tauy = np.inf
         return tauy
-    
+
     # z axis
     if axis == "z":
         k0, k1 = 0, nz - 1
@@ -324,7 +319,7 @@ def has_path(
     node_ls = list(G.nodes)
     if len(node_ls) == 0:
         return False
-    
+
     node_set = set(node_ls)
 
     # x axis
@@ -377,7 +372,7 @@ def has_path(
                     if networkx.has_path(G, ny0, ny1):
                         return True
         return False
-    
+
     # z axis
     if axis == "z":
         k0, k1 = 0, nz - 1
@@ -403,6 +398,7 @@ def has_path(
                     if networkx.has_path(G, nz0, nz1):
                         return True
         return False
+
 
 def floyd_warshall(G):
     A = networkx.to_numpy_array(G, multigraph_weight=min, weight="dist", nonedge=np.inf)
@@ -449,98 +445,60 @@ def Zhang_Suen_thinning(binary_image: np.ndarray) -> Tuple[np.ndarray, List]:
         # ステップ1
         changing_1 = []
         for x in range(1, rows - 1):
-            for y in range(1, columns -1):
-                p2, p3, p4, p5, p6, p7, p8, p9 = neighbour_points = neighbours(x, y, image_thinned)
-                if (image_thinned[x][y] == 1 and
-                    2 <= sum(neighbour_points) <= 6 and # 条件2
-                    count_transition(neighbour_points) == 1 and # 条件3
-                    p2 * p4 * p6 == 0 and # 条件4
-                    p4 * p6 * p8 == 0): # 条件5
-                    changing_1.append((x,y))
+            for y in range(1, columns - 1):
+                p2, p3, p4, p5, p6, p7, p8, p9 = neighbour_points = neighbours(
+                    x, y, image_thinned
+                )
+                if (
+                    image_thinned[x][y] == 1
+                    and 2 <= sum(neighbour_points) <= 6
+                    and count_transition(neighbour_points) == 1  # 条件2
+                    and p2 * p4 * p6 == 0  # 条件3
+                    and p4 * p6 * p8 == 0  # 条件4
+                ):  # 条件5
+                    changing_1.append((x, y))
         for x, y in changing_1:
             image_thinned[x][y] = 0
         # ステップ2
         changing_2 = []
         for x in range(1, rows - 1):
-            for y in range(1, columns -1):
-                p2, p3, p4, p5, p6, p7, p8, p9 = neighbour_points = neighbours(x, y, image_thinned)
-                if (image_thinned[x][y] == 1 and
-                    2 <= sum(neighbour_points) <= 6 and # 条件2
-                    count_transition(neighbour_points) == 1 and # 条件3
-                    p2 * p4 * p8 == 0 and # 条件4
-                    p2 * p6 * p8 == 0): # 条件5
-                    changing_2.append((x,y))
+            for y in range(1, columns - 1):
+                p2, p3, p4, p5, p6, p7, p8, p9 = neighbour_points = neighbours(
+                    x, y, image_thinned
+                )
+                if (
+                    image_thinned[x][y] == 1
+                    and 2 <= sum(neighbour_points) <= 6
+                    and count_transition(neighbour_points) == 1  # 条件2
+                    and p2 * p4 * p8 == 0  # 条件3
+                    and p2 * p6 * p8 == 0  # 条件4
+                ):  # 条件5
+                    changing_2.append((x, y))
         for x, y in changing_2:
             image_thinned[x][y] = 0
-    
+
     return image_thinned, mapping
 
 
 # 指定されたピクセルの周囲のピクセルを取得するメソッドです
 def neighbours(x, y, image):
-    return [image[x-1][y], image[x-1][y+1], image[x][y+1], image[x+1][y+1], # 2, 3, 4, 5
-             image[x+1][y], image[x+1][y-1], image[x][y-1], image[x-1][y-1]] # 6, 7, 8, 9
+    return [
+        image[x - 1][y],
+        image[x - 1][y + 1],
+        image[x][y + 1],
+        image[x + 1][y + 1],  # 2, 3, 4, 5
+        image[x + 1][y],
+        image[x + 1][y - 1],
+        image[x][y - 1],
+        image[x - 1][y - 1],
+    ]  # 6, 7, 8, 9
+
 
 # 0→1の変化の回数を数えるメソッドです
 def count_transition(neighbours):
     neighbours += neighbours[:1]
-    return sum( (n1, n2) == (0, 1) for n1, n2 in zip(neighbours, neighbours[1:]) )
+    return sum((n1, n2) == (0, 1) for n1, n2 in zip(neighbours, neighbours[1:]))
 
 
-import pickle
-from fluid import NaCl
-from quartz import Quartz
-from phyllosilicate import Smectite
-from matplotlib import pyplot as plt
 if __name__ == "__main__":
-    # p_ls = np.linspace(0.0, 0.2, 21).tolist()
-    # xsmec_ls = p_ls.copy()
-    # seed_ls = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]
-    # nacl = NaCl(temperature=298.15, pressure=5.0e6, molality=1.0e-4)
-    # quartz = Quartz(nacl=nacl)
-    # smectite = Smectite(nacl=nacl)
-    # smectite.calc_potentials_and_charges_inf()
-    # smectite.calc_cond_infdiffuse()
-    # smectite.calc_potentials_and_charges_truncated()
-    # smectite.calc_cond_interlayer()
-    # smectite.calc_cond_tensor()
-    # xsmec_poros_bool: Dict = {}
-    # for seed in seed_ls:
-    #     print(f"seed: {seed}")
-    #     for xsmec in xsmec_ls:
-    #         print(f"xsmec: {xsmec}")
-    #         poros_bool: Dict = xsmec_poros_bool.setdefault(xsmec, {})
-    #         for poros in p_ls:
-    #             print(f"poros: {poros}")
-    #             cube = Cube()
-    #             cube.create_pixel_by_macro_variable(shape=(20, 20, 20),
-    #                                                 edge_length=1.0e-6,
-    #                                                 volume_frac_dict={nacl: poros,
-    #                                                                   quartz: (1.0-poros) * (1.0 - xsmec),
-    #                                                                   smectite: (1.0-poros) * xsmec},
-    #                                                 seed=seed)
-    #             bx = analyse_tortuosity(cube, axis="x")
-    #             by = analyse_tortuosity(cube, axis="y")
-    #             bz = analyse_tortuosity(cube, axis="z")
-
-    #             bool_ls: List = poros_bool.setdefault(poros, [])
-    #             bool_ls.extend([bx, by, bz])
-    
-
-    # with open("tmp.pkl", "wb") as pkf:
-    #     pickle.dump(xsmec_poros_bool, pkf)
-
-    with open("tmp.pkl", "rb") as pkf:
-        xsmec_poros_bool = pickle.load(pkf)
-    xsmec_ls = []
-    pc_ls = []
-    for xsmec, poros_bool in xsmec_poros_bool.items():
-        for poros, bool_ls in poros_bool.items():
-            print(len(bool_ls)) #!
-            if bool_ls.count(True) >= 15:
-                pc_ls.append(poros)
-                xsmec_ls.append(xsmec)
-                break
-
-    plt.plot(xsmec_ls, pc_ls)
-    plt.show()
+    pass

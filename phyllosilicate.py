@@ -2,7 +2,7 @@
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
-from typing import Dict, List, Set
+from typing import Dict, List, Tuple, Set
 from logging import Logger
 from sys import float_info
 from os import path, PathLike
@@ -1207,7 +1207,6 @@ class Phyllosilicate:
         if norm_fn < convergence_condition:
             is_norm_converged = True
         xn = xn.T.tolist()[0]
-
         # assign member variables
         self.potential_0_i = xn[0]
         self.potential_stern_i = xn[1]
@@ -1216,7 +1215,6 @@ class Phyllosilicate:
         self.charge_0_i = xn[4]
         self.charge_stern_i = xn[5]
         self.charge_diffuse_i = xn[6]
-
         # fix minor error
         # zeta potential
         if math.isclose(self.potential_zeta_i, self.potential_r_i):
@@ -1566,7 +1564,7 @@ class Phyllosilicate:
         _props: Dict = self.ion_props[s]
         v = _props[IonProp.Valence.name]
         # mobility at position x
-        bx = self.__calc_mobility_diffuse(x, s) + (v / abs(v)) * coeff * (
+        bx = _props[IonProp.Mobility.name] + (v / abs(v)) * coeff * (
             potential - self.potential_zeta_o
         )
         n = (
@@ -1647,15 +1645,14 @@ class Phyllosilicate:
         )
         return n
 
-    def calc_cond_interlayer(self) -> float:
+    def calc_cond_interlayer(self) -> Tuple[float, Tuple[float, float]]:
         """Calculate the Stern + EDL conductivity of the inter layer
 
         Returns:
-            Tuple[float]: conductivity, integral error
+            Tuple[float, Tuple[float, float]]: Conductivity of interlayer (S/m),
+                and tuple contains conductivity of stern layer, conductivity
+                of diffuse layer.
         """
-        # When the layer thickness is less than 1 nm,, water molecules
-        # cannot pass between the layers of smectite (Shirozu, 1998)
-        # assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert self._check_if_calculated_electrical_params_truncated(), (
             "Before calculating the conductivity of interlayer, we should "
             "obtain electrical parameters for truncated diffuse layer case"
@@ -1686,12 +1683,13 @@ class Phyllosilicate:
         self.cond_intra = cond_intra
         return self.cond_intra, (cond_stern, cond_diffuse)
 
-    def calc_cond_infdiffuse(self) -> float:
+    def calc_cond_infdiffuse(self) -> Tuple[float, Tuple[float, float]]:
         """Calculate the Stern + EDL conductivity for the inifinite diffuse
          layer case.
 
         Returns:
-            Tuple[float]: conductivity, integral error
+            Tuple[float, Tuple[float, float]]: Conductivity of EDl (S/m) and
+                tuple contains conductivity of diffuse layer and stern layer.
         """
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
@@ -1700,6 +1698,7 @@ class Phyllosilicate:
 
         # Na+ number (n/m^2) at stern layer
         gamma_stern = self.__calc_n_stern("outer")
+        cond_stern = gamma_stern * self.mobility_stern
         # Na+ number (n/m^2) at diffuse layer
         xdl = self.xd + 1.0 / self.kappa
         coeff = self.dielec_fluid / self.viscosity
@@ -1719,8 +1718,7 @@ class Phyllosilicate:
 
         # calc conductivity
         cond_diffuse: float = (
-            const.ELEMENTARY_CHARGE
-            * (gamma_stern * self.mobility_stern + cond_na_diffuse)
+            const.ELEMENTARY_CHARGE * (cond_stern + cond_na_diffuse)
         ) / xdl
 
         # log
@@ -1730,7 +1728,7 @@ class Phyllosilicate:
         self.cond_infdiffuse = cond_diffuse
         self.double_layer_length = xdl
 
-        return self.cond_infdiffuse
+        return self.cond_infdiffuse, (cond_stern, cond_na_diffuse)
 
     def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
         """Calculate conductivity tensor in smectite with layers aligned

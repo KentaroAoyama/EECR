@@ -53,9 +53,9 @@ class NaCl(Fluid):
             temperature (float): Absolute temperature (K)
             pressure (float): Absolute pressure (Pa). NOTE: If you pass None,
                  pressure is set to be on the vapor + liquid coexistence curve.
-            molarity (float): Molarity (mol/l).
-            molarity (float): Molality (mol/kg).
-            ph (float, optional): pH.
+            molarity (float): Molarity (mol/l)
+            molarity (float): Molality (mol/kg)
+            ph (float, optional): pH
             conductivity (float): Electrical conductivity of NaCl fluid
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
             method (str): Method to calculate electrical conductivity
@@ -245,6 +245,14 @@ class NaCl(Fluid):
             float: Absolute temperature
         """
         return self.temperature
+
+    def get_density(self) -> float:
+        """Getter for the density of aqueous NaCl solution
+
+        Returns:
+            float: Density (kg/m^3)
+        """
+        return self.density
 
     def get_dielec_water(self) -> float:
         """Getter for the permittivity of water

@@ -1556,9 +1556,7 @@ def ws_single_1(
                 (quartz, (1.0 - _poros) * (1.0 - xsmec)),
             ],
         ),
-        instance_range_dict=OrderedDict(
-            (smectite, (2.0, 2.0))
-        ),
+        instance_range_dict=OrderedDict((smectite, (2.0, 2.0))),
         # instance_adj_rate_dict=OrderedDict(
         #     [
         #         (smectite, (nacl, adj_rate)),
@@ -1809,6 +1807,15 @@ core_props_levy = {
     },
 }
 
+# Mendieta et al. (2021)
+core_props_Mendieta = {"MtR": {"Molarity": [1.64e-3, 1.71e-2, 0.154, 1.51],
+                               "Co": [0.24514833664543745, 0.3875372141909462, 0.8084924391201721, 4.327943080981386],
+                               "smec%": 0.66,
+                               "porosity": [0.62, 0.61, 0.62, 0.51]},
+                        "MtG": {"Molarity": [1.39e-3, 1.53e-2, 0.146, 1.54],
+                                "Co": [0.2584503698751926, 0.344096255722863, 0.8751817918140582, 3.7591211402939675],
+                                "smec%": 0.90,
+                                "porosity": [0.68, 0.68, 0.71, 0.57]}}
 
 def compare_WS_shaly_1():
     """Compare with the core data in Waxman & Smits (1968)"""
@@ -2235,7 +2242,6 @@ def analysis_WS_result2():
 
 
 def ws_single_3(_t, _molarity, _ph, _poros, xsmec, seed, save_dir, log_id):
-    # TODO: 間隙率の修正, layer_widthの塩濃度依存性
     # 割り当て方法：random, layer_widthを変更して
     fpth = path.join(save_dir, "cond.pkl")
     if not path.exists(save_dir):
@@ -2247,11 +2253,9 @@ def ws_single_3(_t, _molarity, _ph, _poros, xsmec, seed, save_dir, log_id):
     nacl = NaCl(
         temperature=_t, molarity=_molarity, ph=_ph, logger=logger, pressure=1.0e5
     )
-    # rを変えない方が合う
     r = (
         4.0 - 2.0 / (5.0 - 0.017920058530648788) * (_molarity - 0.017920058530648788)
     ) * 1.0e-9
-    r = 2.0e-9 #!
     smectite = Smectite(nacl=nacl, layer_width=r, logger=logger)  #!
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
@@ -2265,6 +2269,7 @@ def ws_single_3(_t, _molarity, _ph, _poros, xsmec, seed, save_dir, log_id):
     # convert total porosity to macro porosity
     phi_smec = xsmec * r / (6.6e-10 + r)
     phi_macro = (_poros - phi_smec) / (1.0 - phi_smec)
+
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20),
         edge_length=1.0e-6,
@@ -2273,6 +2278,11 @@ def ws_single_3(_t, _molarity, _ph, _poros, xsmec, seed, save_dir, log_id):
                 (nacl, phi_macro),
                 (smectite, (1.0 - phi_macro) * xsmec),
                 (quartz, (1.0 - phi_macro) * (1.0 - xsmec)),
+            ],
+        ),
+        instance_range_dict=OrderedDict(
+            [
+                (nacl, (0.7, 0.7)),
             ],
         ),
         seed=seed,
@@ -2285,11 +2295,14 @@ def ws_single_3(_t, _molarity, _ph, _poros, xsmec, seed, save_dir, log_id):
         pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
 
 
-def levy_single(_t, _molarity, _ph, _poros, xsmec, rmin, rmax, phi, _size, seed, save_dir, log_id):
+def levy_single(
+    _t, _molarity, _ph, _poros, xsmec, rmin, rmax, phi, ryz_smec, seed, save_dir, log_id
+):
     fpth = path.join(save_dir, "cond.pkl")
+    if path.exists(fpth):
+        return
     if not path.exists(save_dir):
         makedirs(save_dir)
-
     logger = create_logger(log_id, path.join(save_dir, "log.txt"))
 
     # nacl
@@ -2297,9 +2310,7 @@ def levy_single(_t, _molarity, _ph, _poros, xsmec, rmin, rmax, phi, _size, seed,
         temperature=_t, molarity=_molarity, ph=_ph, logger=logger, pressure=1.0e5
     )
     # rを変えない方が合う
-    r = (
-        rmax - (rmax - rmin) / (0.6 - 0.013) * (_molarity - 0.013)
-    ) * 1.0e-9
+    r = (rmax - (rmax - rmin) / (0.6 - 0.013) * (_molarity - 0.013)) * 1.0e-9
     smectite = Smectite(nacl=nacl, layer_width=r, logger=logger)  #!
     smectite.calc_potentials_and_charges_truncated()
     smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
@@ -2314,25 +2325,29 @@ def levy_single(_t, _molarity, _ph, _poros, xsmec, rmin, rmax, phi, _size, seed,
     phi_macro = (_poros - phi_smec) / (1.0 - phi_smec)
     if phi_macro < 0.0:
         phi_macro = 0.0
-    
     rotation_setting = None
     if phi is None:
         rotation_setting = "random"
     else:
         rotation_setting = {smectite: (phi, 0.0, 0.0)}
+    print(phi_macro)  #!
+    instance_range_dict: OrderedDict = OrderedDict()
+    if ryz_smec is not None:
+        instance_range_dict.setdefault(smectite, (ryz_smec, ryz_smec))
     solver_input.create_pixel_by_macro_variable(
         shape=(20, 20, 20),
         edge_length=1.0e-6,
         volume_frac_dict=OrderedDict(
             [
-                (smectite, (1.0 - phi_macro) * xsmec),
                 (nacl, phi_macro),
+                (smectite, (1.0 - phi_macro) * xsmec),
                 (quartz, (1.0 - phi_macro) * (1.0 - xsmec)),
             ],
         ),
         rotation_setting=rotation_setting,
         # cluster_size={smectite: _size},
-        instance_range_dict={smectite: (2.0, 2.0)},
+        instance_range_dict=instance_range_dict,
+        # instance_adj_rate_dict=OrderedDict([(smectite, (nacl, 1.0))]),
         seed=seed,
     )
     solver_input.femat()
@@ -2341,7 +2356,59 @@ def levy_single(_t, _molarity, _ph, _poros, xsmec, rmin, rmax, phi, _size, seed,
     solver.run(300, 50, 1.0e-9)
     with open(fpth, "wb") as pkf:
         pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
+    print(_molarity, solver.cond_x)
 
+
+def mendieta_single(_t, _molarity, r, _poros, xsmec, seed, save_dir, log_id):
+    # 割り当て方法：random, layer_widthを変更して
+    fpth = path.join(save_dir, "cond.pkl")
+    if not path.exists(save_dir):
+        makedirs(save_dir)
+
+    logger = create_logger(log_id, path.join(save_dir, "log.txt"))
+
+    # nacl
+    nacl = NaCl(
+        temperature=_t, molarity=_molarity, ph=7.0, logger=logger, pressure=1.0e5
+    )
+    smectite = Smectite(nacl=nacl, layer_width=r, logger=logger)  #!
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_infdiffuse()  # to get self.double_layer_length
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    # quartz
+    quartz = Quartz(nacl=nacl, logger=logger)
+    # set solver_input
+    solver_input = Cube(ex=1.0, ey=0.0, ez=0.0, logger=logger)
+
+    # convert total porosity to macro porosity
+    phi_smec = xsmec * r / (6.6e-10 + r)
+    phi_macro = (_poros - phi_smec) / (1.0 - phi_smec)
+
+    solver_input.create_pixel_by_macro_variable(
+        shape=(20, 20, 20),
+        edge_length=1.0e-6,
+        volume_frac_dict=OrderedDict(
+            [
+                (nacl, phi_macro),
+                (smectite, (1.0 - phi_macro) * xsmec),
+                (quartz, (1.0 - phi_macro) * (1.0 - xsmec)),
+            ],
+        ),
+        # instance_range_dict=OrderedDict(
+        #     [
+        #         (nacl, (0.7, 0.7)),
+        #     ],
+        # ),
+        seed=seed,
+    )
+    solver_input.femat()
+
+    solver = FEM_Cube(solver_input, logger=logger)
+    solver.run(300, 50, 1.0e-9)
+    with open(fpth, "wb") as pkf:
+        pickle.dump((solver.cond_x, solver.cond_y, solver.cond_z), pkf)
+    pass
 
 # TODO: Levyもここでやるので, rename
 def compare_WS_shaly_3():
@@ -2364,7 +2431,7 @@ def compare_WS_shaly_3():
     # smectite.calc_potentials_and_charges_truncated()
     # print(smectite.calc_osmotic_pressure())
 
-    # # Waxman and Smits (1968)
+    # Waxman and Smits (1968)
     # for _id, _prop in core_props_ws.items():
     #     if _id != "26":
     #         continue
@@ -2387,7 +2454,7 @@ def compare_WS_shaly_3():
     #     xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
     #     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
     #     cou = 0
-    #     for seed in [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]:
+    #     for seed in range(200, 400):
     #         for _molarity in reversed(molarity_ls):
     #             print(f"molarity: {_molarity}")
     #             dir_name = path.join(
@@ -2411,51 +2478,46 @@ def compare_WS_shaly_3():
     #     pool.shutdown(wait=True)
 
     # Levy et al. (2018)
-    T = 298.15
+    T = 295.15
     RhoSmec = 2.295454
     Ph = 7.0
 
     # rmin, rmax, phi, adj rate → No
-    # rmin, rmax, phi, cluster size → 
-    opt_params: Dict = {"22": (1.5e-9, 1.5e-9, 70.0, 1),
-                        "24a": (1.5e-9, 1.5e-9, 90.0, 6)}
+    # rmin, rmax, phi, anisotoropic scaling →
+    # 22: (1.3, 1.3, None, 0.6)
+    # 24a (1.1, 1.1, 80.0, 2.5)
+    # 31 (2.0, 2.0, 80.0, 2.5)
+    # 96 (2.0, 2.0, 80.0, 2.5)
+    # 113: (0.8, 0.8, 80.0, 0.5)
+    opt_params_levy: Dict = {
+        "22": (1.3, 1.3, 80.0, 0.5),
+        "24a": (1.1, 1.1, 80.0, 5.0),
+        "31": (2.0, 2.0, 80.0, 2.5),
+        "96": (2.0, 2.0, 80.0, 2.5),
+        "113": (0.8, 0.8, 80.0, 0.5),
+    }
     dirpth = path.join(
         test_dir(),
         "Levy",
     )
     makedirs(dirpth, exist_ok=True)
     for _id, _prop in core_props_levy.items():
-        print(f"_id: {_id}")
 
-        if _id != "24a": #!
-            continue
+        print(f"_id: {_id}")
 
         # calculate fraction of clay minerals
         xsmec = _prop["smec%"] * _prop["RhoSol"] / RhoSmec
-
         _poros = _prop["porosity"]
-
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 5)
         cou = 0
-        for seed in [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]:
+        # for seed in [60, 70, 80, 90, 100, 110, 120, 130, 140, 150]: #!
+        for seed in range(0, 100):
             for _molarity in _prop["Molarity"]:
                 dir_name = path.join(
                     dirpth,
                     str(_id),
                     f"{seed}_{_molarity}",
                 )
-                # levy_single(_t=T,
-                #     _molarity=_molarity,
-                #     _ph=Ph,
-                #     _poros=_poros,
-                #     xsmec=xsmec,
-                #     rmin=opt_params[_id][0],
-                #     rmax=opt_params[_id][1],
-                #     phi=opt_params[_id][2],
-                #     _size=opt_params[_id][3],
-                #     seed=seed,
-                #     save_dir=dir_name,
-                #     log_id=cou,)
                 pool.submit(
                     levy_single,
                     _t=T,
@@ -2463,16 +2525,59 @@ def compare_WS_shaly_3():
                     _ph=Ph,
                     _poros=_poros,
                     xsmec=xsmec,
-                    rmin=opt_params[_id][0],
-                    rmax=opt_params[_id][1],
-                    phi=opt_params[_id][2],
-                    _size=opt_params[_id][3],
+                    rmin=opt_params_levy[_id][0],
+                    rmax=opt_params_levy[_id][1],
+                    phi=opt_params_levy[_id][2],
+                    ryz_smec=opt_params_levy[_id][3],
                     seed=seed,
                     save_dir=dir_name,
                     log_id=cou,
                 )
                 cou += 1
         pool.shutdown(wait=True)
+
+    # Mendieta et al. (2021)
+    # T = 295.15
+    # opt_params_mendieta: Dict = {
+    #     "MtR": (0.8e-9,),
+    #     "MtG": (0.8e-9,),
+    # }
+    # dirpth = path.join(
+    #     test_dir(),
+    #     "Mendieta",
+    # )
+    # makedirs(dirpth, exist_ok=True)
+    # for _id, _prop in core_props_Mendieta.items():
+
+    #     print(f"_id: {_id}")
+
+    #     # calculate fraction of clay minerals
+    #     # Assuming RhoSol ≒ RhoSmec
+    #     xsmec = _prop["smec%"]
+    #     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 5)
+    #     cou = 0
+    #     for seed in [60, 70, 80]:
+    #     # for seed in range(200, 400):
+    #         for _poros, _molarity in zip(_prop["porosity"], _prop["Molarity"]):
+    #             dir_name = path.join(
+    #                 dirpth,
+    #                 str(_id),
+    #                 f"{seed}_{_molarity}",
+    #             )
+    #             pool.submit(
+    #                 mendieta_single,
+    #                 _t=T,
+    #                 _molarity=_molarity,
+    #                 r=opt_params_mendieta[_id][0],
+    #                 _poros=_poros,
+    #                 xsmec=xsmec,
+    #                 seed=seed,
+    #                 save_dir=dir_name,
+    #                 log_id=cou,
+    #             )
+    #             cou += 1
+    #     pool.shutdown(wait=True)
+
 
 
 # TODO: rename
@@ -2535,6 +2640,30 @@ def analysis_WS_result3():
             if cond_tuple is not None:
                 molarity_dct.setdefault(molarity, []).append(cond_tuple[0])
 
+    pickle_dir = path.join(
+        test_dir(),
+        "Mendieta",
+    )
+    for id_name in listdir(pickle_dir):
+        if id_name == "fig":
+            continue
+        dirname_id = path.join(pickle_dir, id_name)
+        molarity_dct: Dict[float, float] = id_cond_result.setdefault(
+            "Mendieta" + id_name, {}
+        )
+        for cond_name in tqdm(listdir(dirname_id)):
+            # get conditions
+            _, molarity = cond_name.split("_")
+            molarity = float(molarity)
+            # load result
+            cond_tuple = None
+            pkl_pth: str = path.join(dirname_id, cond_name, "cond.pkl")
+            if path.isfile(pkl_pth):
+                with open(pkl_pth, "rb") as pkf:
+                    cond_tuple = pickle.load(pkf)
+            if cond_tuple is not None:
+                molarity_dct.setdefault(molarity, []).append(cond_tuple[0])
+
     makedirs("./test/WS_Levy/fig", exist_ok=True)
     for _id, molarity_dct in id_cond_result.items():
         fig, ax = plt.subplots()
@@ -2572,6 +2701,10 @@ def analysis_WS_result3():
             _id_orig = _id.replace("Levy", "")
             obs_x = core_props_levy[_id_orig]["Molarity"]
             obs_y = core_props_levy[_id_orig]["Co"]
+        if "Mendieta" in _id:
+            _id_orig = _id.replace("Mendieta", "")
+            obs_x = core_props_Mendieta[_id_orig]["Molarity"]
+            obs_y = core_props_Mendieta[_id_orig]["Co"]
 
         ax.scatter(obs_x, obs_y, zorder=2)
         # save
@@ -2581,6 +2714,21 @@ def analysis_WS_result3():
         fig.savefig(f"./test/WS_Levy/fig/{_id}.png", bbox_inches="tight", dpi=300)
         plt.clf()
         plt.close()
+
+    # histgram
+    for _id, molarity_dct in id_cond_result.items():
+        for molarity in sorted(molarity_dct.keys()):
+            dirpth = path.join(test_dir(), "WS_Levy", "fig", str(_id))
+            makedirs(dirpth, exist_ok=True)
+            bk_ls = molarity_dct[molarity]
+            if len(bk_ls) > 1:
+                fig, ax = plt.subplots()
+                ax.hist(bk_ls)
+                # ax.set_xscale("log")
+                fpth = path.join(dirpth, f"{molarity}.png")
+                fig.savefig(fpth, dpi=200, bbox_inches="tight")
+                plt.clf()
+                plt.close()
 
 
 def test_mobility_2():
@@ -4045,7 +4193,7 @@ def compare_md_cond():
         cf_xdens_bourg = pickle.load(pkf)
 
     def __calc_mobility_diffuse_bourg(mbulk: float, _x: float, _s: str) -> float:
-        _m = mbulk * ((1.0 - np.exp(-0.14 * _x * 1.0e10)))
+        _m = mbulk * ((1.0 - np.exp(-0.14 * _x)))
         return _m
 
     def __calc_eq_morality(T, P, mtarg, layer_width, xy_unit):
@@ -4065,6 +4213,7 @@ def compare_md_cond():
     cond_smec_ls = []
     T, P = 298.15, 1.0e5
     _results: Dict = results.setdefault("Bourg and Sposito (2011)", {})
+    print("Bourg and Sposito (2011)")
     for cf, nacl_dens in cf_xdens_bourg.items():
         nacl = NaCl(temperature=T, pressure=P, molarity=cf)
 
@@ -4085,12 +4234,15 @@ def compare_md_cond():
             cca = cf * 16 / 48
         else:
             raise
-        ion_props["Na"]["Molarity"] = cna
-        ion_props.setdefault("Ca", {"Molarity": cca})
+        # ion_props["Na"]["Molarity"] = cna
+        # ion_props.setdefault("Ca", {"Molarity": cca})
+        # ion_props["Ca"]["Valence"] = 2
+        # ion_props["Cl"]["Molarity"] = cf
+        ion_props["Na"]["Molarity"] = cf * 0.5
+        ion_props.setdefault("Ca", {"Molarity": cf * 0.25})
         ion_props["Ca"]["Valence"] = 2
         ion_props["Cl"]["Molarity"] = cf
         msa_prop = calc_mobility(ion_props, T, nacl.get_dielec_fluid(), P)
-
         # MD
         sigma = 0.0
         for _s, xy in nacl_dens.items():
@@ -4101,12 +4253,10 @@ def compare_md_cond():
             v = abs(ion_props[_s]["Valence"])
             cou = 0
             for x, y in zip(x_ls, y_ls):
-                if x > 29.0:
-                    continue
                 # number density (/m3)
                 n = 1000.0 * y * const.AVOGADRO_CONST
                 # mobility
-                m = __calc_mobility_diffuse_bourg(_mbulk, x, _s)
+                m = __calc_mobility_diffuse_bourg(_mbulk, x - 4.7, _s)
                 cond_sum += v * const.ELEMENTARY_CHARGE * n * m
                 cou += 1
             # take average
@@ -4121,6 +4271,7 @@ def compare_md_cond():
 
         _results.setdefault("MD", []).append(sigma)
         _results.setdefault("TLM", []).append(smectite.cond_intra)
+        print(sigma, smectite.cond_intra, nacl.get_cond())
 
     fig, ax = plt.subplots()
     ax.plot(cf_ls, cond_smec_ls)
@@ -4195,7 +4346,7 @@ def compare_md_cond():
     _results.setdefault("TLM", []).append(smectite.cond_intra)
 
     print("Tournassat et al., 2009")
-    print(cond, smectite.cond_intra)
+    print(cond, smectite.cond_intra, nacl.get_cond())
 
     # # Zhang et al. (2014)
     # # fig. 2
@@ -4296,7 +4447,7 @@ def compare_md_cond():
     #     _result.setdefault("TLM", []).append(smectite.cond_intra)
 
     # Tournassatが低い理由：TOT層の電荷が低い (-0.725e/nm2)ためだと考えられる
-    # Bourg and Spositoが高い理由：Ca2+が含まれているため
+    # Bourg and Spositoが低い理由：Ca2+が含まれているため, (なお, -2.63828e/nm2)
     fig, ax = plt.subplots()
     for ref, result in results.items():
         ax.scatter(result["TLM"], result["MD"], label=ref)
@@ -4382,7 +4533,7 @@ def assign_parallel(quartz: Quartz, nacl: NaCl):
     # cube.set_sigmas(sigmas)
     # cube.set_dks(dks)
     cube.femat()
-    cube.set_A()
+    cube.generate_A()
 
     # Theoritical solution
     l = edge_length
@@ -4524,25 +4675,215 @@ def percolation():
     fig.savefig("./test/percolation.png", dpi=300, bbox_inches="tight")
 
 
+def plt_anisotropic_distribution():
+    nacl = NaCl(temperature=298.15, pressure=1.0e5, molarity=1.0)
+    smectite = Smectite(nacl=nacl, layer_width=2.0e-9)
+    smectite.calc_potentials_and_charges_truncated()
+    smectite.calc_cond_interlayer()
+    smectite.calc_cond_tensor()
+    smectite.calc_potentials_and_charges_inf()
+    smectite.calc_cond_infdiffuse()
+    quartz = Quartz(nacl=nacl)
+    cube = Cube()
+    poros, xsmec = 0.008654557929317054, 0.32446740383383854  #!
+    cube.create_pixel_by_macro_variable(
+        shape=(20, 20, 20),
+        edge_length=1.0e-6,
+        volume_frac_dict=OrderedDict(
+            [
+                (nacl, poros),
+                (smectite, (1.0 - poros) * xsmec),
+                (quartz, (1.0 - poros) * (1.0 - xsmec)),
+            ],
+        ),
+        instance_range_dict=OrderedDict([(nacl, (10.0, 10.0))]),
+        instance_adj_rate_dict=OrderedDict(
+            [
+                (smectite, (nacl, 1.0)),
+            ]
+        ),
+    )
+    isinstance_ls = cube.get_instance_ls()
+    instance_int_ls = []
+    for k in range(20):
+        for j in range(20):
+            for i in range(20):
+                _i = isinstance_ls[k][j][i]
+                if isinstance(_i, Smectite):
+                    instance_int_ls.append(1.0)
+                elif isinstance(_i, Quartz):
+                    instance_int_ls.append(2.0)
+                elif isinstance(_i, NaCl):
+                    instance_int_ls.append(0.0)
+                else:
+                    print(type(i))
+                    raise
+    plt_any_val(instance_int_ls, (20, 20, 20), "./tmp/L24a", edge_length=1.0e-6)
+
+
+def smec_cond_intra_temp():
+    molality_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
+    tempe_ls = np.linspace(278.15, 473.15, 10).tolist()
+    P, r, Ph = 5.0e6, 2.0e-9, 7.0
+    m_result = {}
+    for m in molality_ls:
+        # temperature, stern conductivity, diffuse conductivity sum
+        result: List = m_result.setdefault(m, [[], [], [], []])
+        for t in tempe_ls:
+            print(m, t)
+            nacl = NaCl(temperature=t, pressure=P, molality=m, ph=Ph)
+            smectite = Smectite(nacl=nacl, layer_width=r)
+            smectite.calc_potentials_and_charges_truncated()
+            _, (cs, cd) = smectite.calc_cond_interlayer()
+            result[0].append(t)
+            result[1].append(cs)
+            result[2].append(cd)
+            result[3].append(cs + cd)
+
+    # plot
+    fig, ax = plt.subplots()
+    for i, (m, result) in enumerate(m_result.items()):
+        ax.plot(
+            result[0],
+            result[1],
+            label=m,
+            linestyle="solid",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+        ax.plot(
+            result[0],
+            result[2],
+            linestyle="dashed",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+        ax.plot(
+            result[0],
+            result[3],
+            linestyle="dotted",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+    ax.legend()
+    fig.savefig(
+        path.join(test_dir(), "smec_cond_intra_temp.png"), dpi=200, bbox_inches="tight"
+    )
+
+
+def smec_cond_infdiffuse_temp():
+    molality_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
+    tempe_ls = np.linspace(278.15, 473.15, 10).tolist()
+    P, r, Ph = 5.0e6, 2.0e-9, 7.0
+    m_result = {}
+    for m in molality_ls:
+        # temperature, stern conductivity, diffuse conductivity sum
+        result: List = m_result.setdefault(m, [[], [], [], []])
+        for t in tempe_ls:
+            print(m, t)
+            nacl = NaCl(temperature=t, pressure=P, molality=m, ph=Ph)
+            smectite = Smectite(nacl=nacl, layer_width=r)
+            smectite.calc_potentials_and_charges_inf()
+            _, (cs, cd) = smectite.calc_cond_infdiffuse()
+            result[0].append(t)
+            result[1].append(cs)
+            result[2].append(cd)
+            result[3].append(cs + cd)
+
+    # plot
+    fig, ax = plt.subplots()
+    for i, (m, result) in enumerate(m_result.items()):
+        ax.plot(
+            result[0],
+            result[1],
+            label=m,
+            linestyle="solid",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+        ax.plot(
+            result[0],
+            result[2],
+            linestyle="dashed",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+        ax.plot(
+            result[0],
+            result[3],
+            linestyle="dotted",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+    ax.legend()
+    fig.savefig(
+        path.join(test_dir(), "smec_cond_infdiffuse_temp.png"),
+        dpi=200,
+        bbox_inches="tight",
+    )
+
+
+def quartz_cond_temp():
+    molality_ls = [0.09, 0.26, 0.858, 1.76, 4.74]
+    tempe_ls = np.linspace(278.15, 473.15, 10).tolist()
+    P, Ph = 5.0e6, 7.0
+    m_result = {}
+    for m in molality_ls:
+        # temperature, stern conductivity, diffuse conductivity sum
+        result: List = m_result.setdefault(m, [[], [], [], []])
+        for t in tempe_ls:
+            print(m, t)
+            nacl = NaCl(temperature=t, pressure=P, molality=m, ph=Ph)
+            quartz = Quartz(nacl=nacl)
+            result[0].append(t)
+            result[1].append(quartz.cond_diffuse)
+            result[2].append(quartz.cond_stern)
+            result[3].append(quartz.cond_diffuse + quartz.cond_stern)
+
+    # plot
+    fig, ax = plt.subplots()
+    for i, (m, result) in enumerate(m_result.items()):
+        ax.plot(
+            result[0],
+            result[1],
+            label=m,
+            linestyle="solid",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+        ax.plot(
+            result[0],
+            result[2],
+            linestyle="dashed",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+        ax.plot(
+            result[0],
+            result[3],
+            linestyle="dotted",
+            color=cm.jet(float(i) / len(m_result)),
+        )
+    ax.legend()
+    fig.savefig(
+        path.join(test_dir(), "quartz_cond_temp.png"), dpi=200, bbox_inches="tight"
+    )
+
+
 def tmp():
-    # Levy et al. (2018)
-    T = 298.15
+    a_ls = [0.96, 0.91, 0.93, 0.85]
+    phi_ls = [0.68, 0.68, 0.71, 0.57]
+    molarity_ls = [1.39e-3, 1.53e-2, 1.46e-1, 1.54]
 
-    def callback(M, Cw):
-        return Cw - sen_and_goode_1992(T, M)
+    rho_nacl_ls = []
+    for cf in molarity_ls:
+        nacl = NaCl(temperature=298.15, molarity=cf, pressure=1.0e5)
+        rho_nacl_ls.append(nacl.get_density())
 
-    for _id, _prop in core_props_levy.items():
-        print(f"_id: {_id}")
-        # calculate molality of NaCl solution
-        __callback = partial(callback, Cw=_prop["Cw"])
-        molarity_ls = []
-        for cw in _prop["Cw"]:
-            __callback = partial(callback, Cw=cw)
-            m = bisect(__callback, 0.0, 6.0)
-            nacl = NaCl(temperature=T, pressure=1.0e5, molality=m, ph=7.0)
-            molarity_ls.append(nacl.get_ion_props()["Na"]["Molarity"])
-        print(molarity_ls)
+    h_ls = []
+    RhoSol = 2.2
+    c = 0.2
+    for i in range(4):
+        phi = phi_ls[i]
+        rho_nacl = rho_nacl_ls[i]
+        h_ls.append(rho_nacl / RhoSol * (phi - (1.0 - phi) * c) / (1.0 - phi))
 
+    v_ls = [1.0/a for a in a_ls]
+
+    plt.plot(h_ls, a_ls)
+    plt.show()
 
 if __name__ == "__main__":
     # tmp()
@@ -4563,31 +4904,28 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992() # DONE
     # # # test_mobility() # やる必要なし
     # test_leroyetal_2022()
-
-    # calc_quartz_mobility()
-    # qurtz_cond() # やる必要なし
-    # smectite_cond_intra()
-    # potential_smectite_intra()
-    # test_dielec()
-    # smec_cond_intra_r_dependence()
-    # smectite_cond_inf()
     # fit_TLM_params_smec_inf()
-    # potential_smectite_inf()
-    # Revil_etal_fig2()
     # #Revil_etal_fig2_by_bulk()
     # compare_WS_shaly_1()
     # analysis_WS1_result()
     # # test_poros_distribution() # TODO
     # compare_WS_shaly_2()
     # analysis_WS_result2()
-
     # optimize_n()
+    # test_quartz_charge() # TODO: outdated?
+    # test_quartz_charge_extend() # TODO: outdated?
+    # Revil_etal_fig2()
     # analyse_result()
-
     # search_maximum_anisotoropic_condition()
-
-    # compare_levi_et_al_2018()
     # test_cluster()
+
+    # qurtz_cond()
+    # smectite_cond_intra()
+    # potential_smectite_intra()
+    # test_dielec()
+    # smec_cond_intra_r_dependence()
+    # smectite_cond_inf()
+    # potential_smectite_inf()
 
     # test_nacl_density()
     # test_nacl_activity_and_molality()
@@ -4595,8 +4933,6 @@ if __name__ == "__main__":
     # test_nacl_dielec_salinity()
     # test_nacl_dielec_temperature()
     # test_nacl_viscosity()
-    # test_quartz_charge() # TODO: outdated?
-    # test_quartz_charge_extend() # TODO: outdated?
     # test_quartz_potential_temperature()
     # test_mobility_fluid()
     # test_activity()
@@ -4612,4 +4948,9 @@ if __name__ == "__main__":
 
     compare_WS_shaly_3()
     analysis_WS_result3()
+
+    # smec_cond_intra_temp()
+    # smec_cond_infdiffuse_temp()
+
+    # quartz_cond_temp()
     pass

@@ -194,8 +194,8 @@ class FEM_Cube:
         assert isinstance(self.u2d, np.ndarray)
         assert isinstance(self.A, np.ndarray)
 
-        b = self.fem_input.get_b()
-        c = self.fem_input.get_c()
+        b = self.fem_input.get_B()
+        c = self.fem_input.get_C()
         assert isinstance(b, np.ndarray)
         assert isinstance(c, float)
 

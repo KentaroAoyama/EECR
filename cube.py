@@ -14,7 +14,6 @@ import os
 os.environ["OMP_NUM_THREADS"] = "1"
 
 import numpy as np
-from sklearn.cluster import KMeans
 
 from fluid import Fluid
 
@@ -139,10 +138,10 @@ class Cube:
 
         Args:
             shape (Tuple[int]): Pixel size of (nz, ny, nx).
-            edge_length (float): Length of a edge of a cube pixel.
+            edge_length (float): Length of a edge of a cube pixel (m).
             volume_frac_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
                 and value is the volume fraction. The phases are assigned in the order of the keys,
-                so if you need to consider the order, give OrderedDict
+                so if you need to consider the order, give OrderedDict.
             instance_range_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
                 and value is the tuple containing anisotoropic scaling factors of y and z axis.
             instance_adj_rate_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
@@ -276,7 +275,7 @@ class Cube:
                 # anisotoropic scale
                 range_yz = instance_range_dict[_instance]
                 _m_selected = self.__calc_anisotropic_distribution(
-                    m_remain, _num, shape, range_yz, seed
+                    m_remain, _num, shape, range_yz
                 )
             elif _instance in instance_adj_rate_dict:
                 # adj rate
@@ -491,44 +490,6 @@ class Cube:
                         sigmas[m][5] = (double_layer_length, cexcess)
         self.sigmas = sigmas
         self.dks = np.array(dks, dtype=np.float64)
-
-    def create_from_file(self, fpth: str) -> None:
-        """Create 3d cubic elements from file as in Garboczi (1998)
-
-        Args:
-            fpth (str): File path to be read
-        """
-        # TODO: 仕様見直し
-        # TODO: idx_tensor_mapは引数として与える仕様に変更する
-        nx = 3
-        ny = 3
-        nz = 1
-        assert isinstance(nx, int) and nx > 0
-        assert isinstance(ny, int) and ny > 0
-        assert isinstance(nz, int) and nz > 0
-        idx_tensor_map: Dict = {
-            0: [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]],
-            1: [[0.5, 0.0, 0.0], [0.0, 0.5, 0.0], [0.0, 0.0, 0.5]],
-        }
-        sigma: List = list(range(len(idx_tensor_map)))
-        _keys: List = list(idx_tensor_map.keys())
-        _keys.sort()
-        for cidx in _keys:
-            sigma[cidx] = idx_tensor_map[cidx]
-        pix_tensor = np.zeros(shape=(nz, ny, nx)).tolist()
-        pix_ls: List = []
-        with open(fpth, "r", encoding="utf-8") as f:
-            for m, _l in enumerate(f.readlines()):
-                cidx = int(_l.replace("\n", ""))
-                i, j, k = calc_ijk(m, nx, ny)
-                pix_tensor[k][j][i] = idx_tensor_map[cidx]
-                pix_ls.append(cidx)
-        self.pix_tensor = pix_tensor
-        self.sigmav = sigma
-        self.pix = pix_ls
-
-        if self.logger is not None:
-            self.logger.info("create_from_file done")
 
     def __sum_double_layer_cond(
         self,
@@ -943,7 +904,7 @@ class Cube:
         self.B = np.array(b, dtype=np.float64)
         self.C = np.float64(c)
 
-        self.set_A()
+        self.generate_A()
 
         if self.logger is not None:
             self.logger.info("femat done")
@@ -952,7 +913,7 @@ class Cube:
         self,
         m_remain: Set,
         _num: int,
-    ) -> Set:
+    ) -> Set[int]:
         """Gives a completely random distribution (i.e., nugget model)
 
         Args:
@@ -960,7 +921,7 @@ class Cube:
             _num (int): Number to select
 
         Returns:
-            Set: Selected global flatten indecies
+            Set[int]: Selected global flatten indecies
         """
         _m_selected: List = random.sample(list(m_remain), k=_num)
         return set(_m_selected)
@@ -1023,94 +984,55 @@ class Cube:
         m_remain: Set,
         _num: int,
         nxyz: Tuple[int],
-        range_yz: Tuple,
-        seed: int,
-    ) -> Set:
+        range_yz: Tuple[float, float],
+    ) -> Set[int]:
         """Calculate the anisotropic distribution of pore
         Args:
             m_remain (Set): Flatten global indices set
             _num (int): Number to be selected
             nxyz (Tuple[int]): Tuple containing nx, ny, nz
-            range_yz (Tuple): Anisotoropic scaling of y and z axis
-            seed (int): Seed for KMeans clustering
+            range_yz (Tuple[float, float]): Anisotoropic scaling of y and z axis
         Returns:
-            Set: Selected global flatten indecies
+            Set[int]: Selected global flatten indecies
         """
         assert _num >= 0, f"_num: {_num}"
         # wn = S(X)^-1 S(X - xn)
         nx, ny, nz = nxyz
         ay, az = range_yz
-        range_scale: np.ndarray = np.array([1.0, 1.0/ay, 1.0/az])
-        # initial point (observation points)
-        num_initial = 2 * min(nxyz)
-        if num_initial == 0:
-            num_initial = 1
-        if num_initial > _num:
-            num_initial = _num
+        range_scale: np.ndarray = np.array([1.0, 1.0 / ay, 1.0 / az])
+        # Set initial points (if exists: 1, else: 0)
+        num_init = int(min((0.05 * nx * ny * nz, 0.5 * _num)))
+        if num_init == 0:
+            num_init = 1
+        if num_init > _num:
+            num_init = _num
 
-        # if exists: 1, else: 2 (num1 > num0)
-        # set half of the values to 0
-        # num1: int = round_half_up(num_initial * _num / len(list(m_remain)))
-        num1: int = round_half_up(num_initial * 0.5)
-        if num1 == 0:
-            num1 = 1
-        num0: int = num_initial - num1
-        # set initial distribution by KMeans
-        x_all: List = []
-        for m in list(m_remain):
-            i, j, k = calc_ijk(m, nx, ny)
-            x_all.append([float(i), float(j), float(k)])
-        x_all: np.ndarray = np.array(x_all)
+        m_initial = self.__assign_random(m_remain, num_init)
 
-        # calculate centroids
-        c_all = KMeans(
-            init="k-means++", n_clusters=num_initial, random_state=seed, n_init="auto"
-        ).fit(x_all)
-        # set value to each centroids
-        values_in: List = [0.0 if i < num0 else 1.0 for i in range(num_initial)]
-        random.shuffle(values_in)
-        # calculate coordinates of initial points
-        m_initial: List = []
-        for xyz in c_all.cluster_centers_:
-            x, y, z = x_all[np.square(x_all - xyz).sum(axis=1).argmin()]
-            m_initial.append(calc_m(int(x), int(y), int(z), nx, ny))
         # get the coordinates where the pore exists
         m_remain = m_remain.difference(m_initial)
         m_remain: List = list(m_remain)
         init_p_ls: List[np.ndarray] = []
-        values_all: List = []
-        for m, v in zip(m_initial, values_in):
+        values_init: List = []
+        for m in m_initial:
             i, j, k = calc_ijk(m, nx, ny)
-            init_p_ls.append(self.__calc_position(i, j, k))
             # considering periodic boundary conditions.
             for i_tmp in (i - nx, i, i + nx):
                 for j_tmp in (j - ny, j, j + ny):
                     for k_tmp in (k - nz, k, k + nz):
-                        values_all.append(v)
-                        if i == i_tmp and j == j_tmp and k == k_tmp:
-                            continue
+                        values_init.append(random.random())
                         init_p_ls.append(self.__calc_position(i_tmp, j_tmp, k_tmp))
-        num_initial_added = 27 * num_initial
 
-        # generate distance matrix
-        dist_initial: List = np.zeros((num_initial_added, num_initial_added)).tolist()
-        for idx1 in range(num_initial_added):
-            for idx2 in range(num_initial_added)[idx1:]:
-                point1 = init_p_ls[idx1]
-                point2 = init_p_ls[idx2]
-                dist_initial[idx1][idx2] = np.sqrt(
-                    np.square((point1 - point2) * range_scale).sum()
-                )
-        dist_initial: np.ndarray = np.array(dist_initial, dtype=np.float64)
-        # make dist_initial symmetrical (diagonal elements are zero)
-        dist_initial += dist_initial.T
+        # Generate distance matrix of initial points
+        init_p_arr = np.array(init_p_ls)
+        dist_init: np.ndarray = np.linalg.norm(
+            (init_p_arr[:, np.newaxis, :] - init_p_arr) * range_scale, axis=2
+        )
 
         # dist to initial points to interpolation points (Γ(X - xn)^T)
         dist_interp: List = []
-        init_p_arr = np.array(init_p_ls)
         for m in m_remain:
-            i, j, k = calc_ijk(m, nx, ny)
-            point_n = np.array([float(i), float(j), float(k)])
+            point_n = self.__calc_position(*calc_ijk(m, nx, ny))
             # n_initial × 3
             _dist_aniso = (init_p_arr - point_n) * range_scale
             # 1 × n_initial
@@ -1120,22 +1042,20 @@ class Cube:
 
         # calculate wight (n_initial × n_remain)
         _c = 1.0 / np.sqrt(np.square([float(nx), float(ny), float(nz)]).sum()) * 0.5
-        gamma_init = self.__calc_vario_exp(dist_initial, c=_c)
-        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_initial_added))
+        gamma_init = self.__calc_vario_exp(dist_init, c=_c)
+        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_init * 27))
         gamma_interp = self.__calc_vario_exp(dist_interp, c=_c)
         wn: np.ndarray = np.matmul(gamma_init_inv, gamma_interp)
-
         # get m
         # The sum of weights is considered a probability
-        values: np.ndarray = np.array(values_all)
+        values: np.ndarray = np.array(values_init)
         _mean = values.mean()
         residual: np.ndarray = values - _mean
         prob = np.matmul(residual, wn) + _mean
         m_selected: List = np.array(m_remain)[
-            np.argsort(-1.0 * prob)[: _num - num1]
+            np.argsort(-1.0 * prob)[: _num - num_init]
         ].tolist()
-        m_initial_1: List = np.array(m_initial)[np.array(values_in) == 1.0].tolist()
-        m_selected.extend(m_initial_1)
+        m_selected.extend(list(m_initial))
         return set(m_selected)
 
     def __calc_position(self, i: int, j: int, k: int) -> np.ndarray:
@@ -1180,11 +1100,12 @@ class Cube:
             m_adj.intersection_update(m_remain)
             m_adj = m_adj.difference(m_selected)
             m_adj_ls: List = list(m_adj)
+            # Number of elements to assign in this loop
             k: int = None
-            if len(m_adj_ls) > num_adj_obs:
-                k = num_adj_obs
-            else:
+            if len(m_adj_ls) < num_adj_obs:
                 k = len(m_adj_ls)
+            else:
+                k = num_adj_obs
             m_selected_tmp: Set = set(random.sample(m_adj_ls, k))
 
             # update variables
@@ -1342,7 +1263,7 @@ class Cube:
         if self.logger is not None:
             self.logger.info("set_ib done")
 
-    def set_A(self) -> None:
+    def generate_A(self) -> None:
         """Set global stiffness matrix"""
         assert self.ib is not None
         assert self.dkv is not None
@@ -1518,23 +1439,6 @@ class Cube:
         )
         As[m] = am
 
-    def set_edge_length(self, _edge_length: float) -> None:
-        """Setter of the self.edge_length
-
-        Args:
-            _edge_length (float): Edge length of the cube (m)
-        """
-        self.edge_length = _edge_length
-
-    def set_rotation_angle_ls(self, _rotation_angle_ls: List[np.ndarray]) -> None:
-        """Setter of the self.rotation_angle_ls
-
-        Args:
-            _rotation_angle_ls (List[np.ndarray]): List containing each element's
-                rotation matrix (m×3×3)
-        """
-        self.rotation_angle_ls = _rotation_angle_ls
-
     def set_pix_tensor(self, _pix_tensor: List[List[List[np.ndarray]]]) -> None:
         """Setter of the self.pix_tensor
 
@@ -1543,6 +1447,25 @@ class Cube:
                 conductivity tensor corresponding to the element (int) of self.pix
         """
         self.pix_tensor = _pix_tensor
+
+    def set_dkv(self, dkv: List[np.ndarray]) -> None:
+        """Setter of the self.dkv
+
+        Args:
+            dkv (List[np.ndarray]): List containing the stiffness matrix of each
+                representative elementary volume
+        """
+        self.dkv = dkv
+
+    def set_dks(self, _dks: List[List[np.ndarray]]) -> None:
+        """Setter of the self.dks
+
+        Args:
+            _dks (List[List[np.ndarray]]): List containing surface stiffness matrix
+                1st index: Global index (m)
+                2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+        """
+        self.dks = _dks
 
     def set_sigmav(self, _sigmav: List[np.ndarray]) -> None:
         """Setter of the self.sigmav
@@ -1553,6 +1476,25 @@ class Cube:
         """
         self.sigmav = _sigmav
 
+    def set_sigmas(self, _sigmas: List[List[Tuple[float, float]]]) -> None:
+        """Setter of the self.sigmas
+
+        Args:
+            _sigmas (List[List[Tuple[float, float]]]): List containing the pair of the
+                Debye length (m) and surface conductivity tensor
+            1st index: Global index (m)
+            2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+        """
+        self.sigmas = _sigmas    
+
+    def set_edge_length(self, _edge_length: float) -> None:
+        """Setter of the self.edge_length
+
+        Args:
+            _edge_length (float): Edge length of the cube (m)
+        """
+        self.edge_length = _edge_length
+
     def set_pix(self, _pix: List[int]) -> None:
         """Setter of the self.pix
 
@@ -1560,6 +1502,91 @@ class Cube:
             _pix (List[int]): Index of conductivity tensors ordered by global index (m)
         """
         self.pix = _pix
+
+    def set_ex(self, ex: float) -> None:
+        """Setter of the self.ex
+
+        Args:
+            ex (float): Electric field in X direction (V/grid number)
+        """
+        self.ex = ex
+
+    def set_ey(self, ey: float) -> None:
+        """Setter of the self.ey
+
+        Args:
+            ey (float): Electric field in Y direction (V/grid number)
+        """
+        self.ey = ey
+
+    def set_ez(self, ez: float) -> None:
+        """Setter of the self.ey
+
+        Args:
+            ez (float): Electric field in Y direction (V/grid number)
+        """
+        self.ez = ez
+
+    def set_A(self, A: np.ndarray) -> None:
+        """Setter of the self.A
+
+        Args:
+            A (np.ndarray): 2d global stiffness matrix (number of the element × 27) 
+        """
+        self.A = A
+
+    def set_Av(self, Av: np.ndarray) -> None:
+        """Setter of the self.Av
+
+        Args:
+            Av (np.ndarray): 2d global stiffness matrix of representative elementary volume
+                (number of the element × 27) 
+        """
+        self.Av = Av
+    
+    def set_As(self, As: np.ndarray) -> None:
+        """Setter of the self.Av
+
+        Args:
+            As (np.ndarray): 2d global stiffness matrix of surface (number of the element × 27) 
+        """
+        self.As = As
+
+    def set_B(self, B: np.ndarray) -> None:
+        """Setter of the self.B
+        
+        Args:
+            B (np.ndarray) Coefficient matrix described at pp.11 in Garboczi (1998).
+                By calculating the inner product of u and b, the energy loss at the
+                boundary can be calculated. 
+        """
+        self.B = B
+
+    def set_C(self, C: np.float64) -> None:
+        """Setter of the self.C
+        
+        Args:
+            C (np.float64 or None): Constant of the energy loss at the boundery
+                which is described at pp.11 in Garboczi (1998).
+        """
+        self.C = C
+
+    def set_logger(self, logger: Logger) -> None:
+        """Setter of the self.logger
+
+        Args:
+            logger (Logger): Logger for debugging
+        """
+        self.logger = logger
+
+    def set_rotation_angle_ls(self, _rotation_angle_ls: List[np.ndarray]) -> None:
+        """Setter of the self.rotation_angle_ls
+
+        Args:
+            _rotation_angle_ls (List[np.ndarray]): List containing each element's
+                rotation matrix (m×3×3)
+        """
+        self.rotation_angle_ls = _rotation_angle_ls
 
     def set_instance_ls(self, _instance_ls: List[Any]) -> None:
         """Setter of the self.instance_ls
@@ -1570,29 +1597,8 @@ class Cube:
         """
         self.instance_ls = _instance_ls
 
-    def set_sigmas(self, _sigmas: List[List[Tuple[float, float]]]) -> None:
-        """Setter of the self.sigmas
-
-        Args:
-            _sigmas (List[List[Tuple[float, float]]]): List containing the pair of the
-                Debye length (m) and surface conductivity tensor
-            1st index: Global index (m)
-            2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
-        """
-        self.sigmas = _sigmas
-
-    def set_dks(self, _dks: List[List[np.ndarray]]) -> None:
-        """Setter of the self.dks
-
-        Args:
-            _dks (List[List[np.ndarray]]): List containing surface stiffness matrix
-            1st index: Global index (m)
-            2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
-        """
-        self.dks = _dks
-
     def get_pix_tensor(self) -> np.ndarray or None:
-        """Getter for the pix in 5d shape.
+        """Getter of the pix in 5d shape.
 
         Returns:
             np.ndarray or None: 5d array of conductivity tensor. Each index indicate node.
@@ -1604,22 +1610,11 @@ class Cube:
             return deepcopy(self.pix_tensor)
         return self.pix_tensor
 
-    def get_instance_ls(self) -> List or None:
-        """Getter for the instance_ls in 3d shape.
+    def get_dkv(self) -> List[np.ndarray] or None:
+        """Getter of the stiffness matrix of representative elementary volume.
 
         Returns:
-            List or None: List containing the instance (solid, fluid, etc.)
-                for each element (index: m)
-        """
-        if self.instance_ls is not None:
-            return deepcopy(self.instance_ls)
-        return self.instance_ls
-
-    def get_dk(self) -> List or None:
-        """Getter for the stiffness matrix in 3d shape.
-
-        Returns:
-            List or None: Stiffness matrix described at pp.8 in Garboczi (1998). First
+            List[np.ndarray] or None: Stiffness matrix described at pp.8 in Garboczi (1998). First
                 index indicates argument variable of sigma's indices (0 to 7) indicates
                 the location of the node (see Fig.1 of Garboczi, 1998). If the stiffness
                 matrix is not calculated, return None.
@@ -1628,8 +1623,20 @@ class Cube:
             return deepcopy(self.dkv)
         return self.dkv
 
+    def get_dks(self) -> List[List[np.ndarray]] or None:
+        """Getter of the stiffness matrix in 3d shape.
+
+        Returns:
+            List[List[np.ndarray]]: List containing surface stiffness matrix
+                1st index: Global index (m)
+                2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+        """
+        if self.dks is not None:
+            return deepcopy(self.dks)
+        return self.dks
+    
     def get_sigmav(self) -> List or None:
-        """Getter for the conductivity tensor in 3d shape.
+        """Getter of the conductivity tensor in 3d shape.
 
         Returns:
             List or None: 3d list of conductivity tensor adescribed at pp.6 in in Garboczi
@@ -1640,9 +1647,9 @@ class Cube:
         if self.sigmav is not None:
             return deepcopy(self.sigmav)
         return self.sigmav
-
+    
     def get_sigmas(self) -> List or None:
-        """Getter for the surface conductivity tensor in 3d shape.
+        """Getter of the surface conductivity tensor in 3d shape.
 
         Returns:
             List or None: 3d list of surface conductivity tensor.
@@ -1650,17 +1657,17 @@ class Cube:
         if self.sigmas is not None:
             return deepcopy(self.sigmas)
         return self.sigmas
-
+    
     def get_edge_length(self) -> float or None:
-        """Getter for the edge length (m) of cubic cell.
+        """Getter of the edge length (m) of cubic cell.
 
         Returns:
             float or None: Edge length of cubic cell (m)
         """
         return self.edge_length
-
+    
     def get_ib(self) -> List or None:
-        """Getter for the neighbor labelling list in 2d shape.
+        """Getter of the neighbor labelling list in 2d shape.
 
         Returns:
             List or None: 2d list of neighbor labelling described at pp.8 to 11 in Garboczi
@@ -1677,7 +1684,7 @@ class Cube:
         return self.ib
 
     def get_pix(self) -> List or None:
-        """Getter for the 1d list mapping the index of the conductivity tensor from the
+        """Getter of the 1d list mapping the index of the conductivity tensor from the
         index (m) of the one dimensional labbling scheme
 
         Returns:
@@ -1690,7 +1697,7 @@ class Cube:
         return self.pix
 
     def get_ex(self) -> np.float64 or None:
-        """Getter for the electric field in the x direction.
+        """Getter of the electric field in the x direction.
 
         Returns:
             np.float64 or None: Electrical field of x direction. The unit is volt/Δx
@@ -1700,7 +1707,7 @@ class Cube:
         return self.ex
 
     def get_ey(self) -> np.float64 or None:
-        """Getter for the electric field in the y direction.
+        """Getter of the electric field in the y direction.
 
         Returns:
             np.float64 or None: Electrical field of y direction. The unit is volt/Δy
@@ -1710,7 +1717,7 @@ class Cube:
         return self.ey
 
     def get_ez(self) -> np.float64 or None:
-        """Getter for the electric field in the z direction.
+        """Getter of the electric field in the z direction.
 
         Returns:
             np.float64 or None: Electrical field of z direction. Note that the unit is volt/Δz
@@ -1720,7 +1727,7 @@ class Cube:
         return self.ez
 
     def get_A(self) -> np.ndarray or None:
-        """Getter for the global stiffness matrix A
+        """Getter of the global stiffness matrix A
 
         Returns:
             np.ndarray or None: Global stiffness matrix
@@ -1730,7 +1737,7 @@ class Cube:
         return self.A
 
     def get_Av(self) -> np.ndarray or None:
-        """Getter for the global volume stiffness matrix A
+        """Getter of the global volume stiffness matrix A
 
         Returns:
             np.ndarray or None: global volume stiffness matrix
@@ -1740,7 +1747,7 @@ class Cube:
         return self.Av
 
     def get_As(self) -> np.ndarray or None:
-        """Getter for the Global surface stiffness matrix A
+        """Getter of the Global surface stiffness matrix A
 
         Returns:
             np.ndarray or None: Global surface stiffness matrix
@@ -1749,8 +1756,8 @@ class Cube:
             return deepcopy(self.As)
         return self.As
 
-    def get_b(self) -> np.ndarray or None:
-        """Getter for the coefficient matrix b
+    def get_B(self) -> np.ndarray or None:
+        """Getter of the coefficient matrix b
 
         Returns:
             np.ndarray or None: Coefficient matrix described at pp.11 in Garboczi (1998).
@@ -1761,14 +1768,44 @@ class Cube:
             return deepcopy(self.B)
         return self.B
 
-    def get_c(self) -> np.float64 or None:
-        """Getter for the constant of the energy loss at the boundery.
+    def get_C(self) -> np.float64 or None:
+        """Getter of the constant of the energy loss at the boundery.
 
         Returns:
             np.float64 or None: Constant of the energy loss at the boundery which is described
                 at pp.11 in Garboczi (1998). If c is not calculated, return None.
         """
         return self.C
+    
+    def get_logger(self) -> Logger or None:
+        """Getter of the logger.
+
+        Returns:
+            logger (Logger) or None: 
+        """
+        return self.logger
+    
+    def get_instance_ls(self) -> List or None:
+        """Getter of the instance_ls in 3d shape.
+
+        Returns:
+            List or None: List containing the instance (solid, fluid, etc.)
+                for each element (index: m)
+        """
+        if self.instance_ls is not None:
+            return deepcopy(self.instance_ls)
+        return self.instance_ls
+
+    def get_rotation_angle_ls(self) -> List or None:
+        """Getter of the rotation_angle_ls in 3d shape.
+
+        Returns:
+            List[np.ndarray] or None: List containing each element's
+                rotation matrix (m×3×3)
+        """
+        if self.rotation_angle_ls is not None:
+            return deepcopy(self.rotation_angle_ls)
+        return self.rotation_angle_ls
 
     def get_shape(self) -> Tuple[int] or None:
         """Getter for the shpe of the cubic FEM mesh

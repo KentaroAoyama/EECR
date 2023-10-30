@@ -1,4 +1,4 @@
-"""Calculate electrical properties of quartz
+"""Calculate the electrical properties of quartz
 """
 
 from typing import Dict
@@ -153,7 +153,9 @@ class Quartz:
         self.charge_0 = charge_0
         self.charge_stern = charge_stern
         self.charge_diffuse = charge_diffuse
-        self.qs_coeff = None
+        self.qs_coeff: float = None
+        self.cond_diffuse: float = None
+        self.cond_stern: float = None
         # stern plane mobility of Na+ (based on Zhang 2011)
         self.mobility_stern = self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
             0.1
@@ -215,9 +217,11 @@ class Quartz:
                     * self.ion_strength
                 )
                 self.__calc_cond_potential_and_charges_2013(xn)
+                self.cond_stern = self.__calc_stern_2013()
+                self.cond_diffuse = self.__calc_diffuse_1997()
                 # eq.(28)
                 self.cond_surface = (
-                    1.53e-9 + self.__calc_diffuse_1997() + self.__calc_stern_2013()
+                    1.53e-9 + self.cond_diffuse + self.cond_stern
                 ) / self.length_edl
             if method == "leroy2022":
                 # Basic stern layer model proposed by Leroy et al. (2022).
@@ -240,8 +244,10 @@ class Quartz:
                     * self.d
                 )
                 # eq.(28) in Leroy et al. (2013)
+                self.cond_diffuse = self.__calc_diffuse_1997()
+                self.cond_stern = self.__calc_stern_2013()
                 self.cond_surface = (
-                    1.53e-9 + self.__calc_diffuse_1997() + self.__calc_stern_2013()
+                    1.53e-9 + self.cond_diffuse + self.cond_diffuse
                 ) / self.length_edl
 
         # calculate conductivity tensor
@@ -358,6 +364,8 @@ class Quartz:
         s_stern = self.__calc_stern_1997()
         # based on Revil & Glover (1998)
         s_prot = 2.4e-9
+        self.cond_stern = s_stern
+        self.cond_diffuse = s_diffuse
         self.cond_surface = (s_diffuse + s_stern + s_prot) / self.length_edl
 
     def __calc_cond_potential_and_charges_2013(
@@ -369,7 +377,6 @@ class Quartz:
         beta: float = 0.75,
         lamda: float = 2.0,
     ) -> float:
-        # TODO? oscillation_tolが大きすぎる可能性がある. 検証する
         if xn is None:
             t_ls = list(init_params.keys())
             _idx = np.argmin(np.square(np.array(t_ls) - self.temperature))

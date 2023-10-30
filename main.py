@@ -82,7 +82,7 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
     dirname += f"_temperature-{temperature}"
     dirname += f"_molality-{molality}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join("E:\EECR", "output6", "pickle", dirname, str(seed))
+    outdir_seed = path.join("E:\EECR", "output7", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
@@ -234,7 +234,7 @@ def experiment():
 
 
 def load_result() -> Dict:
-    pickle_dir = path.join("E:\EECR", "output6", "pickle")
+    pickle_dir = path.join("E:\EECR", "output7", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -296,7 +296,7 @@ def load_result() -> Dict:
 
 def output_fig():
     conditions_ye = load_result()
-    fig_dir = path.join(getcwd(), "output", "fig2")
+    fig_dir = path.join(getcwd(), "output", "fig")
     makedirs(fig_dir, exist_ok=True)
 
     # plot temperature variation
@@ -416,8 +416,8 @@ def plt_curr(pth_solver, pth_out, axis):
 
 if __name__ == "__main__":
     # main()
-    # experiment()
-    output_fig()
+    experiment()
+    # output_fig()
     # plt_hittorf()
     # run("tmp.pkl")
     # cond = "smec_frac-0.0_temperature-473.15_molality-5.0_porosity-0.2"

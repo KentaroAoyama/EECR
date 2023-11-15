@@ -156,7 +156,7 @@ class Quartz:
         self.qs_coeff: float = None
         self.cond_diffuse: float = None
         self.cond_stern: float = None
-        # stern plane mobility of Na+ (based on Zhang 2011)
+        # stern plane mobility of Na+ (based on Zhang et al., 2011)
         self.mobility_stern = self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
             0.1
             + exp(-7.0 * self.ion_props[Species.Na.name][IonProp.Molality.name] - 0.105)
@@ -362,7 +362,7 @@ class Quartz:
         """Calculate the specific conductivity of diffuse layer by Revil & Glover(1998)"""
         s_diffuse = self.__calc_diffuse_1997()
         s_stern = self.__calc_stern_1997()
-        # based on Revil & Glover (1998)
+        # based on Revil & Glover (1998); Leroy et al. (2013)
         s_prot = 2.4e-9
         self.cond_stern = s_stern
         self.cond_diffuse = s_diffuse

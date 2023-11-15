@@ -293,7 +293,7 @@ def load_result() -> Dict:
             conditions_ye.setdefault(tuple(val_ls), []).extend([cond_x, cond_y, cond_z])
     return conditions_ye
 
-
+# TODO: percolationを可視化するのと、0.1刻みの大まかな曲線をプロットする機能を分ける
 def output_fig():
     conditions_ye = load_result()
     fig_dir = path.join(getcwd(), "output", "fig")

@@ -1751,11 +1751,7 @@ class Phyllosilicate:
         # conductivity and width of the TOT layer
         ctot, dtot = 1.0e-12, 6.6e-10
         sigma_h = (sigma_intra * self.layer_width + ctot * dtot) / (dtot + self.layer_width)
-        sigma_v = (
-            1.0
-            / ((1.0 / (self.layer_width * ctot)) + (1.0 / (dtot * sigma_intra)))
-            / (self.layer_width + dtot)
-        )
+        sigma_v = (self.layer_width + dtot) / (self.layer_width / sigma_intra + dtot / ctot)
         cond_tensor = np.array(
             [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
             dtype=np.float64,

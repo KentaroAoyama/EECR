@@ -679,12 +679,11 @@ def get_quartz_init():
 
 def qurtz_duhkin_th():
     print("qurtz_duhkin_th")
-    molarity_ls = np.logspace(-3, 0.7, 10, base=10)
+    molarity_ls = np.logspace(-3, 0.7, 300, base=10)
     plt.rcParams['xtick.direction'] = 'in'
     plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
     t_ls = [25.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0]
-    t_ls = [25.0]
 
     a = 150.0e-9 # pore radius
     for i, _t in enumerate(t_ls):
@@ -751,12 +750,11 @@ def qurtz_duhkin_th():
 
 def qurtz_cond_th():
     print("qurtz_cond_th")
-    molarity_ls = np.logspace(-7, 0.7, 10, base=10)
+    molarity_ls = np.logspace(-7, 0.7, 300, base=10)
     plt.rcParams['xtick.direction'] = 'in'
     plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
     t_ls = [25.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0]
-    t_ls = [25.0]
 
     a = 150.0e-9 # pore radius
     for i, _t in enumerate(t_ls):
@@ -6657,7 +6655,7 @@ if __name__ == "__main__":
     # test_activity()
     # test_fraction()
     # test_smectite_temperature()
-    # test_quartz_temperature()  # TODO:
+    test_quartz_temperature()  # TODO:
     # test_smec_surface_temperature()
     # test_dielec_RaspoandNeau2020()
     # # reviletal1998()
@@ -6686,6 +6684,6 @@ if __name__ == "__main__":
     # 
     # test_sen_and_goode_1992_th()
     # test_cond_from_mobility_th()
-    qurtz_duhkin_th()
+    # qurtz_duhkin_th()
     qurtz_cond_th()
     pass

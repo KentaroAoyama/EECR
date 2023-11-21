@@ -82,7 +82,7 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
     dirname += f"_temperature-{temperature}"
     dirname += f"_molality-{molality}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join("E:\EECR", "output7", "pickle", dirname, str(seed))
+    outdir_seed = path.join("E:\EECR", "output8", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
@@ -179,7 +179,7 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
 
 
 # pylint: disable=unexpected-keyword-arg
-def experiment():
+def experiment(num_workers: int):
     yamlpth = path.join(getcwd(), "conditions.yaml")
     with open(yamlpth, "r", encoding="utf-8") as yf:
         conditions: Dict = safe_load(yf)
@@ -211,8 +211,7 @@ def experiment():
         seed_ls = [42]
 
     for seed in seed_ls:
-        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
-        # pool = futures.ProcessPoolExecutor(4)
+        pool = futures.ProcessPoolExecutor(max_workers=num_workers)
         for smec_frac in smec_frac_ls:
             for temperature in temperature_ls:
                 for molality in molality_ls:
@@ -234,7 +233,7 @@ def experiment():
 
 
 def load_result() -> Dict:
-    pickle_dir = path.join("E:\EECR", "output7", "pickle")
+    pickle_dir = path.join("E:\EECR", "output8", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -416,7 +415,7 @@ def plt_curr(pth_solver, pth_out, axis):
 
 if __name__ == "__main__":
     # main()
-    experiment()
+    experiment(6)
     # output_fig()
     # plt_hittorf()
     # run("tmp.pkl")

@@ -1748,11 +1748,13 @@ class Phyllosilicate:
             "Before calculating the conductivity"
             "of the smectite cell, we should calculate interlayer conductivity"
         )
-        sigma_h = sigma_intra * self.layer_width / (6.6e-10 + self.layer_width)
+        # conductivity and width of the TOT layer
+        ctot, dtot = 1.0e-12, 6.6e-10
+        sigma_h = (sigma_intra * self.layer_width + ctot * dtot) / (dtot + self.layer_width)
         sigma_v = (
             1.0
-            / ((1.0 / (self.layer_width * 1.0e-12)) + (1.0 / (6.6e-10 + sigma_intra)))
-            / (self.layer_width + 6.6e-10)
+            / ((1.0 / (self.layer_width * ctot)) + (1.0 / (dtot * sigma_intra)))
+            / (self.layer_width + dtot)
         )
         cond_tensor = np.array(
             [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
@@ -2080,4 +2082,10 @@ class Kaolinite(Phyllosilicate):
 
 
 if __name__ == "__main__":
+    nacl = NaCl(temperature=298.15, molality=1.0)
+    s = Smectite(nacl=nacl)
+    s.calc_potentials_and_charges_truncated()
+    s.calc_cond_interlayer()
+    s.calc_cond_tensor()
+    print(s.cond_intra, s.get_cond_tensor())
     pass

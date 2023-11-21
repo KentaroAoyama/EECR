@@ -677,28 +677,104 @@ def get_quartz_init():
         pickle.dump(init_dict, pkf, pickle.HIGHEST_PROTOCOL)
 
 
-def qurtz_cond():
-    print("qurtz_cond")
-    molarity_ls = np.logspace(-7, 0.7, 10, base=10)
+def qurtz_duhkin_th():
+    print("qurtz_duhkin_th")
+    molarity_ls = np.logspace(-3, 0.7, 10, base=10)
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
-    n = 10
-    for i, _t in enumerate(np.linspace(293.15, 493.15, n).tolist()):
+    t_ls = [25.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0]
+    t_ls = [25.0]
+
+    a = 150.0e-9 # pore radius
+    for i, _t in enumerate(t_ls):
         print("========")  #!
         print(f"tempe: {_t}")  #!
-        condnacl_ls = []
         conds_ls = []
         for molarity in molarity_ls:
             print(molarity)  #!
-            nacl = NaCl(temperature=_t, molarity=molarity, pressure=5.0e6)
-            condnacl_ls.append(nacl.get_cond())
+            nacl = NaCl(temperature=_t+273.15, molarity=molarity, pressure=5.0e6)
+            q = Quartz(nacl)
+            conds_ls.append(
+                (q.get_cond_surface() - nacl.get_cond()) * q.get_double_layer_length() / (a * nacl.get_cond())
+            )
+        ax.plot(
+            molarity_ls, conds_ls, color=cm.jet(float(i) / len(t_ls)), label=f"{str(int(_t))}℃"
+        )  # TODO: 四捨五入する
+    # specific conductivity measured by Willson and De Backer (1969) # for KNO3-
+    # ex_x = [
+    #     4.95e-07,
+    #     1.83759e-06,
+    #     5.12678e-06,
+    #     1.73118e-05,
+    #     6.27953e-05,
+    #     0.000167031,
+    #     0.000455021,
+    # ]
+    # ex_y = [
+    #     2.405797101,
+    #     2.550724638,
+    #     2.927536232,
+    #     3.536231884,
+    #     4.579710145,
+    #     6,
+    #     7.47826087,
+    # ]
+    # ex_y = [i * 1.0e-9 for i in ex_y]
+    # ax.scatter(ex_x, ex_y)
+
+    # Dukhin number loaded from Leroy et al. (2013)
+    ex_x = [0.001, 0.01, 0.1]
+    ex_y = [0.3667396052631582, 0.17653562653562654, 0.003316953316953253]
+    # convert Du to specific surface conductance
+    for i, molarity in enumerate(ex_x):
+        # nacl = NaCl(molarity=molarity, temperature=298.15, pressure=1.0e5)
+        # q = Quartz(nacl=nacl)
+        # cs = ex_y[i] * nacl.get_cond() * a / q.get_double_layer_length() + nacl.get_cond()
+        cs = ex_y[i]
+        ex_y[i] = cs
+    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2)
+    ax.set_xscale("log")
+    ax.legend(title="Temperature (℃)")
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, loc=(0.7, 0.4))
+    ax.set_xlabel("Molarity [$\mathrm{mol/L}$]", fontsize=14.0, labelpad=5)
+    ax.set_ylabel(r"Dukihn Number ($Du$)", fontsize=14.0, labelpad=5)
+    fig.savefig(
+        path.join(test_dir(), "qurtz_duhkin_th_tmp.png"), dpi=500, bbox_inches="tight"
+    )
+    plt.clf()
+    plt.close()
+
+def qurtz_cond_th():
+    print("qurtz_cond_th")
+    molarity_ls = np.logspace(-7, 0.7, 10, base=10)
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+    fig, ax = plt.subplots()
+    t_ls = [25.0, 50.0, 80.0, 110.0, 140.0, 170.0, 200.0]
+    t_ls = [25.0]
+
+    a = 150.0e-9 # pore radius
+    for i, _t in enumerate(t_ls):
+        print("========")  #!
+        print(f"tempe: {_t}")  #!
+        conds_ls = []
+        for molarity in molarity_ls:
+            print(molarity)  #!
+            nacl = NaCl(temperature=_t+273.15, molarity=molarity, pressure=5.0e6)
             q = Quartz(nacl)
             conds_ls.append(
                 (q.get_cond_surface() - nacl.get_cond()) * q.get_double_layer_length()
             )
         ax.plot(
-            molarity_ls, conds_ls, color=cm.jet(float(i) / n), label=int(_t - 273.15)
-        )  # TODO: 四捨五入する
-    # specific conductivity measured by Willson and De Backer (1969)
+            molarity_ls, conds_ls, color=cm.jet(float(i) / len(t_ls)), label=f"{str(int(_t))}℃"
+        )
+
+    # specific conductivity measured by Willson and De Backer (1969) # for KNO3-
     ex_x = [
         4.95e-07,
         1.83759e-06,
@@ -718,13 +794,32 @@ def qurtz_cond():
         7.47826087,
     ]
     ex_y = [i * 1.0e-9 for i in ex_y]
-    ax.scatter(ex_x, ex_y)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
+    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=",")
+
+    # Dukhin number loaded from Leroy et al. (2013)
+    ex_x = [0.001, 0.03, 0.1]
+    ex_y = [0.3667396052631582, 0.17653562653562654, 0.003316953316953253]
+
+    # convert Du to specific surface conductance
+    for i, molarity in enumerate(ex_x):
+        nacl = NaCl(molarity=molarity, temperature=298.15, pressure=1.0e5)
+        ex_y[i] *= nacl.get_cond() * a
+
+    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=".", s=150)
     ax.set_xscale("log")
-    ax.set_yscale("log")
+    ax.legend(title="Temperature (℃)")
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, loc=(0.1, 0.5))
+    ax.set_xlabel("Molality [$\mathrm{mol/kg}$]", fontsize=12.0, labelpad=5)
+    ax.set_ylabel(r"Surface Conductance [$\mathrm{S}$]", fontsize=14.0, labelpad=5)
     fig.savefig(
-        path.join(test_dir(), "RevilGlover1998.png"), dpi=200, bbox_inches="tight"
+        path.join(test_dir(), "qurtz_cond_th_tmp.png"), dpi=500, bbox_inches="tight"
     )
+    plt.clf()
+    plt.close()
 
 def quartz_dukhin():
     print("quartz_dukhin")
@@ -1468,7 +1563,7 @@ def test_sen_and_goode_1992():
         0.858,
         1.76,
         4.74,
-    ]  # TODO: this should be molality, not morarity
+    ]
     tempe_ls = [273.15 + i for i in range(20, 200, 1)]
     experimental = {
         0.09: [0.92, 1.46, 2.11, 2.79, 3.38, 3.87, 4.33],
@@ -1501,6 +1596,118 @@ def test_sen_and_goode_1992():
     ax.legend()
     fig.savefig("./test/sen_and_goode.png", dpi=200)
 
+def test_sen_and_goode_1992_th():
+    print("test_sen_and_goode_1992_th")
+    tempe_ls = [
+        22.0,
+        50.0,
+        80.0,
+        110.0,
+        140.0,
+        170.0,
+        200.0
+    ] 
+    molality_ls = np.logspace(-2.0, 0.7, 1000).tolist()
+    experimental = {
+        22.0: [0.92, 2.44, 7.1, 12.51, 22.42],
+        50.0: [1.46, 3.8, 10.79, 20.31, 36.70],
+        80.0: [2.11, 5.7, 15.31, 28.64, 51.77],
+        110.0: [2.79, 7.36, 19.61, 36.84, 66.59],
+        140.0: [3.38, 8.8, 23.56, 44.14, 79.77],
+        170.0: [3.87, 10.16, 26.88, 50.12, 90.59],
+        200.0: [4.33, 11.16, 29.13, 54.94, 99.29],
+    }
+    tempe_molality_dct: Dict = {}
+    for t in tempe_ls:
+        _molal_dct: Dict = tempe_molality_dct.setdefault(t, {})
+        for m in molality_ls:
+            _molal_dct.setdefault(m, sen_and_goode_1992(t+273.15, m))
+    
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+    fig, ax = plt.subplots()
+    
+    for i, (tempe, _molal_dct) in enumerate(tempe_molality_dct.items()):
+        molal_ls: List = []
+        cond_ls: List = []
+        for m, _cond in _molal_dct.items():
+            molal_ls.append(m)
+            cond_ls.append(_cond)
+        ax.plot(molal_ls, cond_ls, label=f"{str(int(tempe))}℃", color=cm.jet(float(i) / len(tempe_molality_dct)), alpha=1.0)
+    
+    for i, (_t, _ls) in enumerate(experimental.items()):
+        ax.scatter([0.09, 0.26, 0.858, 1.76, 4.74], _ls, color=cm.jet(float(i) / len(tempe_molality_dct)), zorder=2)
+
+    # ax.legend(title="Temperature (℃)")
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, loc=(0.1, 0.4))
+    ax.set_xscale("log")
+    # ax.set_yscale("log")
+    ax.set_xlabel("Molality [$\mathrm{mol/kg}$]", fontsize=14.0, labelpad=5)
+    ax.set_ylabel("Electrical Conductivity [$\mathrm{S/m}$]", fontsize=14.0, labelpad=5)
+    fig.savefig("./test/sen_and_goode_1992_th.png", dpi=500, bbox_inches="tight")
+    plt.clf()
+    plt.close()
+
+def test_cond_from_mobility_th():
+    print("test_cond_from_mobility_th")
+    tempe_ls = [
+        22.0,
+        50.0,
+        80.0,
+        110.0,
+        140.0,
+        170.0,
+        200.0
+    ] 
+    molality_ls = np.logspace(-2.0, 0.7, 1000).tolist()
+    experimental = {
+        22.0: [0.92, 2.44, 7.1, 12.51, 22.42],
+        50.0: [1.46, 3.8, 10.79, 20.31, 36.70],
+        80.0: [2.11, 5.7, 15.31, 28.64, 51.77],
+        110.0: [2.79, 7.36, 19.61, 36.84, 66.59],
+        140.0: [3.38, 8.8, 23.56, 44.14, 79.77],
+        170.0: [3.87, 10.16, 26.88, 50.12, 90.59],
+        200.0: [4.33, 11.16, 29.13, 54.94, 99.29],
+    }
+    tempe_molality_dct: Dict = {}
+    for t in tempe_ls:
+        _molal_dct: Dict = tempe_molality_dct.setdefault(t, {})
+        for m in molality_ls:
+            nacl = NaCl(temperature=t+273.15, molality=m, pressure=5.0e6)
+            _molal_dct.setdefault(m, nacl.cond_from_mobility)
+    
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+    fig, ax = plt.subplots()
+    
+    for i, (tempe, _molal_dct) in enumerate(tempe_molality_dct.items()):
+        molal_ls: List = []
+        cond_ls: List = []
+        for m, _cond in _molal_dct.items():
+            molal_ls.append(m)
+            cond_ls.append(_cond)
+        ax.plot(molal_ls, cond_ls, label=f"{str(int(tempe))}℃", color=cm.jet(float(i) / len(tempe_molality_dct)), alpha=1.0)
+    
+    for i, (_t, _ls) in enumerate(experimental.items()):
+        ax.scatter([0.09, 0.26, 0.858, 1.76, 4.74], _ls, color=cm.jet(float(i) / len(tempe_molality_dct)), zorder=2)
+
+    # ax.legend(title="Temperature (℃)")
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, loc=(0.1, 0.4))
+    ax.set_xscale("log")
+    # ax.set_yscale("log")
+    ax.set_xlabel("Molality [$\mathrm{mol/kg}$]", fontsize=14.0, labelpad=5)
+    ax.set_ylabel("Electrical Conductivity [$\mathrm{S/m}$]", fontsize=14.0, labelpad=5)
+    fig.savefig("./test/cond_from_mobility_th.png", dpi=500, bbox_inches="tight")
+    plt.clf()
+    plt.close()
 
 def search_ill_cond():
     fpath = "./output/pickle/smec_frac-0.0_temperature-293.15_molarity-0.01_porosity-0.01/42/2023-02-17/solver.pkl"
@@ -6431,8 +6638,7 @@ if __name__ == "__main__":
     # search_maximum_anisotoropic_condition()
     # test_cluster()
 
-    # qurtz_cond()
-    quartz_dukhin()
+    # quartz_dukhin()
     # smectite_cond_intra()
     # potential_smectite_intra()
     # test_dielec()
@@ -6476,4 +6682,10 @@ if __name__ == "__main__":
     # test_TR(use_cache=True)
     # test_QiandWu(use_cache=True)
     # test_BHS_modified(use_cache=True)
+
+    # 
+    # test_sen_and_goode_1992_th()
+    # test_cond_from_mobility_th()
+    qurtz_duhkin_th()
+    qurtz_cond_th()
     pass

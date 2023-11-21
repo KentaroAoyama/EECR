@@ -34,7 +34,7 @@ class Quartz:
         A.Revil and P.W.J.Glover, Theory of ionic-surface electrical conduction
             in porous media, Phys. Rev. B 55, 1757 – Published 15 January 1997
             DOI:https://doi.org/10.1103/PhysRevB.55.1757
-        A.Revil and P.W.J.Glover, Nature of surface electrical conductivity 
+        A.Revil and P.W.J.Glover, Nature of surface electrical conductivity
             in natural sands, sandstones, and clays, 1998, https://doi.org/10.1029/98GL00296
         P.J. Scales, Electrokinetics of the Muscovite Mica-Aqueous Solution Interface,
             1989, https://doi.org/10.1021/la00093a012
@@ -166,7 +166,7 @@ class Quartz:
                 # eq.(44) in Revil & Glover (1997)
                 self.potential_stern = bisect(self.__calc_eq_44, -0.5, 1.0)
                 self.potential_zeta = self.potential_stern
-                self.__calc_cond_surface_1997()
+                self.__calc_cond_surface_1997(nacl.get_cond())
                 self.charge_0 = self.__calc_qs0(
                     self.ion_props[Species.H.name][IonProp.Activity.name],
                     self.ion_props[Species.Na.name][IonProp.Activity.name],
@@ -200,7 +200,7 @@ class Quartz:
                     * log(_x)
                 )
                 self.potential_zeta = self.potential_stern
-                self.__calc_cond_surface_1997()
+                self.__calc_cond_surface_1997(nacl.get_cond())
                 self.charge_0 = self.__calc_qs0(
                     self.ion_props[Species.H.name][IonProp.Activity.name],
                     self.ion_props[Species.Na.name][IonProp.Activity.name],
@@ -222,7 +222,7 @@ class Quartz:
                 # eq.(28)
                 self.cond_surface = (
                     1.53e-9 + self.cond_diffuse + self.cond_stern
-                ) / self.length_edl
+                ) / self.length_edl + nacl.get_cond()
             if method == "leroy2022":
                 # Basic stern layer model proposed by Leroy et al. (2022).
                 # This model is a slight modification of Leroy et al. (2013).
@@ -247,8 +247,8 @@ class Quartz:
                 self.cond_diffuse = self.__calc_diffuse_1997()
                 self.cond_stern = self.__calc_stern_2013()
                 self.cond_surface = (
-                    1.53e-9 + self.cond_diffuse + self.cond_diffuse
-                ) / self.length_edl
+                    1.53e-9 + self.cond_stern + self.cond_diffuse
+                ) / self.length_edl + nacl.get_cond()
 
         # calculate conductivity tensor
         self.__calc_cond_tensor()
@@ -358,15 +358,19 @@ class Quartz:
         _t5 = self.delta * 10.0 ** (-2.0 * self.ph) * _x**4 - 1.0
         return _t1 * _t2 * _t3 * _t4 + _t5
 
-    def __calc_cond_surface_1997(self) -> None:
-        """Calculate the specific conductivity of diffuse layer by Revil & Glover(1998)"""
+    def __calc_cond_surface_1997(self, cw: float) -> None:
+        """Calculate the specific conductivity of diffuse layer by Revil & Glover(1998)
+
+        Args:
+             cw (float): Conductivity of adjacent water
+        """
         s_diffuse = self.__calc_diffuse_1997()
         s_stern = self.__calc_stern_1997()
         # based on Revil & Glover (1998); Leroy et al. (2013)
         s_prot = 2.4e-9
         self.cond_stern = s_stern
         self.cond_diffuse = s_diffuse
-        self.cond_surface = (s_diffuse + s_stern + s_prot) / self.length_edl
+        self.cond_surface = (s_diffuse + s_stern + s_prot) / self.length_edl + cw
 
     def __calc_cond_potential_and_charges_2013(
         self,
@@ -587,7 +591,7 @@ class Quartz:
         coeff = (
             2000.0 * const.AVOGADRO_CONST * self.length_edl * const.ELEMENTARY_CHARGE
         )
-        n: float = 0.0
+        cs: float = 0.0
         for _s, _prop in self.ion_props.items():
             # Currently H+ and OH- are not considered
             if _s in (Species.H.name, Species.OH.name):
@@ -598,7 +602,7 @@ class Quartz:
             ] + 2.0 * self.dielec_fluid * const.BOLTZMANN_CONST * self.temperature / (
                 self.viscosity * const.ELEMENTARY_CHARGE * v
             )
-            n += (
+            cs += (
                 b
                 * _prop[IonProp.Molarity.name]
                 * (
@@ -608,9 +612,10 @@ class Quartz:
                         * self.potential_zeta
                         / (2.0 * const.BOLTZMANN_CONST * self.temperature)
                     )
+                    - 1.0
                 )
             )
-        return coeff * n
+        return coeff * cs
 
     def __calc_stern_1997(self) -> float:
         """Calculate stern layer conductivity by eq.(9) in Revil & Glover (1998)

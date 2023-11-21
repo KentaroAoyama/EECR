@@ -1368,4 +1368,14 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
+    # x = calc_X_L_Sat(598.0, 118.14e-1)
+    # density = calc_density(598.0, 118.14e5, x)
+    # def __callback(__x) -> float:
+    #     nh20 = (density - 1000.0 * __x * MNaCl) / MH2O  # mol/m3
+    #     return x - __x / (__x + nh20 * 1.0e-3)
+
+    # molarity = bisect(__callback, 0.0, 12.0)
+    # # calculate molality(mol/kg)
+    # molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
+    # print(molality)
     pass

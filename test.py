@@ -397,26 +397,51 @@ def Leroy_Revil_2004_fig9():
 
 
 def Revil_etal_fig2():
-    molarity_ls: List = np.logspace(-2, 0.7, 20, base=10.0).tolist()
-    nacl_ref = NaCl(molarity=0.577, temperature=273.15 + 25.0, ph=7.0)
-    # r_ls = np.linspace(1.0e-9, 13.0e-9, 10).tolist()  #!
-    r_ls = [1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
-    r_result: Dict = {}
-    for _r in r_ls:
-        print("======")
-        print(f"_r: {_r}")
-        smectite = Smectite(nacl=nacl_ref, layer_width=_r)
-        smectite.calc_potentials_and_charges_truncated()
-        base, _ = smectite.calc_cond_interlayer()
-        _ls = r_result.setdefault(_r, [[], []])
-        for i, molarity in enumerate(molarity_ls):
-            print(f"molarity: {molarity}")  #!
-            nacl = NaCl(molarity=molarity, ph=7.0)
-            smectite = Smectite(nacl=nacl, layer_width=_r)
-            # truncated
+    cache_pth = "./tmp/reviletal1998"
+    if path.exists(cache_pth):
+        with open(cache_pth, "rb") as pkf:
+            r_result = pickle.load(pkf)
+    else:
+        molality_ls: List = np.logspace(-4, 0.7, 300, base=10.0).tolist()
+        nacl_ref = NaCl(molarity=0.577, temperature=273.15 + 25.0, pressure=1.0e5, ph=7.0)
+        # r_ls = np.linspace(1.0e-9, 13.0e-9, 10).tolist()  #!
+        r_ls = [1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
+        r_result: Dict = {}
+        for _r in r_ls:
+            print("======")
+            print(f"_r: {_r}")
+            smectite = Smectite(nacl=nacl_ref, layer_width=_r)
             smectite.calc_potentials_and_charges_truncated()
-            _ls[0].append(nacl.conductivity)
-            _ls[1].append(smectite.calc_cond_interlayer()[0] / base)
+            base, _ = smectite.calc_cond_interlayer()
+            _ls = r_result.setdefault(_r, [[], []])
+            for i, molality in enumerate(molality_ls):
+                print(f"molality: {molality}")  #!
+                nacl = NaCl(temperature=298.15, pressure=1.0e5, molality=molality, ph=7.0)
+                smectite = Smectite(nacl=nacl, layer_width=_r)
+                # truncated
+                smectite.calc_potentials_and_charges_truncated()
+                _ls[0].append(molality)
+                _ls[1].append(smectite.calc_cond_interlayer()[0] / base)
+        
+        with open(cache_pth, "wb") as pkf:
+            pickle.dump(r_result, pkf)
+
+    # pore-surface
+    molality_ls: List = np.logspace(-4, 0.7, 10, base=10.0).tolist() #!
+    nacl_ref = NaCl(molarity=0.577, temperature=273.15 + 25.0, ph=7.0, pressure=1.0e5)
+    smectite = Smectite(nacl=nacl_ref, layer_width=1.0e-9)
+    smectite.calc_potentials_and_charges_inf()
+    base, _ = smectite.calc_cond_infdiffuse()
+    print(f"base: {base}") #!
+    pore_surface_ls = []
+    for m in molality_ls:
+        nacl = NaCl(temperature=298.15, pressure=1.0e5, molality=m, ph=7.0)
+        smectite = Smectite(nacl=nacl, layer_width=1.0e-9)
+        smectite.calc_potentials_and_charges_inf()
+        v, _ = smectite.calc_cond_infdiffuse()
+        print(m, v)
+        pore_surface_ls.append(v / base)
+
     ex_x = [
         0.203746826,
         0.398446452,
@@ -429,6 +454,14 @@ def Revil_etal_fig2():
         18.53988927,
         22.51255432,
     ]
+    # convert water conductivity to molality
+    def __callback(m, cw):
+        return cw - sen_and_goode_1992(298.15, m)
+    
+    for i, cw in enumerate(ex_x):
+        callback_tmp = partial(__callback, cw=cw)
+        ex_x[i] = bisect(callback_tmp, 0.0, 10.0)
+
     ex_y = [
         1.061392454,
         0.998136634,
@@ -442,17 +475,23 @@ def Revil_etal_fig2():
         1.093890857,
     ]
     fig, ax = plt.subplots()
+    # interlayer
     for i, (_r, _ls) in enumerate(r_result.items()):
         ax.plot(_ls[0], _ls[1], label=_r, color=cm.jet(float(i) / len(r_result)))
+    # pore-solid
+    ax.plot(molality_ls, pore_surface_ls, color=cm.jet(float(0) / len(r_result)), linestyle="dashed")
     ax.scatter(ex_x, ex_y, zorder=2)
-    ax.legend(bbox_to_anchor=(1.05, 1), loc="upper left")
     ax.set_xscale("log")
-    ax.set_xlabel("Water conductivity", fontsize=14)
+    ax.set_xlabel("Molality (mol/kg)", fontsize=14)
     ax.set_ylabel(
         "Normalized Conductivity\n$σ_{s}$($σ_{f}$)/$σ_{s}$ (5.249 S/m )", fontsize=14
     )
-    plt.show()
-    fig.savefig("./test/Revil_etal_fig2.png", dpi=200, bbox_inches="tight")
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, loc=(0.07, 0.6))
+    fig.savefig("./test/Revil_etal_fig2.png", dpi=500, bbox_inches="tight")
 
 
 def exec_etal_fig2_by_bulk(_r: float, molarity: float, fpth):
@@ -791,6 +830,9 @@ def qurtz_cond_th():
         6,
         7.47826087,
     ]
+    for i, cf in enumerate(ex_x):
+        nacl = NaCl(temperature=295.65, molarity=cf, pressure=1.0e5)
+        ex_x[i] = nacl.get_ion_props()["Na"]["Molality"]
     ex_y = [i * 1.0e-9 for i in ex_y]
     ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=",")
 
@@ -801,9 +843,10 @@ def qurtz_cond_th():
     # convert Du to specific surface conductance
     for i, molarity in enumerate(ex_x):
         nacl = NaCl(molarity=molarity, temperature=298.15, pressure=1.0e5)
+        ex_x[i] = nacl.get_ion_props()["Na"]["Molality"]
         ex_y[i] *= nacl.get_cond() * a
-
     ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=".", s=150)
+    
     ax.set_xscale("log")
     ax.legend(title="Temperature (℃)")
     ax.tick_params(axis="x", which="major", length=7)
@@ -4550,7 +4593,7 @@ def compare_md_cond():
     print(cond, smectite.cond_intra, nacl.get_cond())
 
     # # Zhang et al. (2014)
-    # # fig. 2
+    # # fig. 2 # TOT thickness:  6.56 Å
     # with open(path.join(test_dir(), "MD_data", "zhang2014.pkl"), "rb") as pkf:
     #     wc_xy = pickle.load(pkf)
     # wc_d = [
@@ -4647,8 +4690,8 @@ def compare_md_cond():
     #     _result.setdefault("MD", []).append(mdresult)
     #     _result.setdefault("TLM", []).append(smectite.cond_intra)
 
-    # Tournassatが低い理由：TOT層の電荷が低い (-0.725e/nm2)ためだと考えられる
-    # Bourg and Spositoが低い理由：Ca2+が含まれているため, (なお, -2.63828e/nm2)
+    # Tournassatが低い理由：TOT層の電荷が低い (-0.725e/nm2, -0.116 C/m2)ためだと考えられる
+    # Bourg and Spositoが低い理由：Ca2+が含まれているため, (なお, -2.63828e/nm2, -0.42 C/m2)
     fig, ax = plt.subplots()
     for ref, result in results.items():
         ax.scatter(result["TLM"], result["MD"], label=ref)
@@ -6631,7 +6674,7 @@ if __name__ == "__main__":
     # optimize_n()
     # test_quartz_charge() # TODO: outdated?
     # test_quartz_charge_extend() # TODO: outdated?
-    # Revil_etal_fig2()
+    Revil_etal_fig2()
     # analyse_result()
     # search_maximum_anisotoropic_condition()
     # test_cluster()
@@ -6655,11 +6698,11 @@ if __name__ == "__main__":
     # test_activity()
     # test_fraction()
     # test_smectite_temperature()
-    test_quartz_temperature()  # TODO:
+    # test_quartz_temperature()  # TODO:
     # test_smec_surface_temperature()
     # test_dielec_RaspoandNeau2020()
     # # reviletal1998()
-    # compare_md_cond()
+    # compare_md_cond() #!
     # test_dks()
     # percolation()
 
@@ -6685,5 +6728,5 @@ if __name__ == "__main__":
     # test_sen_and_goode_1992_th()
     # test_cond_from_mobility_th()
     # qurtz_duhkin_th()
-    qurtz_cond_th()
+    # qurtz_cond_th()
     pass

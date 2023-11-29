@@ -486,7 +486,7 @@ class Phyllosilicate:
             float: left side of eq.(34) minus right side
         """
         # TODO: ６回微分まで実装する
-        # electrolyte concentration assumed equal to cf
+        # electrolyte concentration assumed equal to that of Na+
         cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         dielec = self.dielec_fluid
@@ -1610,7 +1610,7 @@ class Phyllosilicate:
                 * _prop[IonProp.Molarity.name]
                 * abs(v)
             )
-            beta = self.__calc_mobility_diffuse(_x, _s)
+            beta = self.__calc_mobility_diffuse(_x + self.xd, _s)
             _cond += n * beta
         return _cond
 
@@ -1700,14 +1700,14 @@ class Phyllosilicate:
         gamma_stern = self.__calc_n_stern("outer")
         cond_stern = gamma_stern * self.mobility_stern
         # Na+ number (n/m^2) at diffuse layer
-        xdl = self.xd + 1.0 / self.kappa
+        xdl = 1.0 / self.kappa
         coeff = self.dielec_fluid / self.viscosity
         __callback = partial(
             self.__calc_cond_diffuse_inf,
             s=Species.Na.name,
             coeff=coeff,
         )
-        cond_na_diffuse, _ = quad(__callback, self.xd, xdl)
+        cond_na_diffuse, _ = quad(__callback, 0.0, xdl)
 
         # Cl- number (n/m^2) at diffuse layer
         __callback = partial(
@@ -1715,10 +1715,11 @@ class Phyllosilicate:
             s=Species.Cl.name,
             coeff=coeff,
         )
+        cond_cl_diffuse, _ = quad(__callback, 0.0, xdl)
 
         # calc conductivity
         cond_diffuse: float = (
-            const.ELEMENTARY_CHARGE * (cond_stern + cond_na_diffuse)
+            const.ELEMENTARY_CHARGE * (cond_stern + cond_na_diffuse + cond_cl_diffuse)
         ) / xdl
 
         # log
@@ -2078,10 +2079,4 @@ class Kaolinite(Phyllosilicate):
 
 
 if __name__ == "__main__":
-    nacl = NaCl(temperature=298.15, molality=1.0)
-    s = Smectite(nacl=nacl)
-    s.calc_potentials_and_charges_truncated()
-    s.calc_cond_interlayer()
-    s.calc_cond_tensor()
-    print(s.cond_intra, s.get_cond_tensor())
     pass

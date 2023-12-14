@@ -377,7 +377,7 @@ class Quartz:
         xn: np.ndarray = None,
         iter_max: int = 10000,
         convergence_condition: float = 1.0e-10,
-        oscillation_tol: float = 1.0e-2,
+        oscillation_tol: float = 0.013,
         beta: float = 0.75,
         lamda: float = 2.0,
     ) -> float:

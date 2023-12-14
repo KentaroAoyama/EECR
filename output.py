@@ -13,6 +13,7 @@ from cube import Cube
 from cube import calc_ijk, calc_m
 
 SolverLike = Union[FEM_Cube, Cube]
+instance_int = {"quartz": 0, "smectite": 1, "nacl": 2}
 
 # TODO: docstring
 # TODO: plot electrical potential
@@ -120,7 +121,7 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
         cv_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dxv_ls, dyv_ls)]
         cs_ls = [sqrt(_dx**2 + _dy**2) for _dx, _dy in zip(dxs_ls, dys_ls)]
         fig, ax = plt.subplots()
-        mappable1 = ax.pcolormesh(xx, yy, np.array(ist2d), alpha=0.5, cmap=cm.gray)
+        mappable1 = ax.pcolormesh(xx, yy, np.array(ist2d), alpha=0.7, cmap=cm.gray)
         # current (volume)
         mappable2 = ax.quiver(
             xv_ls,
@@ -245,12 +246,8 @@ def plot_instance(
     for k, yx in enumerate(instance_ls):
         for j, x in enumerate(yx):
             for i, instance in enumerate(x):
-                name = instance.__class__.__name__
-                if name not in isinstance_indicator:
-                    isinstance_indicator.setdefault(name, cou)
-                    title += f"{name}: {cou} "
-                    cou += 1
-                indicator_ls[k][j][i] = isinstance_indicator[name]
+                name = instance.__class__.__name__.lower()
+                indicator_ls[k][j][i] = instance_int[name]
     instance_arr = np.array(indicator_ls)
 
     # x
@@ -294,12 +291,16 @@ def __plot_instance_main_axis(
         makedirs(savedir)
     for i, val in enumerate(_arr):
         fig, ax = plt.subplots()
-        im = ax.pcolormesh(grid_x, grid_y, val)
+        im = ax.pcolormesh(grid_x, grid_y, val, alpha=0.7, cmap=cm.gray)
         ax.set_aspect("equal")
+        ax.tick_params(axis="x", which="major", length=7)
+        ax.tick_params(axis="x", which="minor", length=5)
+        ax.tick_params(axis="y", which="major", length=7)
+        ax.tick_params(axis="y", which="minor", length=5)
         if title is not None:
             ax.set_title(title)
         fig.colorbar(im, ax=ax)
-        fig.savefig(path.join(savedir, str(i)), dpi=200, bbox_inches="tight")
+        fig.savefig(path.join(savedir, str(i)), dpi=500, bbox_inches="tight")
         plt.clf()
         plt.close()
 

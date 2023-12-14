@@ -1,5 +1,5 @@
 # TODO: docker化
-# TODO: 表面を流れる電流の量と, 温度, 塩濃度, スメクタイト量の関係を調べる
+# TODO: 表面を流れる電流の量と, 温度, 塩濃度, スメクタイト量の関係を調べる (割合)
 # pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures

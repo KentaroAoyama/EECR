@@ -6,8 +6,8 @@ from statistics import mean
 import numpy as np
 import networkx
 
-from cube import Cube
-
+from cube import Cube, calc_ijk
+from solver import FEM_Cube
 
 def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
     # TODO: スケルトン処理を加えて計算効率を上げる
@@ -498,6 +498,35 @@ def neighbours(x, y, image):
 def count_transition(neighbours):
     neighbours += neighbours[:1]
     return sum((n1, n2) == (0, 1) for n1, n2 in zip(neighbours, neighbours[1:]))
+
+def analyse_current_each_element(solver: FEM_Cube) -> Tuple:
+    inctance_ls: List = solver.get_fem_input().get_instance_ls()
+    nz, ny, nx = solver.get_fem_input().get_shape()
+    instance_currp: Dict = {}
+    # x
+    currxv = solver.get_currxv()
+    currxs = solver.get_currxs()
+    curryv = solver.get_curryv()
+    currys = solver.get_currys()
+    currzv = solver.get_currzv()
+    currzs = solver.get_currzs()
+    for m, (ixv, ixs, iyv, iys, izv, izs) in enumerate(zip(currxv, currxs, curryv, currys, currzv, currzs)):
+        i, j, k = calc_ijk(m, nx, ny)
+        _ins = inctance_ls[k][j][i]
+        _d: Dict = instance_currp.setdefault(_ins, {})
+        v = _d.setdefault("xv", 0.0)
+        _d["xv"] = v + ixv
+        v = _d.setdefault("xs", 0.0)
+        _d["xs"] = v + ixs
+        v = _d.setdefault("yv", 0.0)
+        _d["yv"] = v + iyv
+        v = _d.setdefault("ys", 0.0)
+        _d["ys"] = v + iys
+        v = _d.setdefault("zv", 0.0)
+        _d["zv"] = v + izv
+        v = _d.setdefault("zs", 0.0)
+        _d["zs"] = v + izs
+    return instance_currp
 
 
 if __name__ == "__main__":

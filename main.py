@@ -1,5 +1,5 @@
 # TODO: docker化
-# TODO: 表面を流れる電流の量と, 温度, 塩濃度, スメクタイト量の関係を調べる (割合)
+# TODO: 表面を流れる電流の量と, 温度, 塩濃度, スメクタイト量の関係を調べる
 # pylint:disable=E0611:no-name-in-module
 from logging import getLogger, FileHandler, Formatter, DEBUG
 from concurrent import futures
@@ -21,6 +21,7 @@ from quartz import Quartz
 from fluid import NaCl
 from cube import Cube
 from solver import FEM_Cube
+from analyse import analyse_current_each_element
 from output import plot_smec_frac_cond, plot_current_arrow
 
 
@@ -82,13 +83,13 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
     dirname += f"_temperature-{temperature}"
     dirname += f"_molality-{molality}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join("E:\EECR", "output8", "pickle", dirname, str(seed))
+    outdir_seed = path.join(getcwd(), "output3", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
     makedirs(outdir, exist_ok=True)
     for date_dirname in listdir(outdir):
-        if len(listdir(path.join(outdir, date_dirname))) > 1:
+        if len(listdir(outdir)) > 1:
             return None
     print(outdir)
     logger_pth = path.join(outdir, "log.txt")
@@ -173,6 +174,16 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
             pickle.HIGHEST_PROTOCOL,
         )
 
+    # current
+    instance_currp = analyse_current_each_element(solver)
+    instance_currp_fpth: str = path.join(outdir, "instance_currp.pkl")
+    with open(instance_currp_fpth, "wb") as pkf:
+        pickle.dump(
+            instance_currp,
+            pkf,
+            pickle.HIGHEST_PROTOCOL,
+        )
+
     # remove handler
     for h in logger.handlers:
         logger.removeHandler(h)
@@ -233,7 +244,7 @@ def experiment(num_workers: int):
 
 
 def load_result() -> Dict:
-    pickle_dir = path.join("E:\EECR", "output8", "pickle")
+    pickle_dir = path.join(getcwd(), "output3", "pickle")
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -415,7 +426,7 @@ def plt_curr(pth_solver, pth_out, axis):
 
 if __name__ == "__main__":
     # main()
-    experiment(6)
+    experiment(cpu_count() - 10)
     # output_fig()
     # plt_hittorf()
     # run("tmp.pkl")

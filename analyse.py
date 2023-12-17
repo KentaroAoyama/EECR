@@ -9,6 +9,7 @@ import networkx
 from cube import Cube, calc_ijk
 from solver import FEM_Cube
 
+
 def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
     # TODO: スケルトン処理を加えて計算効率を上げる
     axis = axis.lower()
@@ -61,10 +62,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # x+
                 if i != nx - 1:
                     name = instance_ls[ki][ji][iip].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append((n, (i + 1, j, k), {"dist": 1.0}))
                         if name == "nacl":
                             addedges_f.append((n, (i + 1, j, k), {"dist": 1.0}))
@@ -73,10 +71,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # y+
                 if j != ny - 1:
                     name = instance_ls[ki][jip][ii].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append((n, (i, j + 1, k), {"dist": 1.0}))
                         if name == "nacl":
                             addedges_f.append((n, (i, j + 1, k), {"dist": 1.0}))
@@ -85,10 +80,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # z+
                 if k != nz - 1:
                     name = instance_ls[kip][ji][ii].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append((n, (i, j, k + 1), {"dist": 1.0}))
                         if name == "nacl":
                             addedges_f.append((n, (i, j, k + 1), {"dist": 1.0}))
@@ -97,10 +89,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # xy+
                 if i != nx - 1 and j != ny - 1:
                     name = instance_ls[ki][jip][iip].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append((n, (i + 1, j + 1, k), {"dist": sqrt(2.0)}))
                         if name == "nacl":
                             addedges_f.append(
@@ -113,10 +102,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # yz+
                 if j != ny - 1 and k != nz - 1:
                     name = instance_ls[kip][jip][ii].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append((n, (i, j + 1, k + 1), {"dist": sqrt(2.0)}))
                         if name == "nacl":
                             addedges_f.append(
@@ -129,10 +115,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # zx+
                 if i != nx - 1 and k != nz - 1:
                     name = instance_ls[kip][ji][iip].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append((n, (i + 1, j, k + 1), {"dist": sqrt(2.0)}))
                         if name == "nacl":
                             addedges_f.append(
@@ -145,10 +128,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
                 # xyz+
                 if i != nx - 1 and j != ny - 1 and k != nz - 1:
                     name = instance_ls[kip][jip][iip].__class__.__name__.lower()
-                    if name in (
-                        "nacl",
-                        "smectite",
-                    ):
+                    if name in ("nacl", "smectite",):
                         addedges_fs.append(
                             (n, (i + 1, j + 1, k + 1), {"dist": sqrt(3.0)})
                         )
@@ -199,9 +179,7 @@ def analyse_tortuosity(cube: Cube, axis="X") -> Tuple[float]:
 
 
 def calc_shortest_dist(
-    G: networkx.DiGraph,
-    shape: Tuple,
-    axis: str,
+    G: networkx.DiGraph, shape: Tuple, axis: str,
 ) -> Tuple[float, float, float]:
     nx, ny, nz = shape
     node_ls = list(G.nodes)
@@ -311,9 +289,7 @@ def calc_shortest_dist(
 
 
 def has_path(
-    G: networkx.DiGraph,
-    shape: Tuple,
-    axis: str,
+    G: networkx.DiGraph, shape: Tuple, axis: str,
 ) -> Tuple[float, float, float]:
     nx, ny, nz = shape
     node_ls = list(G.nodes)
@@ -499,6 +475,7 @@ def count_transition(neighbours):
     neighbours += neighbours[:1]
     return sum((n1, n2) == (0, 1) for n1, n2 in zip(neighbours, neighbours[1:]))
 
+
 def analyse_current_each_element(solver: FEM_Cube) -> Tuple:
     inctance_ls: List = solver.get_fem_input().get_instance_ls()
     nz, ny, nx = solver.get_fem_input().get_shape()
@@ -510,7 +487,9 @@ def analyse_current_each_element(solver: FEM_Cube) -> Tuple:
     currys = solver.get_currys()
     currzv = solver.get_currzv()
     currzs = solver.get_currzs()
-    for m, (ixv, ixs, iyv, iys, izv, izs) in enumerate(zip(currxv, currxs, curryv, currys, currzv, currzs)):
+    for m, (ixv, ixs, iyv, iys, izv, izs) in enumerate(
+        zip(currxv, currxs, curryv, currys, currzv, currzs)
+    ):
         i, j, k = calc_ijk(m, nx, ny)
         _ins = inctance_ls[k][j][i]
         _d: Dict = instance_currp.setdefault(_ins, {})
@@ -527,6 +506,24 @@ def analyse_current_each_element(solver: FEM_Cube) -> Tuple:
         v = _d.setdefault("zs", 0.0)
         _d["zs"] = v + izs
     return instance_currp
+
+
+def calc_hittorf(instance_currp: Dict):
+    d_all: Dict = {}
+    for _ins, currp in instance_currp.items():
+        _all = d_all.setdefault("x", 0.0)
+        d_all["x"] = _all + currp["xv"] + currp["xs"]
+        _all = d_all.setdefault("y", 0.0)
+        d_all["y"] = _all + currp["yv"] + currp["ys"]
+        _all = d_all.setdefault("z", 0.0)
+        d_all["z"] = _all + currp["zv"] + currp["zs"]
+    hittorf_dct: Dict = {}
+    for _ins, currp in instance_currp.items():
+        _dct = hittorf_dct.setdefault(_ins, {})
+        _dct["x"] = (currp["xv"] + currp["xs"]) / d_all["x"]
+        _dct["y"] = (currp["yv"] + currp["ys"]) / d_all["y"]
+        _dct["z"] = (currp["zv"] + currp["zs"]) / d_all["z"]
+    return hittorf_dct
 
 
 if __name__ == "__main__":

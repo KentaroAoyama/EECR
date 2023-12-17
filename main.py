@@ -21,7 +21,7 @@ from quartz import Quartz
 from fluid import NaCl
 from cube import Cube
 from solver import FEM_Cube
-from analyse import analyse_current_each_element
+from analyse import analyse_current_each_element, calc_hittorf
 from output import plot_smec_frac_cond, plot_current_arrow
 
 
@@ -245,7 +245,12 @@ def experiment(num_workers: int):
 
 def load_result() -> Dict:
     pickle_dir = path.join(getcwd(), "output3", "pickle")
-    conditions_ye: Dict = {}
+    cachepth = path.join(getcwd(), "cache.pkl")
+    if path.exists(cachepth):
+        with open(cachepth, "rb") as pkf:
+            conditions_results = pickle.load(pkf)
+    return conditions_results
+    conditions_results: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
         del _ls[0]  # smec
@@ -277,7 +282,7 @@ def load_result() -> Dict:
             #     solver.get_cond_y(),
             #     solver.get_cond_z(),
             # )
-            # load from log file
+            # load conductivity
             log_pth = path.join(date_dir, "log.txt")
             with open(log_pth, "r") as f:
                 lines = f.readlines()
@@ -300,21 +305,36 @@ def load_result() -> Dict:
                         break
             if None in (cond_x, cond_y, cond_z):
                 continue
-            conditions_ye.setdefault(tuple(val_ls), []).extend([cond_x, cond_y, cond_z])
-    return conditions_ye
+            results = conditions_results.setdefault(tuple(val_ls), {})
+            results.setdefault("cond", []).extend([cond_x, cond_y, cond_z])
+            
+            # load current density
+            instance_currp_fpth: str = path.join(date_dir, "instance_currp.pkl")
+            with open(instance_currp_fpth, "rb") as pkf:
+                instance_currp = pickle.load(pkf)
+            hittorf_dct = calc_hittorf(instance_currp)
+            for _ins, hittorf in hittorf_dct.items():
+                results.setdefault(_ins.__class__.__name__.lower(), []).extend([hittorf["x"], hittorf["y"], hittorf["z"]])
+            for name in ("smectite", "nacl", "quartz"):
+                if name not in results:
+                    results.setdefault(name, []).extend([0.0]*30) #!
+    with open("cache.pkl", "wb") as pkf:
+        pickle.dump(conditions_results, pkf, pickle.HIGHEST_PROTOCOL)
+    return conditions_results
 
 # TODO: percolationを可視化するのと、0.1刻みの大まかな曲線をプロットする機能を分ける
-def output_fig():
-    conditions_ye = load_result()
+def output_cond_fig():
+    conditions_results = load_result()
     fig_dir = path.join(getcwd(), "output", "fig")
     makedirs(fig_dir, exist_ok=True)
 
     # plot temperature variation
-    tempe_dir = path.join(fig_dir, "temperature")
+    tempe_dir = path.join(fig_dir, "cond", "temperature")
     makedirs(tempe_dir, exist_ok=True)
     molality_poros_xyel: Dict = {}
-    for conditions, cond_ls in conditions_ye.items():
+    for conditions, results in conditions_results.items():
         smec_frac, tempe, molality, poros = conditions
+        cond_ls = results["cond"]
         cond, error = np.mean(cond_ls), np.std(cond_ls)
         _ls = molality_poros_xyel.setdefault((molality, poros), [[], [], [], []])
         if float("nan") in (cond, error):
@@ -332,17 +352,18 @@ def output_fig():
     for molality_poros, _xyel in molality_poros_xyel.items():
         molality, poros = molality_poros
         save_pth = path.join(tempe_dir, f"molality-{molality}_porosity-{poros}.png")
-        # lateral: temperature, ledgend: smectite fraction
+        # lateral: temperature, legend: smectite fraction
         plot_smec_frac_cond(
             _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Temperature (℃)"
         )
 
     # plot molality variation
-    molality_dir = path.join(fig_dir, "molality")
+    molality_dir = path.join(fig_dir, "cond", "molality")
     makedirs(molality_dir, exist_ok=True)
     tempe_poros_xyel: Dict = {}
-    for conditions, cond_ls in conditions_ye.items():
+    for conditions, results in conditions_results.items():
         smec_frac, tempe, molality, poros = conditions
+        cond_ls = results["cond"]
         cond, error = np.mean(cond_ls), np.std(cond_ls)
         _ls = tempe_poros_xyel.setdefault((tempe, poros), [[], [], [], []])
         if float("nan") in (cond, error):
@@ -360,7 +381,7 @@ def output_fig():
     for tempe_poros, _xyel in tempe_poros_xyel.items():
         tempe, poros = tempe_poros
         save_pth = path.join(molality_dir, f"temperature-{tempe}_porosity-{poros}.png")
-        # lateral: molality, ledgend: smectite fraction
+        # lateral: molality, legend: smectite fraction
         plot_smec_frac_cond(
             _xyel[3],
             _xyel[1],
@@ -372,11 +393,12 @@ def output_fig():
         )
 
     # plot porosity variation
-    poros_dir = path.join(fig_dir, "poros")
+    poros_dir = path.join(fig_dir, "cond", "poros")
     makedirs(poros_dir, exist_ok=True)
     tempe_molality_xyel: Dict = {}
-    for conditions, cond_ls in conditions_ye.items():
+    for conditions, results in conditions_results.items():
         smec_frac, tempe, molality, poros = conditions
+        cond_ls = results["cond"]
         cond, error = np.mean(cond_ls), np.std(cond_ls)
         _ls = tempe_molality_xyel.setdefault((tempe, molality), [[], [], [], []])
         if float("nan") in (cond, error):
@@ -397,6 +419,104 @@ def output_fig():
         plot_smec_frac_cond(
             _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Porosity"
         )
+
+def output_hittorf_fig():
+    conditions_results = load_result()
+    fig_dir = path.join(getcwd(), "output", "fig")
+    makedirs(fig_dir, exist_ok=True)
+
+    # plot temperature variation
+    tempe_dir = path.join(fig_dir, "hittorf", "temperature")
+    makedirs(tempe_dir, exist_ok=True)
+    molality_poros_xyel: Dict = {}
+    for conditions, results in conditions_results.items():
+        for key, _result in results.items():
+            if key == "cond":
+                continue
+            smec_frac, tempe, molality, poros = conditions
+            hittorf, error = np.mean(_result), np.std(_result)
+            _cd_result = molality_poros_xyel.setdefault(key, {})
+            _ls = _cd_result.setdefault((molality, poros), [[], [], [], []])
+            if float("nan") in (hittorf, error):
+                continue
+            if np.isnan(hittorf) or np.isnan(error):
+                continue
+            _ls[0].append(smec_frac)
+            _ls[1].append(hittorf)
+            _ls[2].append(error)
+            _ls[3].append(tempe - 273.15)
+    for key, cd_results in molality_poros_xyel.items():
+        for molality_poros, _xyel in cd_results.items():
+            figdir = path.join(tempe_dir, key) # key: smectite, nacl, etc.
+            makedirs(figdir, exist_ok=True)
+            molality, poros = molality_poros
+            save_pth = path.join(figdir, f"molality-{molality}_porosity-{poros}.png")
+            # lateral: temperature, legend: smectite fraction
+            plot_smec_frac_cond(
+                _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Temperature (℃)", lims=(-0.1, 1.1),
+            )
+
+    # plot molality variation
+    molality_dir = path.join(fig_dir, "hittorf", "molality")
+    makedirs(molality_dir, exist_ok=True)
+    tempe_poros_xyel: Dict = {}
+    for conditions, results in conditions_results.items():
+        for key, _result in results.items():
+            if key == "cond":
+                continue
+            smec_frac, tempe, molality, poros = conditions
+            hittorf, error = np.mean(_result), np.std(_result)
+            _cd_result = tempe_poros_xyel.setdefault(key, {})
+            _ls = _cd_result.setdefault((tempe, poros), [[], [], [], []])
+            if float("nan") in (hittorf, error):
+                continue
+            if np.isnan(hittorf) or np.isnan(error):
+                continue
+            _ls[0].append(smec_frac)
+            _ls[1].append(hittorf)
+            _ls[2].append(error)
+            _ls[3].append(molality)
+    for key, cd_results in tempe_poros_xyel.items():
+        for tempe_poros, _xyel in cd_results.items():
+            figdir = path.join(molality_dir, key) # key: smectite, nacl, etc.
+            makedirs(figdir, exist_ok=True)
+            tempe, poros = tempe_poros
+            save_pth = path.join(figdir, f"tempe-{tempe}_porosity-{poros}.png")
+            # lateral: temperature, legend: smectite fraction
+            plot_smec_frac_cond(
+                _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Molality (mol/kg)", logscale=True, lims=(-0.1, 1.1),
+            )
+
+    # plot porosity variation
+    porosity_dir = path.join(fig_dir, "hittorf", "porosity")
+    makedirs(porosity_dir, exist_ok=True)
+    tempe_molality_xyel: Dict = {}
+    for conditions, results in conditions_results.items():
+        for key, _result in results.items():
+            if key == "cond":
+                continue
+            smec_frac, tempe, molality, poros = conditions
+            hittorf, error = np.mean(_result), np.std(_result)
+            _cd_result = tempe_molality_xyel.setdefault(key, {})
+            _ls = _cd_result.setdefault((tempe, molality), [[], [], [], []])
+            if float("nan") in (hittorf, error):
+                continue
+            if np.isnan(hittorf) or np.isnan(error):
+                continue
+            _ls[0].append(smec_frac)
+            _ls[1].append(hittorf)
+            _ls[2].append(error)
+            _ls[3].append(poros)
+    for key, cd_results in tempe_molality_xyel.items():
+        for tempe_molality, _xyel in cd_results.items():
+            figdir = path.join(porosity_dir, key) # key: smectite, nacl, etc.
+            makedirs(figdir, exist_ok=True)
+            tempe, molality = tempe_molality
+            save_pth = path.join(figdir, f"tempe-{tempe}_molality-{molality}.png")
+            # lateral: temperature, legend: smectite fraction
+            plot_smec_frac_cond(
+                _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Porosity", lims=(-0.1, 1.1),
+            )
 
 
 def plt_hittorf():
@@ -423,14 +543,32 @@ def plt_curr(pth_solver, pth_out, axis):
         solver = pickle.load(pkf)
     plot_current_arrow(solver, pth_out, axis)
 
+# from matplotlib import pyplot as plt
+# def tmp():
+#     results = load_result()
+#     ratio_ls = []
+#     for conds, result in results.items():
+#         cond_ls = result["cond"]
+#         for key in result:
+#             print(key)
+#             if key == "quartz":
+#                 hq = result[key]
+#                 ratio_ls.append(mean(hq) * mean(cond_ls))
+#     fig, ax = plt.subplots()
+#     ax.hist(ratio_ls)
+#     plt.show()
+
 
 if __name__ == "__main__":
     # main()
-    experiment(cpu_count() - 10)
-    # output_fig()
+    # experiment(cpu_count() - 10)
+    output_cond_fig()
+    # output_hittorf_fig()
+    # tmp()
     # plt_hittorf()
     # run("tmp.pkl")
     # cond = "smec_frac-0.0_temperature-473.15_molality-5.0_porosity-0.2"
     # date = "2023-09-26"
     # plt_curr(f"E:\EECR\output6\pickle\{cond}\{60}\{date}\solver.pkl", f"./output/curr/{cond}", "Z")
+    # exec_single_condition(0.0, 293.15, 0.0001, 0.0, 100)
     pass

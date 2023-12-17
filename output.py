@@ -172,7 +172,13 @@ def plot_smec_frac_cond(
     error_bar_ls: List = None,
     xlabel: str = None,
     logscale=False,
+    lims=None
 ):
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+    #!
+    plt.rc('xtick', labelsize=15)
+    plt.rc('ytick', labelsize=15)
     assert len(smectite_frac_ls) == len(cond_ls)
     if label_val_ls is not None:
         assert len(smectite_frac_ls) == len(
@@ -221,7 +227,13 @@ def plot_smec_frac_cond(
         ax.set_xscale("log")
     # ax.set_yscale("log")
     ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
-    fig.savefig(save_pth, dpi=200, bbox_inches="tight")
+    if lims is not None:
+        ax.set_ylim(*lims)
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    fig.savefig(save_pth, dpi=500, bbox_inches="tight")
 
     # close
     plt.clf()

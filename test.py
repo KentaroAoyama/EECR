@@ -1031,11 +1031,14 @@ def smectite_cond_intra():
     fig.savefig(path.join(test_dir(), "Smectite_cond_intra.png"), dpi=200)
 
 
-def smec_cond_intra_r_dependence():
+def smec_cond_intra_r_dependence_th():
     print("smectite_cond_intra_r_dependence")
-    molarity_ls = np.logspace(-3, 0.7, 10, base=10)
+    molality_ls = np.logspace(-3, 0.7, 300, base=10)
     r_ls = [1.0e-9, 2.0e-9, 3.0e-9, 4.0e-9, 5.0e-9]
+    r_ls = [2.0e-9] #!
     condnacl_ls = []
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
     for i, _r in enumerate(r_ls):
         print("========")  #!
@@ -1043,28 +1046,36 @@ def smec_cond_intra_r_dependence():
         condnacl_ls = []
         stern_ls = []
         zeta_ls = []
-        for molarity in molarity_ls:
-            print(molarity)  #!
-            nacl = NaCl(temperature=298.15, molarity=molarity, pressure=5.0e6)
+        for molality in molality_ls:
+            print(molality)  #!
+            nacl = NaCl(temperature=298.15, molality=molality, pressure=5.0e6)
             condnacl_ls.append(nacl.get_cond())
             smectite = Smectite(nacl, layer_width=_r)
             smectite.calc_potentials_and_charges_truncated()
             _, (stern, diffuse) = smectite.calc_cond_interlayer()
-            stern_ls.append(const.ELEMENTARY_CHARGE * stern / (_r * 0.5))
-            zeta_ls.append(const.ELEMENTARY_CHARGE * diffuse / (_r * 0.5))
+            # stern_ls.append(const.ELEMENTARY_CHARGE * stern / (_r * 0.5))
+            # zeta_ls.append(const.ELEMENTARY_CHARGE * diffuse / (_r * 0.5))
+            stern_ls.append(const.ELEMENTARY_CHARGE * stern)
+            zeta_ls.append(const.ELEMENTARY_CHARGE * diffuse)
         ax.plot(
-            molarity_ls,
+            molality_ls,
             stern_ls,
-            color=cm.jet(float(i) / len(r_ls)),
-            label=_r,
-            linestyle="solid",
+            # color=cm.jet(float(i) / len(r_ls)),
+            color="0.05",
+            label="Stern",
+            linestyle="dashdot",
         )
         ax.plot(
-            molarity_ls, zeta_ls, color=cm.jet(float(i) / len(r_ls)), linestyle="dotted"
+            molality_ls, zeta_ls, label="Diffuse",color="0.05", linestyle="dotted"
         )
-    ax.legend()
+        ax.plot(molality_ls, [s + d for s, d in zip(stern_ls, zeta_ls)], color="0.05", label="Total", linestyle="solid")
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, fontsize=14)
     ax.set_xscale("log")
-    fig.savefig(path.join(test_dir(), "Smectite_cond_intra_r_dependence.png"), dpi=200)
+    fig.savefig(path.join(test_dir(), "Smectite_cond_intra_r_dependence.png"), dpi=500)
 
 
 def smectite_cond_inf():
@@ -4949,7 +4960,8 @@ def assign_parallel(quartz: Quartz, nacl: NaCl):
 
 def test_dks():
     print("test_dks")
-    t_ls = np.linspace(298.15, 498.15, 10).tolist()
+    t_ls = np.linspace(293.15, 498.15, 10).tolist()
+    t_ls = [293.15]
     m_ls = np.logspace(-4, 0.7, base=10.0, num=10).tolist()
     result_ls = []
     for _t in t_ls:
@@ -6840,7 +6852,6 @@ if __name__ == "__main__":
     # smectite_cond_intra()
     # potential_smectite_intra()
     # test_dielec()
-    # smec_cond_intra_r_dependence()
     # smectite_cond_inf()
     # potential_smectite_inf()
 
@@ -6862,7 +6873,7 @@ if __name__ == "__main__":
     # test_dks()
     # percolation()
 
-    compare_with_experiment()
+    # compare_with_experiment()
     # analyse_experimental_fitting()
 
     # smec_cond_intra_temp()
@@ -6891,4 +6902,9 @@ if __name__ == "__main__":
     # cs_tempe_th()
     # test_aniso_distribution()
     # test_random_distribution()
+    smec_cond_intra_r_dependence_th()
+    # with open(path.join(test_dir(), "test_dks_result.pkl"), "rb") as pkf:
+    #     result_ls = pickle.load(pkf)
+    # for sth, ssim in result_ls:
+    #     print((sth - ssim) / sth)
     pass

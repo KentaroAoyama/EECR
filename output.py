@@ -202,7 +202,7 @@ def plot_smec_frac_cond(
         xy_ls[2].append(_err)
 
     fig, ax = plt.subplots()
-    ax.grid(linestyle="-", linewidth=1)
+    # ax.grid(linestyle="-", linewidth=1)
     keys_sorted = sorted(list(label_xy.keys()))
     for i, _label in enumerate(keys_sorted):
         _xye = label_xy[_label]

@@ -71,7 +71,11 @@ def load_result(use_cache=False) -> Dict:
     outpth = path.join(test_dir(), "sim_result.pkl")
     if use_cache and path.exists(outpth):
         with open(outpth, "rb") as pkf:
-            return pickle.load(pkf)
+            results = pickle.load(pkf)
+        dct: Dict = {}
+        for condition, result in results.items():
+            dct.setdefault(condition, result["cond"])
+        return dct
     conditions_ye: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -3005,17 +3009,25 @@ def analyse_experimental_fitting():
         test_dir(),
         "WS3",
     )
+    T, P = 298.15, 1.0e5
+    molar2molal_ws: Dict = {}
     for id_name in listdir(pickle_dir):
         if id_name == "fig":
             continue
         dirname_id = path.join(pickle_dir, id_name)
-        molarity_dct: Dict[float, float] = id_cond_result.setdefault(
+        molality_dct: Dict[float, float] = id_cond_result.setdefault(
             "WS" + str(id_name), {}
         )
         for cond_name in tqdm(listdir(dirname_id)):
             # get conditions
             _, molarity = cond_name.split("_")
             molarity = float(molarity)
+            # convert molarity to molality
+            molality = molar2molal_ws.get(molarity, None)
+            if molality is None:
+                nacl = NaCl(temperature=T, pressure=P, molarity=molarity)
+                molality = nacl.get_ion_props()["Na"]["Molality"]
+                molar2molal_ws.setdefault(molarity, molality)
             # load result
             cond_tuple = None
             pkl_pth: str = path.join(dirname_id, cond_name, "cond.pkl")
@@ -3023,23 +3035,31 @@ def analyse_experimental_fitting():
                 with open(pkl_pth, "rb") as pkf:
                     cond_tuple = pickle.load(pkf)
             if cond_tuple is not None:
-                molarity_dct.setdefault(molarity, []).append(cond_tuple[0])
+                molality_dct.setdefault(molality, []).append(cond_tuple[0])
 
     pickle_dir = path.join(
         test_dir(),
         "Levy",
     )
+    T, P = 295.15, 1.0e5
+    molar2molal_levy: Dict = {}
     for id_name in listdir(pickle_dir):
         if id_name == "fig":
             continue
         dirname_id = path.join(pickle_dir, id_name)
-        molarity_dct: Dict[float, float] = id_cond_result.setdefault(
+        molality_dct: Dict[float, float] = id_cond_result.setdefault(
             "Levy" + id_name, {}
         )
         for cond_name in tqdm(listdir(dirname_id)):
             # get conditions
             _, molarity = cond_name.split("_")
             molarity = float(molarity)
+            # convert molarity to molality
+            molality = molar2molal_levy.get(molarity, None)
+            if molality is None:
+                nacl = NaCl(temperature=T, pressure=P, molarity=molarity)
+                molality = nacl.get_ion_props()["Na"]["Molality"]
+                molar2molal_levy.setdefault(molarity, molality)
             # load result
             cond_tuple = None
             pkl_pth: str = path.join(dirname_id, cond_name, "cond.pkl")
@@ -3047,32 +3067,49 @@ def analyse_experimental_fitting():
                 with open(pkl_pth, "rb") as pkf:
                     cond_tuple = pickle.load(pkf)
             if cond_tuple is not None:
-                molarity_dct.setdefault(molarity, []).append(cond_tuple[0])
+                molality_dct.setdefault(molality, []).append(cond_tuple[0])
 
     makedirs("./test/WS_Levy/fig", exist_ok=True)
-    for _id, molarity_dct in id_cond_result.items():
-        if len(molarity_dct) == 0:
-            continue
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
+    plt.rcParams['axes.axisbelow'] = True
+    # fig, ax = plt.subplots()
+    id_th = {"WS26": "WS26",
+             "Levy22": "L22",
+             "Levy24a": "L24a",
+             "Levy31": "L31",
+             "Levy96": "L96",
+             "Levy113": "L113"}
+    for i, (_id, _id_th) in enumerate(id_th.items()):
         fig, ax = plt.subplots()
-        molarity_ls = []
+        molality_dct = id_cond_result[_id]
+        if len(molality_dct) == 0:
+            continue
+        molal_ls = []
         mean_ls = []
         std_ls = []
-        for molarity in sorted(molarity_dct.keys()):
-            bk_ls = molarity_dct[molarity]
-            molarity_ls.append(molarity)
+        for molal in sorted(molality_dct.keys()):
+            bk_ls = molality_dct[molal]
+            molal_ls.append(molal)
             if len(bk_ls) > 1:
                 mean_ls.append(mean(bk_ls))
                 std_ls.append(stdev(bk_ls))
             else:
                 mean_ls.append(bk_ls[0])
                 std_ls.append(0)
-        ax.errorbar(
-            molarity_ls,
-            mean_ls,
-            std_ls,
-            alpha=0.75,
-            capsize=3,
-            color=cm.jet(float(i) / len(molarity_dct)),
+        # ax.fill_between(
+        #     molal_ls,
+        #     [ave - std for ave, std in zip(mean_ls, std_ls)],
+        #     [ave + std for ave, std in zip(mean_ls, std_ls)],
+        #     alpha=0.5,
+        #     color=cm.jet(float(i) / len(id_cond_result)),
+        # )
+        ax.fill_between(
+            molal_ls,
+            [ave - std for ave, std in zip(mean_ls, std_ls)],
+            [ave + std for ave, std in zip(mean_ls, std_ls)],
+            alpha=0.25,
+            color="0.2",
         )
         # obs
         obs_x, obs_y = None, None
@@ -3080,21 +3117,34 @@ def analyse_experimental_fitting():
             _id_orig = _id.replace("WS", "")
             _ls_tmp = core_props_ws[_id_orig]["bulk"]
             obs_x, obs_y = [], []
-            for i, bk in enumerate(_ls_tmp):
+            for j, bk in enumerate(_ls_tmp):
                 if bk is not None:
-                    obs_x.append(molarity_ws_pred[i])
+                    obs_x.append(molar2molal_ws[molarity_ws_pred[j]])
                     obs_y.append(bk * 0.1)
         if "Levy" in _id:
             _id_orig = _id.replace("Levy", "")
-            obs_x = core_props_levy[_id_orig]["Molarity"]
+            obs_x = [molar2molal_levy[i] for i in core_props_levy[_id_orig]["Molarity"]]
             obs_y = core_props_levy[_id_orig]["Co"]
 
-        ax.scatter(obs_x, obs_y, zorder=2)
+        # ax.scatter(obs_x, obs_y, color=cm.jet(float(i) / len(id_cond_result)), label=_id_th, zorder=2)
+        ax.scatter(obs_x, obs_y, color="0.2", label=_id_th, zorder=2)
+
+        ax.set_xscale("log")
+        # ax.set_yscale("log")
+        # if "Levy" in _id:
+        #     ax.set_ylim(0.0, 0.32)
+        ax.tick_params(axis="x", which="major", length=7)
+        ax.tick_params(axis="x", which="minor", length=5)
+        ax.tick_params(axis="y", which="major", length=7)
+        ax.tick_params(axis="y", which="minor", length=5)
+        ax.tick_params(labelsize=14)
+        # ax.legend(frameon=False, facecolor="white", loc=(0.09, 0.55), fontsize=10)
         # save
-        ax.set_xlabel("Salinity (M)", fontsize=14.0)
+        ax.set_xlabel("Molality (mol/kg)", fontsize=14.0)
+        # ax.set_ylabel("Log Conductivity (S/m)", fontsize=14.0)
         ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
-        ax.grid()
-        fig.savefig(f"./test/WS_Levy/fig/{_id}.png", bbox_inches="tight", dpi=300)
+        # ax.grid()
+        fig.savefig(f"./test/WS_Levy/fig/{_id_th}.png", bbox_inches="tight", dpi=500)
         plt.clf()
         plt.close()
 
@@ -5055,7 +5105,8 @@ def percolation():
 
     # with open("./tmp/percolation.pkl", "wb") as pkf:
     #     pickle.dump(xsmec_poros_bool, pkf)
-
+    plt.rcParams['xtick.direction'] = 'in'
+    plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
 
     with open("./tmp/percolation.pkl", "rb") as pkf:
@@ -5084,9 +5135,15 @@ def percolation():
     ax.set_xlabel("$X_{smec}$", fontsize=14, labelpad=10.0)
     ax.set_ylabel("$φ_{c}$", fontsize=14, labelpad=10.0)
 
+    ax.tick_params(axis="x", which="major", length=7)
+    ax.tick_params(axis="x", which="minor", length=5)
+    ax.tick_params(axis="y", which="major", length=7)
+    ax.tick_params(axis="y", which="minor", length=5)
+    ax.legend(frameon=False, loc=(0.07, 0.65), fontsize=8)
+    
     ax.set_aspect("equal")
 
-    fig.savefig("./test/percolation.png", dpi=300, bbox_inches="tight")
+    fig.savefig("./test/percolation.png", dpi=500, bbox_inches="tight")
 
 
 def plt_anisotropic_distribution():
@@ -5311,7 +5368,7 @@ def plot_r2(
             for i, (name, v) in enumerate(params.items()):
                 if i > 0:
                     label += "\n"
-                v = "{:.2f}".format(v)
+                # v = "{:.2f}".format(v)
                 label += f"{name}: {v}"
         mappable = ax.scatter(x, y, c=hue, cmap="coolwarm", label=label, s=1.0)
     else:
@@ -5429,7 +5486,7 @@ def test_Archie(use_cache=False):
         phiw_ls.append(phiw)
         phismec_ls.append((1.0 - phiw) * xsmec * r / (6.6e-10 + r))
 
-    # # regularization
+    # regularization
     # weight_ls = [i/mean(weight_ls) for i in weight_ls]
 
     # included case
@@ -5940,7 +5997,7 @@ def test_Clavier(use_cache=False):
     )
     params = model.make_params()
     params["m"] = Parameter(name="m", value=1.5, min=1.0)
-    params["QvCoeff"] = Parameter(name="QvCoeff", value=0.1, min=0.0)
+    params["QvCoeff"] = Parameter(name="QvCoeff", value=0.1, min=float_info.min)
     params["a"] = Parameter(name="a", value=0.6, min=0.0)
     params["gamma"] = Parameter(name="gamma", value=0.013, min=float_info.min)
     params["lamda"] = Parameter(name="lamda", value=0.1, min=float_info.min)
@@ -6186,7 +6243,7 @@ def test_BHS(use_cache=False):
         Returns:
             np.ndarray: Array contains bulk conductivity
         """
-        c = 1.0e-5
+        c = 1.0e-7
         # generate function pass to bisect
         crt_ls = [cr20 * phismec * (1.0 + alpha * (t - 20.0)) for t, phismec in zip(tempe_ls, phismec_ls)]
         func_ls = [partial(__inner, cw=cw, cr=crt, phi=phi, m=m) for cw, crt, phi in zip(cw_ls, crt_ls, phi_ls)]
@@ -6340,7 +6397,6 @@ def test_TR(use_cache=False):
 
         Args:
             cw_ls (List[float]): Conductivity of water (S/m)
-            phi_ls (List[float]): Porosity
             tempe_ls (List[float]): Temperature (℃)
             cr20 (float): Effective conductivity path through EDL and water at 20℃
             alpha (float): Temperature dependence of mobility
@@ -6615,6 +6671,165 @@ def test_QiandWu(use_cache=False):
         f.write(f"AIC: {result.aic}\n")
         f.write(f"R2: {r2_score(co_ls, result.best_fit)}\n")
 
+def test_QiandWu_mofified(use_cache=False):
+    """ Test Qi and Wu's equation (Qi and Wu, 2022)"""
+    
+    print("test_QiandWu_mofified")
+
+    def _eq(cw, cc, zeta, phi, m):
+        """Eq.(4) in Qi and Wu (2022)
+        """
+        return cw * phi**m + (((2.0 * zeta + 1.0) * cc * cw + 2.0 * (1.0 - zeta) * cc**2) / ((2.0 + zeta) * cc + (1.0 - zeta) * cw))
+
+    def equation(
+        cw_ls: List[float],
+        tempe_ls: List[float],
+        phi_ls: List[float],
+        phismec_ls: List[float],
+        cr20: float,
+        alpha: float,
+        zeta: float,
+        m: float,
+        a: float,
+        b: float,
+        c: float,
+    ) -> np.ndarray:
+        """Calculate Qi and Wu's equation (Qi and Wu, 2022)
+
+        Args:
+            cw_ls (List[float]): Conductivity of water (S/m)
+            phi_ls (List[float]): Porosity
+            tempe_ls (List[float]): Temperature (℃)
+            cr20 (float): Effective conductivity path through EDL and water at 20℃
+            alpha (float): Temperature dependence of mobility
+            zeta (float): Water volume fraction in the clay-and-water conduction path
+            m: Cementation factor
+
+        Returns:
+            np.ndarray: Array contains bulk conductivity
+        """
+        # crt_ls = [cr20 * phismec * (1.0 + alpha * (t - 20.0)) * (a * cw**2 + b*cw + c) for cw, t, phismec in zip(cw_ls, tempe_ls, phismec_ls)]
+        crt_ls = [cr20 * phismec * (1.0 + alpha * (t - 20.0)) * (a * cw**2 + b*cw + c) for cw, t, phismec in zip(cw_ls, tempe_ls, phismec_ls)]
+        co_ls = [_eq(cw, crt, zeta, phi, m) for cw, crt, phi in zip(cw_ls, crt_ls, phi_ls)]
+        return np.array(co_ls)
+
+    results: Dict = load_result(use_cache=use_cache)
+
+    # conditions
+    r = sim_condition["r"]
+    cw_ls, phi_inc_ls, co_ls, weight_ls = [], [], [], []
+    xsmec_ls, tempe_ls, molality_ls, phiw_ls, phismec_ls = [], [], [], [], []
+    for (xsmec, T, M, phiw), co_1conds in results.items():
+        if len(co_1conds) == 0:
+            continue
+        if isin_percolation_search_area(phiw):
+            continue
+        if isin_percolation_search_area(xsmec):
+            continue
+        if phiw > 0.5:
+            continue
+
+        # porosity which includes interlayer space
+        phi_inc = phiw + (1.0 - phiw) * xsmec * (r / (r + 6.6e-10))
+        phi_inc_ls.append(phi_inc)
+
+        # Conductivity of NaCl(aq)
+        cw_ls.append(sen_and_goode_1992(T, M))
+
+        # Bulk conductivity and weight
+        co_ls.append(mean(co_1conds))
+        weight_ls.append(1.0 / (log10(stdev(co_1conds)) ** 2.0))
+
+        # conditions
+        xsmec_ls.append(xsmec)
+        tempe_ls.append(T)
+        molality_ls.append(M)
+        phiw_ls.append(phiw)
+        phismec_ls.append((1.0 - phiw) * xsmec * r / (6.6e-10 + r))
+
+    # Fitting for each temperature (℃)
+    # savepath
+    dirpth = path.join(test_dir(), "Qi&Wu_modified")
+    makedirs(dirpth, exist_ok=True)
+
+    model = Model(
+        equation, independent_vars=["cw_ls", "tempe_ls", "phi_ls", "phismec_ls",], param_names=["cr20", "alpha", "zeta", "m", "a", "b", "c",]
+    )
+    # second order: 'cr20': 0.001342562815310755, 'alpha': 0.06780270943237987, 'zeta': 1.600629628839556e-10, 'm': 1.5233600185512874, 'a': 0.6274468292424902, 'b': -109.87634537515365, 'c': 4505.271985848731}
+    params = model.make_params()
+    params["cr20"] = Parameter(name="cr20", value=0.001342562815310755, min=float_info.min)
+    params["alpha"] = Parameter(name="alpha", value=0.06780270943237987, min=float_info.min)
+    params["zeta"] = Parameter(name="zeta", value=1.600629628839556e-10, min=0.0, max=1.0)
+    params["m"] = Parameter(name="m", value=1.5233600185512874, min=1.0)
+    params["a"] = Parameter(name="a", value=0.6274468292424902,)
+    params["b"] = Parameter(name="b", value=-109.87634537515365,)
+    params["c"] = Parameter(name="c", value=4505.271985848731,)
+
+
+    result = model.fit(
+        co_ls,
+        params,
+        weights=weight_ls,
+        method="leastsq",
+        verbose=True,
+        cw_ls=cw_ls,
+        phismec_ls=phismec_ls,
+        tempe_ls=[t - 273.15 for t in tempe_ls],
+        phi_ls=phi_inc_ls
+    )
+    print(result.best_values)
+    # plot
+    plot_r2(
+        result.best_fit,
+        co_ls,
+        path.join(dirpth, f"molal.png"),
+        molality_ls,
+        "Log Molality (mol/kg)",
+        params=result.best_values,
+        xlabel="Qi&Wu_modified (S/m)",
+    )
+    plot_r2(
+        result.best_fit,
+        co_ls,
+        path.join(dirpth, f"xsmec.png"),
+        xsmec_ls,
+        "Xsmec",
+        params=result.best_values,
+        xlabel="Qi&Wu_modified (S/m)",
+    )
+    plot_r2(
+        result.best_fit,
+        co_ls,
+        path.join(dirpth, f"phiw.png"),
+        phiw_ls,
+        "Φw",
+        params=result.best_values,
+        xlabel="Qi&Wu_modified (S/m)",
+    )
+    plot_r2(
+        result.best_fit,
+        co_ls,
+        path.join(dirpth, f"phismec.png"),
+        phismec_ls,
+        "Φsmec",
+        params=result.best_values,
+        xlabel="Qi&Wu_modified (S/m)",
+    )
+    plot_r2(
+        result.best_fit,
+        co_ls,
+        path.join(dirpth, f"temp.png"),
+        tempe_ls,
+        "Temperature (K)",
+        params=result.best_values,
+        xlabel="Qi&Wu_modified (S/m)",
+    )
+
+    with open(path.join(dirpth, "statics.txt"), "w") as f:
+        # log statistical value
+        f.write(f"AIC: {result.aic}\n")
+        f.write(f"R2: {r2_score(co_ls, result.best_fit)}\n")
+
 
 def test_BHS_modified(use_cache=False):
     """ Test Bruggeman-Hanai-Sen's equation (Bussian, 1983) that accounts for the salinity
@@ -6639,8 +6854,6 @@ def test_BHS_modified(use_cache=False):
         m: float,
         cr20: float,
         alpha: float,
-        P1: float,
-        P2: float,
     ) -> np.ndarray:
         """Calculate BHS equation (Bussian, 1983)
 
@@ -6658,7 +6871,7 @@ def test_BHS_modified(use_cache=False):
         """
         c = 1.0e-5
         # generate function pass to bisect
-        crt_ls = [cr20 * phismec * (1.0 + alpha * (t - 20.0)) * np.exp(-P1 * m **P2) for t, phismec, m in zip(tempe_ls, phismec_ls, m_ls)]
+        crt_ls = [cr20 * phismec * (1.0 + alpha * (t - 20.0)) for t, phismec, m in zip(tempe_ls, phismec_ls, m_ls)]
         func_ls = [partial(__inner, cw=cw, cr=crt, phi=phi, m=m) for cw, crt, phi in zip(cw_ls, crt_ls, phi_ls)]
         co_ls = list(range(len(func_ls)))
         for i in range(len(func_ls)):
@@ -6715,14 +6928,12 @@ def test_BHS_modified(use_cache=False):
     makedirs(dirpth, exist_ok=True)
 
     model = Model(
-        equation, independent_vars=["cw_ls", "phi_ls", "tempe_ls", "phismec_ls", "m_ls"], param_names=["m", "cr20", "alpha", "P1", "P2"]
+        equation, independent_vars=["cw_ls", "phi_ls", "tempe_ls", "phismec_ls", "m_ls"], param_names=["m", "cr20", "alpha"]
     )
     params = model.make_params()
     params["m"] = Parameter(name="m", value=1.5, min=1.0)
     params["cr20"] = Parameter(name="cr20", value=0.01, min=float_info.min)
     params["alpha"] = Parameter(name="alpha", value=0.0414, min=float_info.min)
-    params["P1"] = Parameter(name="P1", value=1.2, min=float_info.min)
-    params["P2"] = Parameter(name="P2", value=0.3, min=float_info.min)
 
     result = model.fit(
         co_ls,
@@ -6890,6 +7101,7 @@ if __name__ == "__main__":
     # test_TR(use_cache=True)
     # test_QiandWu(use_cache=True)
     # test_BHS_modified(use_cache=True)
+    test_QiandWu_mofified(use_cache=True)
 
     # 
     # test_sen_and_goode_1992_th()
@@ -6902,9 +7114,11 @@ if __name__ == "__main__":
     # cs_tempe_th()
     # test_aniso_distribution()
     # test_random_distribution()
-    smec_cond_intra_r_dependence_th()
+    # smec_cond_intra_r_dependence_th()
     # with open(path.join(test_dir(), "test_dks_result.pkl"), "rb") as pkf:
     #     result_ls = pickle.load(pkf)
     # for sth, ssim in result_ls:
     #     print((sth - ssim) / sth)
+    # for t in [293.15, 373.15, 473.15]:
+    #     print(sen_and_goode_1992(T=t, M=0.01))
     pass

@@ -88,9 +88,9 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
     assert len(outdir) < 244
 
     makedirs(outdir, exist_ok=True)
-    for date_dirname in listdir(outdir):
-        if len(listdir(outdir)) > 1:
-            return None
+    # for date_dirname in listdir(outdir):
+    #     if len(listdir(outdir)) > 1:
+    #         return None
     print(outdir)
     logger_pth = path.join(outdir, "log.txt")
 
@@ -561,8 +561,8 @@ def plt_curr(pth_solver, pth_out, axis):
 
 if __name__ == "__main__":
     # main()
-    # experiment(cpu_count() - 10)
-    output_cond_fig()
+    experiment(cpu_count() - 10)
+    # output_cond_fig()
     # output_hittorf_fig()
     # tmp()
     # plt_hittorf()

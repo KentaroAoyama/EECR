@@ -5109,6 +5109,14 @@ def percolation():
     plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
 
+    # theory
+    xsmec_ls_tmp = np.linspace(0.0, 0.1, 1000).tolist()
+    pc_ls = []
+    C = 0.1
+    for xsmec in xsmec_ls_tmp:
+        pc_ls.append((C - xsmec) / (1.0 - xsmec))
+    ax.plot(xsmec_ls_tmp, pc_ls, color="0.2", label="Theory")
+
     with open("./tmp/percolation.pkl", "rb") as pkf:
         xsmec_poros_bool = pickle.load(pkf)
     xsmec_ls = []
@@ -5122,15 +5130,7 @@ def percolation():
                 xsmec_ls.append(xsmec)
                 break
 
-    ax.scatter(xsmec_ls, pc_ls)
-
-    # theory
-    xsmec_ls_tmp = np.linspace(0.0, 0.1, 1000).tolist()
-    pc_ls = []
-    C = 0.1
-    for xsmec in xsmec_ls_tmp:
-        pc_ls.append((C - xsmec) / (1.0 - xsmec))
-    ax.plot(xsmec_ls_tmp, pc_ls)
+    ax.scatter(xsmec_ls, pc_ls, color="0.4", label="Network analysis")
 
     ax.set_xlabel("$X_{smec}$", fontsize=14, labelpad=10.0)
     ax.set_ylabel("$φ_{c}$", fontsize=14, labelpad=10.0)
@@ -5139,7 +5139,7 @@ def percolation():
     ax.tick_params(axis="x", which="minor", length=5)
     ax.tick_params(axis="y", which="major", length=7)
     ax.tick_params(axis="y", which="minor", length=5)
-    ax.legend(frameon=False, loc=(0.07, 0.65), fontsize=8)
+    ax.legend(frameon=False, loc=(0.55, 0.65), fontsize=10)
     
     ax.set_aspect("equal")
 
@@ -7082,7 +7082,6 @@ if __name__ == "__main__":
     # test_dielec_RaspoandNeau2020()
     # # reviletal1998()
     # test_dks()
-    # percolation()
 
     # compare_with_experiment()
     # analyse_experimental_fitting()
@@ -7101,7 +7100,7 @@ if __name__ == "__main__":
     # test_TR(use_cache=True)
     # test_QiandWu(use_cache=True)
     # test_BHS_modified(use_cache=True)
-    test_QiandWu_mofified(use_cache=True)
+    # test_QiandWu_mofified(use_cache=True)
 
     # 
     # test_sen_and_goode_1992_th()
@@ -7115,6 +7114,7 @@ if __name__ == "__main__":
     # test_aniso_distribution()
     # test_random_distribution()
     # smec_cond_intra_r_dependence_th()
+    percolation()
     # with open(path.join(test_dir(), "test_dks_result.pkl"), "rb") as pkf:
     #     result_ls = pickle.load(pkf)
     # for sth, ssim in result_ls:

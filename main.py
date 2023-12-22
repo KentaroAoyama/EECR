@@ -83,7 +83,7 @@ def exec_single_condition(smec_frac, temperature, molality, porosity, seed) -> N
     dirname += f"_temperature-{temperature}"
     dirname += f"_molality-{molality}"
     dirname += f"_porosity-{porosity}"
-    outdir_seed = path.join(getcwd(), "output3", "pickle", dirname, str(seed))
+    outdir_seed = path.join(getcwd(), "output4", "pickle", dirname, str(seed))
     outdir = path.join(outdir_seed, str(datetime.now()).split()[0])
     assert len(outdir) < 244
 
@@ -244,12 +244,12 @@ def experiment(num_workers: int):
 
 
 def load_result() -> Dict:
-    pickle_dir = path.join(getcwd(), "output3", "pickle")
-    cachepth = path.join(getcwd(), "cache.pkl")
+    pickle_dir = path.join(getcwd(), "output4", "pickle")
+    cachepth = path.join(getcwd(), "cache_percolation.pkl")
     if path.exists(cachepth):
         with open(cachepth, "rb") as pkf:
             conditions_results = pickle.load(pkf)
-    return conditions_results
+        return conditions_results
     conditions_results: Dict = {}
     for condition_dirname in tqdm(listdir(pickle_dir)):
         _ls = condition_dirname.split("_")
@@ -325,72 +325,73 @@ def load_result() -> Dict:
 # TODO: percolationを可視化するのと、0.1刻みの大まかな曲線をプロットする機能を分ける
 def output_cond_fig():
     conditions_results = load_result()
-    fig_dir = path.join(getcwd(), "output", "fig")
+    fig_dir = path.join(getcwd(), "output", "fig_percolation")
     makedirs(fig_dir, exist_ok=True)
 
-    # plot temperature variation
-    tempe_dir = path.join(fig_dir, "cond", "temperature")
-    makedirs(tempe_dir, exist_ok=True)
-    molality_poros_xyel: Dict = {}
-    for conditions, results in conditions_results.items():
-        smec_frac, tempe, molality, poros = conditions
-        cond_ls = results["cond"]
-        cond, error = np.mean(cond_ls), np.std(cond_ls)
-        _ls = molality_poros_xyel.setdefault((molality, poros), [[], [], [], []])
-        if float("nan") in (cond, error):
-            continue
-        if np.isnan(cond) or np.isnan(error):
-            continue
-        if cond < 0.0:
-            continue
-        if cond > 1.0e4:
-            continue
-        _ls[0].append(smec_frac)
-        _ls[1].append(cond)
-        _ls[2].append(error)
-        _ls[3].append(tempe - 273.15)
-    for molality_poros, _xyel in molality_poros_xyel.items():
-        molality, poros = molality_poros
-        save_pth = path.join(tempe_dir, f"molality-{molality}_porosity-{poros}.png")
-        # lateral: temperature, legend: smectite fraction
-        plot_smec_frac_cond(
-            _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Temperature (℃)"
-        )
+    #!
+    # # plot temperature variation
+    # tempe_dir = path.join(fig_dir, "cond", "temperature")
+    # makedirs(tempe_dir, exist_ok=True)
+    # molality_poros_xyel: Dict = {}
+    # for conditions, results in conditions_results.items():
+    #     smec_frac, tempe, molality, poros = conditions
+    #     cond_ls = results["cond"]
+    #     cond, error = np.mean(cond_ls), np.std(cond_ls)
+    #     _ls = molality_poros_xyel.setdefault((molality, poros), [[], [], [], []])
+    #     if float("nan") in (cond, error):
+    #         continue
+    #     if np.isnan(cond) or np.isnan(error):
+    #         continue
+    #     if cond < 0.0:
+    #         continue
+    #     if cond > 1.0e4:
+    #         continue
+    #     _ls[0].append(smec_frac)
+    #     _ls[1].append(cond)
+    #     _ls[2].append(error)
+    #     _ls[3].append(tempe - 273.15)
+    # for molality_poros, _xyel in molality_poros_xyel.items():
+    #     molality, poros = molality_poros
+    #     save_pth = path.join(tempe_dir, f"molality-{molality}_porosity-{poros}.png")
+    #     # lateral: temperature, legend: smectite fraction
+    #     plot_smec_frac_cond(
+    #         _xyel[3], _xyel[1], save_pth, _xyel[0], _xyel[2], "Temperature (℃)"
+    #     )
 
-    # plot molality variation
-    molality_dir = path.join(fig_dir, "cond", "molality")
-    makedirs(molality_dir, exist_ok=True)
-    tempe_poros_xyel: Dict = {}
-    for conditions, results in conditions_results.items():
-        smec_frac, tempe, molality, poros = conditions
-        cond_ls = results["cond"]
-        cond, error = np.mean(cond_ls), np.std(cond_ls)
-        _ls = tempe_poros_xyel.setdefault((tempe, poros), [[], [], [], []])
-        if float("nan") in (cond, error):
-            continue
-        if np.isnan(cond) or np.isnan(error):
-            continue
-        if cond < 0.0:
-            continue
-        if cond > 1.0e4:
-            continue
-        _ls[0].append(smec_frac)
-        _ls[1].append(cond)
-        _ls[2].append(error)
-        _ls[3].append(molality)
-    for tempe_poros, _xyel in tempe_poros_xyel.items():
-        tempe, poros = tempe_poros
-        save_pth = path.join(molality_dir, f"temperature-{tempe}_porosity-{poros}.png")
-        # lateral: molality, legend: smectite fraction
-        plot_smec_frac_cond(
-            _xyel[3],
-            _xyel[1],
-            save_pth,
-            _xyel[0],
-            _xyel[2],
-            "Molality (mol/kg)",
-            logscale=True,
-        )
+    # # plot molality variation
+    # molality_dir = path.join(fig_dir, "cond", "molality")
+    # makedirs(molality_dir, exist_ok=True)
+    # tempe_poros_xyel: Dict = {}
+    # for conditions, results in conditions_results.items():
+    #     smec_frac, tempe, molality, poros = conditions
+    #     cond_ls = results["cond"]
+    #     cond, error = np.mean(cond_ls), np.std(cond_ls)
+    #     _ls = tempe_poros_xyel.setdefault((tempe, poros), [[], [], [], []])
+    #     if float("nan") in (cond, error):
+    #         continue
+    #     if np.isnan(cond) or np.isnan(error):
+    #         continue
+    #     if cond < 0.0:
+    #         continue
+    #     if cond > 1.0e4:
+    #         continue
+    #     _ls[0].append(smec_frac)
+    #     _ls[1].append(cond)
+    #     _ls[2].append(error)
+    #     _ls[3].append(molality)
+    # for tempe_poros, _xyel in tempe_poros_xyel.items():
+    #     tempe, poros = tempe_poros
+    #     save_pth = path.join(molality_dir, f"temperature-{tempe}_porosity-{poros}.png")
+    #     # lateral: molality, legend: smectite fraction
+    #     plot_smec_frac_cond(
+    #         _xyel[3],
+    #         _xyel[1],
+    #         save_pth,
+    #         _xyel[0],
+    #         _xyel[2],
+    #         "Molality (mol/kg)",
+    #         logscale=True,
+    #     )
 
     # plot porosity variation
     poros_dir = path.join(fig_dir, "cond", "poros")
@@ -398,6 +399,8 @@ def output_cond_fig():
     tempe_molality_xyel: Dict = {}
     for conditions, results in conditions_results.items():
         smec_frac, tempe, molality, poros = conditions
+        if smec_frac > 0.11 or poros > 0.11:
+            continue
         cond_ls = results["cond"]
         cond, error = np.mean(cond_ls), np.std(cond_ls)
         _ls = tempe_molality_xyel.setdefault((tempe, molality), [[], [], [], []])
@@ -561,8 +564,8 @@ def plt_curr(pth_solver, pth_out, axis):
 
 if __name__ == "__main__":
     # main()
-    experiment(cpu_count() - 10)
-    # output_cond_fig()
+    # experiment(cpu_count() - 10)
+    output_cond_fig()
     # output_hittorf_fig()
     # tmp()
     # plt_hittorf()

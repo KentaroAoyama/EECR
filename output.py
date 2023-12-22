@@ -176,7 +176,6 @@ def plot_smec_frac_cond(
 ):
     plt.rcParams['xtick.direction'] = 'in'
     plt.rcParams['ytick.direction'] = 'in'
-    #!
     plt.rc('xtick', labelsize=15)
     plt.rc('ytick', labelsize=15)
     assert len(smectite_frac_ls) == len(cond_ls)
@@ -211,21 +210,30 @@ def plot_smec_frac_cond(
             continue
         if float("nan") in _y:
             continue
-
-        ax.errorbar(
+        # _e = [0.0 for _ in range(len(_x))] #!
+        # _, caps, bars = ax.errorbar(
+        #     _x,
+        #     _y,
+        #     _e,
+        #     label=str(_label),
+        #     capsize=3,
+        #     color=cm.jet(float(i) / len(keys_sorted)),
+        # ) #!
+        ax.plot(
             _x,
             _y,
-            _e,
             label=str(_label),
-            capsize=3,
             color=cm.jet(float(i) / len(keys_sorted)),
+            alpha=0.6
         )
+        # [bar.set_alpha(0.25) for bar in bars]
+        # [cap.set_alpha(0.25) for cap in caps]
     ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
     if xlabel is not None:
         ax.set_xlabel(xlabel, fontsize=14.0)
     if logscale:
         ax.set_xscale("log")
-    # ax.set_yscale("log")
+    ax.set_yscale("log")
     ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
     if lims is not None:
         ax.set_ylim(*lims)

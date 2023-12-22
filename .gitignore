@@ -1,17 +1,1 @@
 *.pyc
-*.pkl
-*log.txt
-*.png
-*.lnk
-test/*
-__pycache__/solver.cpython-39.pyc
-__pycache__/quartz.cpython-39.pyc
-__pycache__/phyllosilicate.cpython-39.pyc
-__pycache__/output.cpython-39.pyc
-__pycache__/fluid.cpython-39.pyc
-__pycache__/cube.cpython-39.pyc
-__pycache__/constants.cpython-39.pyc
-tmp/reviletal1998
-tmp/params/1e-09_not_converged.pickle
-tmp/params/1e-09.pickle
-tmp/cs_tempe_th

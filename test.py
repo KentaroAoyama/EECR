@@ -1175,9 +1175,9 @@ def potential_smectite_inf():
             linestyle="solid",
         )
         ax.plot(molarity_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dashdot")
-    # Leroy et al., 2015
-    ex_x = [0.002483266, 0.005355863, 0.007630982, 0.017786185]
-    ex_y = [-0.1496710526, -0.1475585303, -0.1312719129, -0.1075822876]
+    # Rasmusson et al. (1997)
+    ex_x = [0.0025, 0.0054, 0.0077, 0.018]
+    ex_y = [-0.149, -0.1475, -0.131, -0.1075]
     ax.scatter(ex_x, ex_y)  #!
 
     ax.legend()
@@ -5109,14 +5109,6 @@ def percolation():
     plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
 
-    # theory
-    xsmec_ls_tmp = np.linspace(0.0, 0.1, 1000).tolist()
-    pc_ls = []
-    C = 0.1
-    for xsmec in xsmec_ls_tmp:
-        pc_ls.append((C - xsmec) / (1.0 - xsmec))
-    ax.plot(xsmec_ls_tmp, pc_ls, color="0.2", label="Theory")
-
     with open("./tmp/percolation.pkl", "rb") as pkf:
         xsmec_poros_bool = pickle.load(pkf)
     xsmec_ls = []
@@ -5130,7 +5122,15 @@ def percolation():
                 xsmec_ls.append(xsmec)
                 break
 
-    ax.scatter(xsmec_ls, pc_ls, color="0.4", label="Network analysis")
+    ax.scatter(xsmec_ls, pc_ls)
+
+    # theory
+    xsmec_ls_tmp = np.linspace(0.0, 0.1, 1000).tolist()
+    pc_ls = []
+    C = 0.1
+    for xsmec in xsmec_ls_tmp:
+        pc_ls.append((C - xsmec) / (1.0 - xsmec))
+    ax.plot(xsmec_ls_tmp, pc_ls)
 
     ax.set_xlabel("$X_{smec}$", fontsize=14, labelpad=10.0)
     ax.set_ylabel("$φ_{c}$", fontsize=14, labelpad=10.0)
@@ -5139,7 +5139,7 @@ def percolation():
     ax.tick_params(axis="x", which="minor", length=5)
     ax.tick_params(axis="y", which="major", length=7)
     ax.tick_params(axis="y", which="minor", length=5)
-    ax.legend(frameon=False, loc=(0.55, 0.65), fontsize=10)
+    ax.legend(frameon=False, loc=(0.07, 0.65), fontsize=8)
     
     ax.set_aspect("equal")
 
@@ -7064,7 +7064,7 @@ if __name__ == "__main__":
     # potential_smectite_intra()
     # test_dielec()
     # smectite_cond_inf()
-    # potential_smectite_inf()
+    potential_smectite_inf()
 
     # test_nacl_density()
     # test_nacl_activity_and_molality()
@@ -7082,6 +7082,7 @@ if __name__ == "__main__":
     # test_dielec_RaspoandNeau2020()
     # # reviletal1998()
     # test_dks()
+    # percolation()
 
     # compare_with_experiment()
     # analyse_experimental_fitting()
@@ -7114,7 +7115,6 @@ if __name__ == "__main__":
     # test_aniso_distribution()
     # test_random_distribution()
     # smec_cond_intra_r_dependence_th()
-    percolation()
     # with open(path.join(test_dir(), "test_dks_result.pkl"), "rb") as pkf:
     #     result_ls = pickle.load(pkf)
     # for sth, ssim in result_ls:

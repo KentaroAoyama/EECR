@@ -1043,15 +1043,21 @@ class Cube:
         # calculate wight (n_initial × n_remain)
         _c = 1.0 / np.sqrt(np.square([float(nx), float(ny), float(nz)]).sum()) * 0.5
         gamma_init = self.__calc_vario_exp(dist_init, c=_c)
-        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_init * 27))
+        # add constraints
+        n_init, _ = gamma_init.shape
+        gamma_init = np.hstack((gamma_init, np.ones((n_init,), dtype=np.float64).reshape(n_init,1)))
+        gamma_init = np.vstack((gamma_init, np.hstack((np.ones((n_init,), dtype=np.float64), 0.0))))
+        gamma_init_inv = np.linalg.solve(gamma_init, np.identity(num_init * 27 + 1))
         gamma_interp = self.__calc_vario_exp(dist_interp, c=_c)
-        wn: np.ndarray = np.matmul(gamma_init_inv, gamma_interp)
+        # add constraints
+        _, n_remain = gamma_interp.shape
+        gamma_interp = np.vstack((gamma_interp, np.ones((n_remain,), dtype=np.float64)))
+
+        wn: np.ndarray = np.matmul(gamma_init_inv, gamma_interp)[:n_init]
         # get m
         # The sum of weights is considered a probability
         values: np.ndarray = np.array(values_init)
-        _mean = values.mean()
-        residual: np.ndarray = values - _mean
-        prob = np.matmul(residual, wn) + _mean
+        prob = np.matmul(values, wn)
         m_selected: List = np.array(m_remain)[
             np.argsort(-1.0 * prob)[: _num - num_init]
         ].tolist()

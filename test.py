@@ -839,19 +839,20 @@ def qurtz_cond_th():
         0.000455021,
     ]
     ex_y = [
-        2.405797101,
-        2.550724638,
-        2.927536232,
-        3.536231884,
-        4.579710145,
-        6,
-        7.47826087,
+        2.2262870056919076e-9,
+        2.4242410099400936e-9,
+        2.8454685659049805e-9,
+        3.5146323561949953e-9,
+        4.456585208509649e-9,
+        5.975317265727418e-9,
+        7.560275993871106e-9,
     ]
-    for i, cf in enumerate(ex_x):
-        nacl = NaCl(temperature=295.65, molarity=cf, pressure=1.0e5)
-        ex_x[i] = nacl.get_ion_props()["Na"]["Molality"]
-    ex_y = [i * 1.0e-9 for i in ex_y]
-    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=",")
+    # for i, cf in enumerate(ex_x):
+    #     nacl = NaCl(temperature=295.65, molarity=cf, pressure=1.0e5)
+    #     ex_x[i] = nacl.get_ion_props()["Na"]["Molality"]
+    # ex_y = [i * 1.0e-9 for i in ex_y]
+    # The concentrations were sufficiently small that molarity was assumed to be equal to molality.
+    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=",", label="Watillon & de Backer (1970)")
 
     # Dukhin number loaded from Leroy et al. (2013)
     ex_x = [0.001, 0.03, 0.1]
@@ -862,7 +863,7 @@ def qurtz_cond_th():
         nacl = NaCl(molarity=molarity, temperature=298.15, pressure=1.0e5)
         ex_x[i] = nacl.get_ion_props()["Na"]["Molality"]
         ex_y[i] *= nacl.get_cond() * a
-    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=".", s=150)
+    ax.scatter(ex_x, ex_y, color=cm.jet(float(0) / len(t_ls)), zorder=2, marker=".", s=150, label="Sonnefeld et al. (2001)")
     
     ax.set_xscale("log")
     ax.legend(title="Temperature (℃)")
@@ -870,7 +871,7 @@ def qurtz_cond_th():
     ax.tick_params(axis="x", which="minor", length=5)
     ax.tick_params(axis="y", which="major", length=7)
     ax.tick_params(axis="y", which="minor", length=5)
-    ax.legend(frameon=False, loc=(0.1, 0.5))
+    ax.legend(frameon=False, loc=(0.1, 0.5), fontsize=7.0)
     ax.set_xlabel("Molality [$\mathrm{mol/kg}$]", fontsize=12.0, labelpad=5)
     ax.set_ylabel(r"Surface Conductance [$\mathrm{S}$]", fontsize=14.0, labelpad=5)
     fig.savefig(
@@ -1175,9 +1176,9 @@ def potential_smectite_inf():
             linestyle="solid",
         )
         ax.plot(molarity_ls, pzeta_ls, color=cm.jet(float(i) / n), linestyle="dashdot")
-    # Rasmusson et al. (1997)
-    ex_x = [0.0025, 0.0054, 0.0077, 0.018]
-    ex_y = [-0.149, -0.1475, -0.131, -0.1075]
+    # Leroy et al., 2015
+    ex_x = [0.002483266, 0.005355863, 0.007630982, 0.017786185]
+    ex_y = [-0.1496710526, -0.1475585303, -0.1312719129, -0.1075822876]
     ax.scatter(ex_x, ex_y)  #!
 
     ax.legend()
@@ -2834,7 +2835,7 @@ def levy_single(
     if phi is None:
         rotation_setting = "random"
     else:
-        rotation_setting = {smectite: (phi, 0.0, 0.0)}
+        rotation_setting = {smectite: (0.0, phi, 0.0)}
     instance_range_dict: OrderedDict = OrderedDict()
     if ryz_smec is not None:
         instance_range_dict.setdefault(smectite, (ryz_smec, ryz_smec))
@@ -2889,51 +2890,59 @@ def compare_with_experiment():
     # print(smectite.calc_osmotic_pressure())
 
     # Waxman and Smits (1968)
-    for _id, _prop in core_props_ws.items():
-        if _id != "26":
-            continue
-        _poros = _prop["porosity"]
-        _label_ls_tmp: List = _prop["bulk"]
-        label_ls, molarity_ls = [], []
-        for _label, _molarity in zip(_label_ls_tmp, molarity_ws_pred):
-            if _label is None:
-                continue
-            label_ls.append(_label * 0.1)
-            molarity_ls.append(_molarity)
+    # for _id, _prop in core_props_ws.items():
+    #     if _id != "26":
+    #         continue
+    #     _poros = _prop["porosity"]
+    #     _label_ls_tmp: List = _prop["bulk"]
+    #     label_ls, molarity_ls = [], []
+    #     for _label, _molarity in zip(_label_ls_tmp, molarity_ws_pred):
+    #         if _label is None:
+    #             continue
+    #         label_ls.append(_label * 0.1)
+    #         molarity_ls.append(_molarity)
 
-        # fraction of clay minerals
-        _xsmec = _prop["xsmec"]
-        _xkaol = _prop["xkaol"]
-        assert _xsmec + _xkaol <= 1.0
-        # calculate volume fraction of smectite from Qv
-        # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
-        qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
-        xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
-        print(f"WS: {xsmec}") #!
-        # pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
-        # cou = 0
-        # for seed in range(200, 400):
-        #     for _molarity in reversed(molarity_ls):
-        #         print(f"molarity: {_molarity}")
-        #         dir_name = path.join(
-        #             test_dir(),
-        #             "WS3",
-        #             str(_id),
-        #             f"{seed}_{_molarity}",
-        #         )
-        #         pool.submit(
-        #             ws_single_3,
-        #             _t=T,
-        #             _molarity=_molarity,
-        #             _ph=Ph,
-        #             _poros=_poros,
-        #             xsmec=xsmec,
-        #             seed=seed,
-        #             save_dir=dir_name,
-        #             log_id=cou,
-        #         )
-        #         cou += 1
-        # pool.shutdown(wait=True)
+    #     # fraction of clay minerals
+    #     _xsmec = _prop["xsmec"]
+    #     _xkaol = _prop["xkaol"]
+    #     assert _xsmec + _xkaol <= 1.0
+    #     # calculate volume fraction of smectite from Qv
+    #     # assume that Xsmec can be calculated by eq.(12) of Levy et al.(2018)
+    #     qv2 = const.ELEMENTARY_CHARGE * const.AVOGADRO_CONST * _prop["Qv"] * 1.0e-3
+    #     xsmec = qv2 / 202.0 * _poros / (1.0 - _poros)
+    #     print(f"WS: {xsmec}") #!
+    #     pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 2)
+    #     cou = 0
+    #     for seed in range(0, 100):
+    #         for _molarity in reversed(molarity_ls):
+    #             print(f"molarity: {_molarity}")
+    #             dir_name = path.join(
+    #                 test_dir(),
+    #                 "WS3",
+    #                 str(_id),
+    #                 f"{seed}_{_molarity}",
+    #             )
+    #             pool.submit(
+    #                 ws_single_3,
+    #                 _t=T,
+    #                 _molarity=_molarity,
+    #                 _ph=Ph,
+    #                 _poros=_poros,
+    #                 xsmec=xsmec,
+    #                 seed=seed,
+    #                 save_dir=dir_name,
+    #                 log_id=cou,
+    #             )
+    #             # ws_single_3(_t=T,
+    #             #     _molarity=_molarity,
+    #             #     _ph=Ph,
+    #             #     _poros=_poros,
+    #             #     xsmec=xsmec,
+    #             #     seed=seed,
+    #             #     save_dir=dir_name,
+    #             #     log_id=cou,)
+    #             cou += 1
+    #     pool.shutdown(wait=True)
 
     # Levy et al. (2018)
     T = 295.15  # written in Fig. 13
@@ -2942,17 +2951,19 @@ def compare_with_experiment():
 
     # rmin, rmax, phi, adj rate → No
     # rmin, rmax, phi, anisotoropic scaling →
-    # 22: (1.3, 1.3, None, 0.6)
-    # 24a (1.1, 1.1, 80.0, 2.5)
-    # 31 (2.0, 2.0, 80.0, 2.5)
-    # 96 (2.0, 2.0, 80.0, 2.5)
-    # 113: (0.8, 0.8, 80.0, 0.5)
+    # X軸周り：
+    #  "22": (1.3, 1.3, 80.0, 0.5),
+    #  "24a": (1.1, 1.1, 80.0, 5.0),
+    #  "31": (2.0, 2.0, 80.0, 5.0),
+    #  "96": (2.0, 2.0, 80.0, 5.0),
+    #  "113": (0.8, 0.8, 80.0, 0.6),
+    # Y軸周り
     opt_params_levy: Dict = {
-        "22": (1.3, 1.3, 80.0, 0.5),
-        "24a": (1.1, 1.1, 80.0, 5.0),
-        "31": (2.0, 2.0, 80.0, 5.0),
-        "96": (2.0, 2.0, 80.0, 5.0),
-        "113": (0.8, 0.8, 80.0, 0.6),
+        "22": (1.3, 1.3, 0.0, 0.5),
+        "24a": (1.1, 1.1, 20.0, 5.0),
+        "31": (2.0, 2.0, 20.0, 5.0),
+        "96": (2.0, 2.0, 20.0, 5.0),
+        "113": (0.8, 0.8, 20.0, 0.6),
     }
     dirpth = path.join(
         test_dir(),
@@ -2964,34 +2975,34 @@ def compare_with_experiment():
         # calculate fraction of clay minerals
         xsmec = _prop["smec%"] * _prop["RhoSol"] / RhoSmec
         print(xsmec)
-        # _poros = _prop["porosity"]
-        # pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 5)
-        # cou = 0
-        # # for seed in [60, 70, 80]:
-        # for seed in range(0, 100):
-        #     for _molarity in _prop["Molarity"]:
-        #         dir_name = path.join(
-        #             dirpth,
-        #             str(_id),
-        #             f"{seed}_{_molarity}",
-        #         )
-        #         pool.submit(
-        #             levy_single,
-        #             _t=T,
-        #             _molarity=_molarity,
-        #             _ph=Ph,
-        #             _poros=_poros,
-        #             xsmec=xsmec,
-        #             rmin=opt_params_levy[_id][0],
-        #             rmax=opt_params_levy[_id][1],
-        #             phi=opt_params_levy[_id][2],
-        #             ryz_smec=opt_params_levy[_id][3],
-        #             seed=seed,
-        #             save_dir=dir_name,
-        #             log_id=cou,
-        #         )
-        #         cou += 1
-        # pool.shutdown(wait=True)
+        _poros = _prop["porosity"]
+        pool = futures.ProcessPoolExecutor(max_workers=cpu_count() - 5)
+        cou = 0
+        # for seed in [60, 70, 80]:
+        for seed in range(0, 100):
+            for _molarity in _prop["Molarity"]:
+                dir_name = path.join(
+                    dirpth,
+                    str(_id),
+                    f"{seed}_{_molarity}",
+                )
+                pool.submit(
+                    levy_single,
+                    _t=T,
+                    _molarity=_molarity,
+                    _ph=Ph,
+                    _poros=_poros,
+                    xsmec=xsmec,
+                    rmin=opt_params_levy[_id][0],
+                    rmax=opt_params_levy[_id][1],
+                    phi=opt_params_levy[_id][2],
+                    ryz_smec=opt_params_levy[_id][3],
+                    seed=seed,
+                    save_dir=dir_name,
+                    log_id=cou,
+                )
+                cou += 1
+        pool.shutdown(wait=True)
 
 
 def analyse_experimental_fitting():
@@ -3005,37 +3016,37 @@ def analyse_experimental_fitting():
             _ls[0].append(molarity_ws_pred[i])
             _ls[1].append(bk / 10.0)
     id_cond_result: Dict[str, Dict] = {}
-    pickle_dir = path.join(
-        test_dir(),
-        "WS3",
-    )
-    T, P = 298.15, 1.0e5
-    molar2molal_ws: Dict = {}
-    for id_name in listdir(pickle_dir):
-        if id_name == "fig":
-            continue
-        dirname_id = path.join(pickle_dir, id_name)
-        molality_dct: Dict[float, float] = id_cond_result.setdefault(
-            "WS" + str(id_name), {}
-        )
-        for cond_name in tqdm(listdir(dirname_id)):
-            # get conditions
-            _, molarity = cond_name.split("_")
-            molarity = float(molarity)
-            # convert molarity to molality
-            molality = molar2molal_ws.get(molarity, None)
-            if molality is None:
-                nacl = NaCl(temperature=T, pressure=P, molarity=molarity)
-                molality = nacl.get_ion_props()["Na"]["Molality"]
-                molar2molal_ws.setdefault(molarity, molality)
-            # load result
-            cond_tuple = None
-            pkl_pth: str = path.join(dirname_id, cond_name, "cond.pkl")
-            if path.isfile(pkl_pth):
-                with open(pkl_pth, "rb") as pkf:
-                    cond_tuple = pickle.load(pkf)
-            if cond_tuple is not None:
-                molality_dct.setdefault(molality, []).append(cond_tuple[0])
+    # pickle_dir = path.join(
+    #     test_dir(),
+    #     "WS3",
+    # )
+    # T, P = 298.15, 1.0e5
+    # molar2molal_ws: Dict = {}
+    # for id_name in listdir(pickle_dir):
+    #     if id_name == "fig":
+    #         continue
+    #     dirname_id = path.join(pickle_dir, id_name)
+    #     molality_dct: Dict[float, float] = id_cond_result.setdefault(
+    #         "WS" + str(id_name), {}
+    #     )
+    #     for cond_name in tqdm(listdir(dirname_id)):
+    #         # get conditions
+    #         _, molarity = cond_name.split("_")
+    #         molarity = float(molarity)
+    #         # convert molarity to molality
+    #         molality = molar2molal_ws.get(molarity, None)
+    #         if molality is None:
+    #             nacl = NaCl(temperature=T, pressure=P, molarity=molarity)
+    #             molality = nacl.get_ion_props()["Na"]["Molality"]
+    #             molar2molal_ws.setdefault(molarity, molality)
+    #         # load result
+    #         cond_tuple = None
+    #         pkl_pth: str = path.join(dirname_id, cond_name, "cond.pkl")
+    #         if path.isfile(pkl_pth):
+    #             with open(pkl_pth, "rb") as pkf:
+    #                 cond_tuple = pickle.load(pkf)
+    #         if cond_tuple is not None:
+    #             molality_dct.setdefault(molality, []).append(cond_tuple[0])
 
     pickle_dir = path.join(
         test_dir(),
@@ -3081,6 +3092,8 @@ def analyse_experimental_fitting():
              "Levy96": "L96",
              "Levy113": "L113"}
     for i, (_id, _id_th) in enumerate(id_th.items()):
+        if _id == "WS26":
+            continue #!
         fig, ax = plt.subplots()
         molality_dct = id_cond_result[_id]
         if len(molality_dct) == 0:
@@ -3144,6 +3157,7 @@ def analyse_experimental_fitting():
         # ax.set_ylabel("Log Conductivity (S/m)", fontsize=14.0)
         ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
         # ax.grid()
+        print(f"./test/WS_Levy/fig/{_id_th}.png")
         fig.savefig(f"./test/WS_Levy/fig/{_id_th}.png", bbox_inches="tight", dpi=500)
         plt.clf()
         plt.close()
@@ -3213,7 +3227,7 @@ def test_random_distribution():
 
 
 def test_aniso_distribution():
-    r = 5.0
+    r = 0.2
     cachepth = f"./instance/{r}/cache.pkl"
     if path.exists(cachepth):
         with open(cachepth, "rb") as pkf:
@@ -5109,6 +5123,14 @@ def percolation():
     plt.rcParams['ytick.direction'] = 'in'
     fig, ax = plt.subplots()
 
+    # theory
+    xsmec_ls_tmp = np.linspace(0.0, 0.1, 1000).tolist()
+    pc_ls = []
+    C = 0.1
+    for xsmec in xsmec_ls_tmp:
+        pc_ls.append((C - xsmec) / (1.0 - xsmec))
+    ax.plot(xsmec_ls_tmp, pc_ls, color="0.2", label="Theory")
+
     with open("./tmp/percolation.pkl", "rb") as pkf:
         xsmec_poros_bool = pickle.load(pkf)
     xsmec_ls = []
@@ -5122,15 +5144,7 @@ def percolation():
                 xsmec_ls.append(xsmec)
                 break
 
-    ax.scatter(xsmec_ls, pc_ls)
-
-    # theory
-    xsmec_ls_tmp = np.linspace(0.0, 0.1, 1000).tolist()
-    pc_ls = []
-    C = 0.1
-    for xsmec in xsmec_ls_tmp:
-        pc_ls.append((C - xsmec) / (1.0 - xsmec))
-    ax.plot(xsmec_ls_tmp, pc_ls)
+    ax.scatter(xsmec_ls, pc_ls, color="0.4", label="Network analysis")
 
     ax.set_xlabel("$X_{smec}$", fontsize=14, labelpad=10.0)
     ax.set_ylabel("$φ_{c}$", fontsize=14, labelpad=10.0)
@@ -5139,7 +5153,7 @@ def percolation():
     ax.tick_params(axis="x", which="minor", length=5)
     ax.tick_params(axis="y", which="major", length=7)
     ax.tick_params(axis="y", which="minor", length=5)
-    ax.legend(frameon=False, loc=(0.07, 0.65), fontsize=8)
+    ax.legend(frameon=False, loc=(0.55, 0.65), fontsize=10)
     
     ax.set_aspect("equal")
 
@@ -6277,7 +6291,6 @@ def test_BHS(use_cache=False):
             continue
         if phiw > 0.5:
             continue
-
         # porosity which includes interlayer space
         phi_inc = phiw + (1.0 - phiw) * xsmec * (r / (r + 6.6e-10))
         phi_inc_ls.append(phi_inc)
@@ -6295,7 +6308,7 @@ def test_BHS(use_cache=False):
         molality_ls.append(M)
         phiw_ls.append(phiw)
         phismec_ls.append((1.0 - phiw) * xsmec * r / (6.6e-10 + r))
-
+    print(f"len: {len(phismec_ls)}")
     # Fitting for each temperature (℃)
     # savepath
     dirpth = path.join(test_dir(), "Bussian")
@@ -6305,8 +6318,11 @@ def test_BHS(use_cache=False):
         equation, independent_vars=["cw_ls", "phi_ls", "tempe_ls", "phismec_ls"], param_names=["m", "cr20", "alpha"]
     )
     params = model.make_params()
-    params["m"] = Parameter(name="m", value=1.5, min=1.0)
-    params["cr20"] = Parameter(name="cr20", value=0.01, min=float_info.min)
+    # params["m"] = Parameter(name="m", value=1.5, min=1.0)
+    # params["cr20"] = Parameter(name="cr20", value=0.01, min=float_info.min)
+    # params["alpha"] = Parameter(name="alpha", value=0.0414, min=float_info.min)
+    params["m"] = Parameter(name="m", value=2.0, min=1.0)
+    params["cr20"] = Parameter(name="cr20", value=0.15, min=float_info.min)
     params["alpha"] = Parameter(name="alpha", value=0.0414, min=float_info.min)
 
     result = model.fit(
@@ -7004,26 +7020,21 @@ def test_BHS_modified(use_cache=False):
 
 
 def tmp():
-    def callback(molality):
-        return sen_and_goode_1992(T=295.15, M=molality) - cw
+    nacl = NaCl(molality=0.1)
+    nacl.set_cond(1.0)
+    nacl.calc_cond_tensor_cube_oxyz()
+    cube = Cube()
+    cube.create_pixel_by_macro_variable((1, 1, 1,), 1.0, {nacl: 1.0})
+    cube.femat()
+    dkv0 = cube.get_dkv()[0]
 
-    # Levy
-    # for _id, _props in core_props_levy.items():
-    #     print(_id)
-    #     cf_ls = []
-    #     for cw in _props["Cw"]:
-    #         m = bisect(callback, 0.000001, 5.0)
-    #         nacl = NaCl(temperature=295.15, molality=m, pressure=1.0e5)
-    #         cf_ls.append(nacl.get_ion_props()["Na"]["Molarity"])
-    #     print(cf_ls)
+    nacl.set_cond(10.0)
+    nacl.calc_cond_tensor_cube_oxyz()
+    cube.create_pixel_by_macro_variable((1, 1, 1,), 1.0, {nacl: 1.0})
+    cube.femat()
+    dkv1 = cube.get_dkv()[0]
 
-    # Revil
-    cf_ls = []
-    for cw in [0.07, 0.5, 2.0, 10.0]:
-        m = bisect(callback, 0.000001, 5.0)
-        nacl = NaCl(temperature=295.15, molality=m, pressure=1.0e5)
-        cf_ls.append(nacl.get_ion_props()["Na"]["Molarity"])
-    print(cf_ls)
+    print(dkv1 / dkv0)
 
 
 if __name__ == "__main__":
@@ -7064,7 +7075,7 @@ if __name__ == "__main__":
     # potential_smectite_intra()
     # test_dielec()
     # smectite_cond_inf()
-    potential_smectite_inf()
+    # potential_smectite_inf()
 
     # test_nacl_density()
     # test_nacl_activity_and_molality()
@@ -7082,7 +7093,6 @@ if __name__ == "__main__":
     # test_dielec_RaspoandNeau2020()
     # # reviletal1998()
     # test_dks()
-    # percolation()
 
     # compare_with_experiment()
     # analyse_experimental_fitting()
@@ -7097,7 +7107,7 @@ if __name__ == "__main__":
     # test_WT(use_cache=True)
     # test_Clavier(use_cache=True)
     # test_SenandGoode(use_cache=True)
-    # test_BHS(use_cache=True)
+    test_BHS(use_cache=True)
     # test_TR(use_cache=True)
     # test_QiandWu(use_cache=True)
     # test_BHS_modified(use_cache=True)
@@ -7115,6 +7125,7 @@ if __name__ == "__main__":
     # test_aniso_distribution()
     # test_random_distribution()
     # smec_cond_intra_r_dependence_th()
+    # percolation()
     # with open(path.join(test_dir(), "test_dks_result.pkl"), "rb") as pkf:
     #     result_ls = pickle.load(pkf)
     # for sth, ssim in result_ls:

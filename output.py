@@ -1,12 +1,14 @@
 from typing import List, Dict, Tuple, Union
-from os import path, makedirs
+from os import path, makedirs, PathLike
 from copy import deepcopy
-from math import sqrt
+from math import sqrt, log10
 import pickle
+from pathlib import Path
 
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.cm as cm
+import vtk
 
 from solver import FEM_Cube
 from cube import Cube
@@ -60,6 +62,13 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
         hlabel, vlabel = "X", "Y"
     else:
         raise
+    # adjust unit #!
+    chv = [i / abs(i) * (log10(abs(i)) + 12.0) if i > 0.0 else 0.0 for i in chv]
+    cvv = [i / abs(i) * (log10(abs(i)) + 12.0) if i > 0.0 else 0.0 for i in cvv]
+    svp = [i / abs(i) * (log10(abs(i)) + 12.0) if i > 0.0 else 0.0 for i in svp]
+    svm = [i / abs(i) * (log10(abs(i)) + 12.0) if i > 0.0 else 0.0 for i in svm]
+    shp = [i / abs(i) * (log10(abs(i)) + 12.0) if i > 0.0 else 0.0 for i in shp]
+    shm = [i / abs(i) * (log10(abs(i)) + 12.0) if i > 0.0 else 0.0 for i in shm]
     x_ls, y_ls = [i + 0.5 for i in range(nh)], [i + 0.5 for i in range(nv)]
     xx, yy = np.meshgrid(x_ls, y_ls)
     cmax = max(
@@ -68,6 +77,7 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
             max(max(svp), max(svm), max(shp), max(shm)),
         )
     )
+    cmax = 12.0 #!
 
     makedirs(savedir, exist_ok=True)
     for iax in range(nax):
@@ -132,7 +142,7 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
             cmap="Reds",
             angles="xy",
             units="xy",
-            scale=cmax,
+            scale=12.0,
         )
         # current (surface)
         mappable3 = ax.quiver(
@@ -141,17 +151,19 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
             dxs_ls,
             dys_ls,
             cs_ls,
-            cmap="Reds",
+            cmap="Blues",
             angles="xy",
             units="xy",
-            scale=cmax,
-            linestyle="dashed",
+            scale=6.0,
         )
         mappable1.set_clim(0, 2)
-        mappable2.set_clim(0, cmax)
-        mappable3.set_clim(0, cmax)
+        mappable2.set_clim(0, 16.0)
+        mappable3.set_clim(0, 8.0)
         fig.colorbar(mappable2).set_label(
-            r"Current Density (A/m$^{2}$)", fontsize=14, labelpad=10.0
+            r"Current Density (A/m$^{2}$)", fontsize=14, labelpad=10.0,
+        )
+        fig.colorbar(mappable3).set_label(
+            r"Current Density (A/m$^{2}$)", fontsize=14, labelpad=10.0,
         )
         ax.set_aspect("equal")
         ax.set_xlabel(str(hlabel) + r" (μm)", fontsize=14, labelpad=10.0)  #! TODO
@@ -164,6 +176,430 @@ def plot_current_arrow(solver: FEM_Cube, savedir: str, axis: str = "X"):
         plt.close()
 
 
+def midpoints(x):
+    sl = ()
+    for _ in range(x.ndim):
+        x = (x[sl + np.index_exp[:-1]] + x[sl + np.index_exp[1:]]) / 2.0
+        sl += np.index_exp[:]
+    return x
+
+def plot_current_3d(solver: FEM_Cube, _type: str, cutoff: float, _max: float, logscale: bool, savepth: PathLike,):
+    assert _type in ("volume", "surface")
+    cube = solver.get_fem_input()
+    nz, ny, nx = cube.get_shape()
+    ns = nz * ny * nx
+    instance_ls = cube.get_instance_ls()
+    nh, nv, nax = None, None, None
+    xx, yy = None, None
+    instance_int = {"quartz": 0, "smectite": 1, "nacl": 2}
+    x, y, z = np.meshgrid(np.arange(0.0, float(nx * 2) + 1, 1.0),
+                          np.arange(0.0, float(ny * 2) + 1, 1.0),
+                          np.arange(0.0, float(nz * 2) + 1, 1.0),
+                          indexing="ij")
+    x = x.transpose((2, 1, 0))
+    y = y.transpose((2, 1, 0))
+    z = z.transpose((2, 1, 0))
+
+    fills: List = np.zeros(shape=(nx*2, ny*2, nz*2)).tolist()
+    colors: List = deepcopy(fills)
+    if _type == "volume":
+        cmap = plt.get_cmap("Reds")
+    if _type == "surface":
+        cmap = plt.get_cmap("Blues")
+
+    if logscale:
+        _max = log10(_max)
+
+    if _type.lower() == "volume":
+        cx = solver.get_currxv()
+        cy = solver.get_curryv()
+        cz = solver.get_currzv()
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    m = calc_m(i, j, k, nx, ny)
+                    _c = sqrt(cx[m] ** 2 + cy[m] ** 2 + cz[m] ** 2) * 1.0e12 #! load this value from settings
+                    _f: bool = False
+                    _color: List[float] = None
+                    if _c > cutoff:
+                        _f = True
+                        if logscale:
+                            _c = log10(_c)
+                        print(_c)
+                        _color = list(cmap(_c / _max)[:3])
+                    else:
+                        _color = [0.0, 0.0, 0.0]
+                    for ktmp in (k, k + nz):
+                        for jtmp in (j, j + ny):
+                            for itmp in (i, i + nx):
+                                fills[ktmp][jtmp][itmp] = _f
+                                colors[ktmp][jtmp][itmp] = _color
+
+    if _type.lower() == "surface":
+        cx = solver.get_currxs()
+        cy = solver.get_currys()
+        cz = solver.get_currzs()
+        for k in range(nz):
+            for j in range(ny):
+                for i in range(nx):
+                    m = calc_m(i, j, k, nx, ny)
+                    _c = sqrt(cx[m] ** 2 + cy[m] ** 2 + cz[m] ** 2) * 1.0e12 #! load this value from settings
+                    _f: bool = False
+                    _color: List[float] = None
+                    if _c > cutoff:
+                        _f = True
+                        if logscale:
+                            _c = log10(_c)
+                        print(_c)
+                        _color = list(cmap(_c / _max)[:3])
+                    else:
+                        _color = [0.0, 0.0, 0.0]
+                    for ktmp in (k, k + nz):
+                        for jtmp in (j, j + ny):
+                            for itmp in (i, i + nx):
+                                fills[ktmp][jtmp][itmp] = _f
+                                colors[ktmp][jtmp][itmp] = _color
+    
+    # and plot everything
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.voxels(x, y, z, np.array(fills),
+            facecolors=np.array(colors, dtype=np.float64),
+            # edgecolors=np.clip(2*colors - 0.5, 0, 1),  # brighter
+            linewidth=0.5,
+            # alpha=0.5
+            )
+    ax.set(xlabel='x', ylabel='y', zlabel='z')
+    ax.set_aspect('equal')
+
+    ax.xaxis.pane.set_color('w')
+    ax.yaxis.pane.set_color('w')
+    ax.zaxis.pane.set_color('w')
+
+    plt.show()
+    fig.savefig(savepth, bbox_inches="tight", dpi=500)
+
+
+def plot_element_3d(solver: FEM_Cube, cutoff: float, _max: float, logscale: bool, savepth: PathLike,):
+    cube = solver.get_fem_input()
+    nz, ny, nx = cube.get_shape()
+    ns = nz * ny * nx
+    instance_ls = cube.get_instance_ls()
+    nh, nv, nax = None, None, None
+    xx, yy = None, None
+    instance_int = {"quartz": 2, "smectite": 1, "nacl": 0}
+    x, y, z = np.meshgrid(np.arange(0.0, float(nx * 2) + 1, 1.0),
+                          np.arange(0.0, float(ny * 2) + 1, 1.0),
+                          np.arange(0.0, float(nz * 2) + 1, 1.0),
+                          indexing="ij")
+    x = x.transpose((2, 1, 0))
+    y = y.transpose((2, 1, 0))
+    z = z.transpose((2, 1, 0))
+
+    fills: List = np.zeros(shape=(nx*2, ny*2, nz*2)).tolist()
+    colors: List = deepcopy(fills)
+    cmap = plt.get_cmap("gray")
+
+    if logscale:
+        _max = log10(_max)
+
+    cx = [v + s for (v, s) in zip(solver.get_currxv(), solver.get_currxs())]
+    cy = [v + s for (v, s) in zip(solver.get_curryv(), solver.get_currys())]
+    cz = [v + s for (v, s) in zip(solver.get_currzv(), solver.get_currzs())]
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                m = calc_m(i, j, k, nx, ny)
+                _c = sqrt(cx[m] ** 2 + cy[m] ** 2 + cz[m] ** 2) * 1.0e12 #! load this value from settings
+                _f: bool = False
+                _color: List[float] = None
+                if _c > cutoff:
+                    _f = True
+                    if logscale:
+                        _c = log10(_c)
+                    _color = list(cmap(instance_int[instance_ls[k][j][i].__class__.__name__.lower()] / 2))[:3]
+                    print(_color)
+                else:
+                    _color = [0.0, 0.0, 0.0]
+                for ktmp in (k, k + nz):
+                    for jtmp in (j, j + ny):
+                        for itmp in (i, i + nx):
+                            fills[ktmp][jtmp][itmp] = _f
+                            colors[ktmp][jtmp][itmp] = _color
+    
+    # and plot everything
+    fig = plt.figure()
+    ax = fig.add_subplot(projection='3d')
+
+    ax.voxels(x, y, z, np.array(fills),
+            facecolors=np.array(colors, dtype=np.float64),
+            # edgecolors=np.clip(2*colors - 0.5, 0, 1),  # brighter
+            linewidth=0.5,
+            # alpha=0.5
+            )
+    ax.set(xlabel='x', ylabel='y', zlabel='z')
+    ax.set_aspect('equal')
+
+    ax.xaxis.pane.set_color('w')
+    ax.yaxis.pane.set_color('w')
+    ax.zaxis.pane.set_color('w')
+
+    plt.show()
+    fig.savefig(savepth, bbox_inches="tight", dpi=500)
+
+def current2vtk(solver_pth: PathLike, outdir: PathLike):
+
+    pass
+
+def _strpoints(x, y, z) -> str:
+    return str(float(x)) + " " + str(float(y)) + " " + str(float(z)) + "\n"
+
+def _voxeldata(n) -> float:
+    return f"8 {n} {n+1} {n+3} {n+2} {n+4} {n+5} {n+7} {n+6}\n"
+
+def output_vtk_voxels(pth: PathLike, points_ls, cells_ls, scalar_ls) -> None:
+    with open(pth, "w") as f:
+        f.write("# vtk DataFile Version 2.0\n")
+        f.write("voxelelements\n")
+        f.write("ASCII\n")
+        f.write("DATASET UNSTRUCTURED_GRID\n")
+        f.write(f"POINTS {len(points_ls)} float\n")
+        for p in points_ls:
+            f.write(p)
+        f.write(f"CELLS {len(cells_ls)} {(len(cells_ls) * 9)}\n")
+        for cell in cells_ls:
+            f.write(cell)
+        f.write(f"CELL_TYPES {len(cells_ls)}\n")
+        for _ in range(len(cells_ls)):
+            f.write("11\n")
+        f.write(f"CELL_DATA {len(cells_ls)}")
+        f.write("SCALARS scalar float\n")
+        f.write("LOOKUP_TABLE default\n")
+        for _s in scalar_ls:
+            f.write(_s)
+
+def output_conduction_elements_vtk(solver: FEM_Cube, cutoff: float, logscale: bool, savepth: PathLike, wirelinepth: PathLike=None):
+    cube = solver.get_fem_input()
+    nz, ny, nx = cube.get_shape()
+    instance_ls = cube.get_instance_ls()
+    instance_int = {"quartz": 2, "smectite": 1, "nacl": 0}
+
+    cx = [v + s for (v, s) in zip(solver.get_currxv(), solver.get_currxs())]
+    cy = [v + s for (v, s) in zip(solver.get_curryv(), solver.get_currys())]
+    cz = [v + s for (v, s) in zip(solver.get_currzv(), solver.get_currzs())]
+
+    # convert to vtk file
+    points_ls: List[str] = []
+    cells_ls: List[str] = []
+    scalar_ls: List[str] = []
+
+    # get locations and intensities of vector
+    number_points: int = 0
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                m = calc_m(i, j, k, nx, ny)
+                _c = sqrt(cx[m] ** 2 + cy[m] ** 2 + cz[m] ** 2) * 1.0e12 #! load this value from settings
+                if _c > cutoff:
+                    instance = instance_ls[k][j][i].__class__.__name__.lower()
+                    if instance == "quartz":
+                        continue
+                    for ktmp in (k, k + nz):
+                        for jtmp in (j, j + ny):
+                            for itmp in (i, i + nx):
+                                # if itmp != i or jtmp != j or ktmp != k:
+                                #     continue #!
+                                # points
+                                points_ls.append(_strpoints(itmp, jtmp, ktmp))
+                                points_ls.append(_strpoints(itmp + 1, jtmp, ktmp))
+                                points_ls.append(_strpoints(itmp + 1, jtmp + 1, ktmp))
+                                points_ls.append(_strpoints(itmp, jtmp + 1, ktmp))
+                                points_ls.append(_strpoints(itmp, jtmp, ktmp + 1))
+                                points_ls.append(_strpoints(itmp + 1, jtmp, ktmp + 1))
+                                points_ls.append(_strpoints(itmp + 1, jtmp + 1, ktmp + 1))
+                                points_ls.append(_strpoints(itmp, jtmp + 1, ktmp + 1))
+                                # elements
+                                cells_ls.append(_voxeldata(number_points))
+                                # scalars
+                                scalar_ls.append(str(float(instance_int[instance])) + "\n")
+                                number_points += 8
+    savepth = Path(savepth)
+    output_vtk_voxels(savepth, points_ls, cells_ls, scalar_ls)
+
+    if wirelinepth is not None:
+        points_ls: List[str] = []
+        cells_ls: List[str] = []
+        scalar_ls: List[str] = []
+        number_points: int = 0
+        for itmp in (0, nx):
+            for jtmp in (0, ny):
+                for ktmp in (0, nz):
+                    # if itmp != 0 or jtmp != 0 or ktmp != 0:
+                    #     continue
+                    points_ls.append(_strpoints(itmp, jtmp, ktmp))
+                    points_ls.append(_strpoints(itmp + nx, jtmp, ktmp))
+                    points_ls.append(_strpoints(itmp + nx, jtmp + ny, ktmp))
+                    points_ls.append(_strpoints(itmp, jtmp + ny, ktmp))
+                    points_ls.append(_strpoints(itmp, jtmp, ktmp + nz))
+                    points_ls.append(_strpoints(itmp + nx, jtmp, ktmp + nz))
+                    points_ls.append(_strpoints(itmp + nx, jtmp + ny, ktmp + nz))
+                    points_ls.append(_strpoints(itmp, jtmp + ny, ktmp + nz))
+                    cells_ls.append(_voxeldata(number_points))
+                    # scalars
+                    scalar_ls.append(str(0.0) + "\n")
+                    number_points += 8
+
+        output_vtk_voxels(savepth.parent.joinpath("wireline.vtk"), points_ls, cells_ls, scalar_ls)
+
+
+def calc_log_vector(v) -> float:
+    if v == 0.0:
+        return 0.0
+    return v / abs(v) * log10(abs(v))
+
+
+def output_conduction_currents_voxel_vtk(solver: FEM_Cube, _type: str, cutoff: float, logscale: bool, savepth: PathLike,):
+    assert _type in ("surface", "volume"), _type
+
+    cube = solver.get_fem_input()
+    nz, ny, nx = cube.get_shape()
+    instance_ls = cube.get_instance_ls()
+
+    cx, cy, cz = None, None, None
+    if _type == "surface":
+        cx = [s for s in solver.get_currxs()]
+        cy = [s for s in solver.get_currys()]
+        cz = [s for s in solver.get_currzs()]
+    if _type == "volume":
+        cx = [v for v in solver.get_currxv()]
+        cy = [v for v in solver.get_curryv()]
+        cz = [v for v in solver.get_currzv()]
+    assert None not in (cx, cy, cz) 
+    cx_ref = [v + s for v, s in zip(solver.get_currxv(), solver.get_currxs())]
+    cy_ref = [v + s for v, s in zip(solver.get_curryv(), solver.get_currys())]
+    cz_ref = [v + s for v, s in zip(solver.get_currzv(), solver.get_currzs())]
+    # convert to vtk file
+    points_ls: List[str] = []
+    cells_ls: List[str] = []
+    scalar_ls: List[str] = []
+
+    # get locations and intensities of vector
+    number_points: int = 0
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                m = calc_m(i, j, k, nx, ny)
+                _c_ref = sqrt(cx_ref[m] ** 2 + cy_ref[m] ** 2 + cz_ref[m] ** 2) * 1.0e12
+                _c = sqrt(cx[m] ** 2 + cy[m] ** 2 + cz[m] ** 2) * 1.0e12 #! load this value from settings
+                if _c_ref > cutoff:
+                    instance = instance_ls[k][j][i].__class__.__name__.lower()
+                    if instance == "quartz" and _type == "volume":
+                        continue
+                    if instance == "nacl" and _type == "surface":
+                        continue
+                    if logscale:
+                        if _c == 0.0:
+                            _c = 0.0
+                        else:
+                            _c = log10(abs(_c))
+                    for ktmp in (k, k + nz):
+                        for jtmp in (j, j + ny):
+                            for itmp in (i, i + nx):
+                                # #!
+                                # if itmp != i or jtmp != j or ktmp != k:
+                                #     continue
+                                # points
+                                points_ls.append(_strpoints(itmp, jtmp, ktmp))
+                                points_ls.append(_strpoints(itmp + 1, jtmp, ktmp))
+                                points_ls.append(_strpoints(itmp + 1, jtmp + 1, ktmp))
+                                points_ls.append(_strpoints(itmp, jtmp + 1, ktmp))
+                                points_ls.append(_strpoints(itmp, jtmp, ktmp + 1))
+                                points_ls.append(_strpoints(itmp + 1, jtmp, ktmp + 1))
+                                points_ls.append(_strpoints(itmp + 1, jtmp + 1, ktmp + 1))
+                                points_ls.append(_strpoints(itmp, jtmp + 1, ktmp + 1))
+                                # elements
+                                cells_ls.append(_voxeldata(number_points))
+                                # scalars
+                                scalar_ls.append(str(_c) + "\n")
+                                number_points += 8
+    print(savepth)
+    output_vtk_voxels(savepth, points_ls, cells_ls, scalar_ls)
+
+def output_conduction_currents_vector_vtk(solver: FEM_Cube, _type: str, cutoff: float, logscale: bool, savepth: PathLike,):
+    assert _type in ("surface", "volume"), _type
+
+    cube = solver.get_fem_input()
+    nz, ny, nx = cube.get_shape()
+    instance_ls = cube.get_instance_ls()
+
+    cx, cy, cz = None, None, None
+    if _type == "surface":
+        cx = [s for s in solver.get_currxs()]
+        cy = [s for s in solver.get_currys()]
+        cz = [s for s in solver.get_currzs()]
+    if _type == "volume":
+        cx = [v for v in solver.get_currxv()]
+        cy = [v for v in solver.get_curryv()]
+        cz = [v for v in solver.get_currzv()]
+    assert None not in (cx, cy, cz) 
+    cx_ref = [v + s for v, s in zip(solver.get_currxv(), solver.get_currxs())]
+    cy_ref = [v + s for v, s in zip(solver.get_curryv(), solver.get_currys())]
+    cz_ref = [v + s for v, s in zip(solver.get_currzv(), solver.get_currzs())]
+    # convert to vtk file
+    coordinates: List[List] = []
+    vectors: List[List] = []
+    for k in range(nz):
+        for j in range(ny):
+            for i in range(nx):
+                m = calc_m(i, j, k, nx, ny)
+                _c_ref = sqrt(cx_ref[m] ** 2 + cy_ref[m] ** 2 + cz_ref[m] ** 2) * 1.0e12
+                _c = sqrt(cx[m] ** 2 + cy[m] ** 2 + cz[m] ** 2) * 1.0e12 #! load this value from settings
+                if _c_ref > cutoff:
+                    instance = instance_ls[k][j][i].__class__.__name__.lower()
+                    if instance == "quartz" and _type == "volume":
+                        continue
+                    if instance == "nacl" and _type == "surface":
+                        continue
+                    if logscale:
+                        if _c == 0.0:
+                            _c = 0.0
+                        else:
+                            _c = log10(abs(_c))
+                    _vector = [cx[m] * 1.0e12, cy[m] * 1.0e12, cz[m] * 1.0e12]
+                    for ktmp in (k, k + nz):
+                        for jtmp in (j, j + ny):
+                            for itmp in (i, i + nx):
+                                # points
+                                coordinates.append([itmp, jtmp, ktmp])
+                                # vectors
+                                vectors.append(_vector)
+        
+    coordinates = np.array(coordinates, dtype=np.float64)
+    vectors = np.array(vectors, dtype=np.float64)
+
+    # VTKのデータオブジェクトを作成
+    points = vtk.vtkPoints()
+    vectors_array = vtk.vtkDoubleArray()
+    vectors_array.SetNumberOfComponents(3)
+
+    # ベクトルデータをVTKのデータオブジェクトに追加
+    for i in range(len(coordinates)):
+        points.InsertNextPoint(coordinates[i, 0], coordinates[i, 1], coordinates[i, 2])
+        vectors_array.InsertNextTuple3(vectors[i, 0], vectors[i, 1], vectors[i, 2])
+
+    # ポリデータを作成し、ベクトルデータを追加
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+    polydata.GetPointData().SetVectors(vectors_array)
+
+    # VTKファイルに書き出す
+    writer = vtk.vtkPolyDataWriter()
+    writer.SetFileName(str(savepth))  # 出力ファイル名
+    writer.SetInputData(polydata)
+    writer.Write()
+
+
 def plot_smec_frac_cond(
     smectite_frac_ls: List[float],
     cond_ls: List[float],
@@ -171,7 +607,7 @@ def plot_smec_frac_cond(
     label_val_ls: List[float or int] = None,
     error_bar_ls: List = None,
     xlabel: str = None,
-    logscale=False,
+    logscalex=False,
     lims=None
 ):
     plt.rcParams['xtick.direction'] = 'in'
@@ -228,12 +664,12 @@ def plot_smec_frac_cond(
         )
         # [bar.set_alpha(0.25) for bar in bars]
         # [cap.set_alpha(0.25) for cap in caps]
-    ax.legend(loc="upper left", bbox_to_anchor=(1, 1))
+    ax.legend(loc="upper left", bbox_to_anchor=(1, 1), title="$X_{smec}$")
     if xlabel is not None:
         ax.set_xlabel(xlabel, fontsize=14.0)
-    if logscale:
+    if logscalex:
         ax.set_xscale("log")
-    ax.set_yscale("log")
+    # ax.set_yscale("log")
     ax.set_ylabel("Conductivity (S/m)", fontsize=14.0)
     if lims is not None:
         ax.set_ylim(*lims)

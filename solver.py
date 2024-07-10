@@ -1,6 +1,6 @@
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
-from typing import List, Dict
+from typing import List, Dict, Union
 from copy import deepcopy
 from logging import Logger
 from warnings import warn
@@ -444,13 +444,13 @@ class FEM_Cube:
 
     # getters methods for member variables
     # pylint: disable=missing-docstring
-    def get_fem_input(self) -> None or Cube:
+    def get_fem_input(self) -> Union[None, Cube]:
         return deepcopy(self.fem_input)
 
-    def get_logger(self) -> None or Logger:
+    def get_logger(self) -> Union[None, Logger]:
         return deepcopy(self.logger)
 
-    def get_u(self) -> None or np.ndarray:
+    def get_u(self) -> Union[None, np.ndarray]:
         return deepcopy(self.u)
 
     def get_u2d(self):
@@ -483,7 +483,7 @@ class FEM_Cube:
     def get_currzv(self):
         return deepcopy(self.currzv)
 
-    def get_currs(self) -> Dict or None:
+    def get_currs(self) -> Union[Dict, None]:
         if self.currs is not None:
             return deepcopy(self.currs)
         return self.currs

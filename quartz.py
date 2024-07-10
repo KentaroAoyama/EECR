@@ -1,7 +1,7 @@
 """Calculate the electrical properties of quartz
 """
 
-from typing import Dict
+from typing import Dict, Union
 from math import sqrt, exp, log, log10, sinh, cosh
 from logging import Logger
 from copy import deepcopy
@@ -676,7 +676,7 @@ class Quartz:
         )
         self.cond_tensor = cond_tensor
 
-    def get_cond_tensor(self) -> np.ndarray or None:
+    def get_cond_tensor(self) -> Union[np.ndarray, None]:
         """Getter for the conductivity tensor
 
         Returns:
@@ -686,7 +686,7 @@ class Quartz:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
-    def get_potential_stern(self) -> float or None:
+    def get_potential_stern(self) -> Union[float, None]:
         """Getter for the stern potential
 
         Returns:
@@ -694,7 +694,7 @@ class Quartz:
         """
         return self.potential_stern
 
-    def get_cond_surface(self) -> float or None:
+    def get_cond_surface(self) -> Union[float, None]:
         """Getter for the conductivity of infinite diffuse layer
 
         Returns:
@@ -702,7 +702,7 @@ class Quartz:
         """
         return self.cond_surface
 
-    def get_double_layer_length(self) -> float or None:
+    def get_double_layer_length(self) -> Union[float, None]:
         """Getter for the double layer length (surface to the end of the diffuse layer)
 
         Returns:
@@ -710,7 +710,7 @@ class Quartz:
         """
         return self.length_edl
 
-    def get_surface_charge(self) -> float or None:
+    def get_surface_charge(self) -> Union[float, None]:
         """Getter for the surface charge density (Qs0 in eq.100)
 
         Returns:

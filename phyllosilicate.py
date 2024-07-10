@@ -2,7 +2,7 @@
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Set, Union
 from logging import Logger
 from sys import float_info
 from os import path, PathLike
@@ -324,7 +324,7 @@ class Phyllosilicate:
         d_cf = self.ion_props[Species.Na.name][IonProp.Mobility.name] * 0.5
         return d_cf
 
-    def __calc_mobility_diffuse(self, _x: float, _s: str) -> float or None:
+    def __calc_mobility_diffuse(self, _x: float, _s: str) -> Union[float, None]:
         """Calculate mobility of Na+ and Cl- at diffuse layer based on Bourg &
         Sposito (2011).
 
@@ -1853,7 +1853,7 @@ class Phyllosilicate:
         """
         return self.logger
 
-    def get_cond_tensor(self) -> np.ndarray or None:
+    def get_cond_tensor(self) -> Union[np.ndarray, None]:
         """Getter for the conductivity tensor
 
         Returns:
@@ -1863,7 +1863,7 @@ class Phyllosilicate:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
-    def get_cond_surface(self) -> float or None:
+    def get_cond_surface(self) -> Union[float, None]:
         """Getter for the stern potential
 
         Returns:
@@ -1871,7 +1871,7 @@ class Phyllosilicate:
         """
         return self.cond_infdiffuse
 
-    def get_double_layer_length(self) -> float or None:
+    def get_double_layer_length(self) -> Union[float, None]:
         """Getter for the double layer length (surface to the end of the diffuse layer)
 
         Returns:

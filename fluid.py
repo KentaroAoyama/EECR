@@ -1,6 +1,6 @@
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from copy import deepcopy
 from logging import Logger
 from math import pi, sqrt, log, log10, exp, tanh, isclose
@@ -296,7 +296,7 @@ class NaCl(Fluid):
         """
         return self.conductivity
 
-    def get_cond_tensor(self) -> np.ndarray or None:
+    def get_cond_tensor(self) -> Union[np.ndarray, None]:
         """Getter for the conductivity tensor
 
         Returns:

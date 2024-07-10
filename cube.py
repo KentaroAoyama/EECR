@@ -131,7 +131,7 @@ class Cube:
         cluster_size: DictLike = {},
         surface: str = "boundary",
         seed: int = 42,
-        rotation_setting: str or Dict[Any, Tuple[float]] = "random",
+        rotation_setting: Union[str, Dict[Any, Tuple[float]]] = "random",
     ) -> None:
         """Create a pixel based on macroscopic physical properties such as porosity and mineral
         mass fractions.
@@ -931,7 +931,7 @@ class Cube:
         num: int,
         nxyz: Tuple[int],
         cluster_size: int,
-    ) -> Set or None:
+    ) -> Union[Set, None]:
         """_summary_
 
         Args:
@@ -1603,7 +1603,7 @@ class Cube:
         """
         self.instance_ls = _instance_ls
 
-    def get_pix_tensor(self) -> np.ndarray or None:
+    def get_pix_tensor(self) -> Union[np.ndarray, None]:
         """Getter of the pix in 5d shape.
 
         Returns:
@@ -1616,7 +1616,7 @@ class Cube:
             return deepcopy(self.pix_tensor)
         return self.pix_tensor
 
-    def get_dkv(self) -> List[np.ndarray] or None:
+    def get_dkv(self) -> Union[List[np.ndarray], None]:
         """Getter of the stiffness matrix of representative elementary volume.
 
         Returns:
@@ -1629,7 +1629,7 @@ class Cube:
             return deepcopy(self.dkv)
         return self.dkv
 
-    def get_dks(self) -> List[List[np.ndarray]] or None:
+    def get_dks(self) -> Union[List[List[np.ndarray]], None]:
         """Getter of the stiffness matrix in 3d shape.
 
         Returns:
@@ -1641,7 +1641,7 @@ class Cube:
             return deepcopy(self.dks)
         return self.dks
     
-    def get_sigmav(self) -> List or None:
+    def get_sigmav(self) -> Union[List, None]:
         """Getter of the conductivity tensor in 3d shape.
 
         Returns:
@@ -1654,7 +1654,7 @@ class Cube:
             return deepcopy(self.sigmav)
         return self.sigmav
     
-    def get_sigmas(self) -> List or None:
+    def get_sigmas(self) -> Union[List, None]:
         """Getter of the surface conductivity tensor in 3d shape.
 
         Returns:
@@ -1664,7 +1664,7 @@ class Cube:
             return deepcopy(self.sigmas)
         return self.sigmas
     
-    def get_edge_length(self) -> float or None:
+    def get_edge_length(self) -> Union[float, None]:
         """Getter of the edge length (m) of cubic cell.
 
         Returns:
@@ -1672,7 +1672,7 @@ class Cube:
         """
         return self.edge_length
     
-    def get_ib(self) -> List or None:
+    def get_ib(self) -> Union[List, None]:
         """Getter of the neighbor labelling list in 2d shape.
 
         Returns:
@@ -1689,7 +1689,7 @@ class Cube:
             return deepcopy(self.ib)
         return self.ib
 
-    def get_pix(self) -> List or None:
+    def get_pix(self) -> Union[List, None]:
         """Getter of the 1d list mapping the index of the conductivity tensor from the
         index (m) of the one dimensional labbling scheme
 
@@ -1702,7 +1702,7 @@ class Cube:
             return deepcopy(self.pix)
         return self.pix
 
-    def get_ex(self) -> np.float64 or None:
+    def get_ex(self) -> Union[np.float64, None]:
         """Getter of the electric field in the x direction.
 
         Returns:
@@ -1712,7 +1712,7 @@ class Cube:
         """
         return self.ex
 
-    def get_ey(self) -> np.float64 or None:
+    def get_ey(self) -> Union[np.float64, None]:
         """Getter of the electric field in the y direction.
 
         Returns:
@@ -1722,7 +1722,7 @@ class Cube:
         """
         return self.ey
 
-    def get_ez(self) -> np.float64 or None:
+    def get_ez(self) -> Union[np.float64, None]:
         """Getter of the electric field in the z direction.
 
         Returns:
@@ -1732,7 +1732,7 @@ class Cube:
         """
         return self.ez
 
-    def get_A(self) -> np.ndarray or None:
+    def get_A(self) -> Union[np.ndarray, None]:
         """Getter of the global stiffness matrix A
 
         Returns:
@@ -1742,7 +1742,7 @@ class Cube:
             return deepcopy(self.A)
         return self.A
 
-    def get_Av(self) -> np.ndarray or None:
+    def get_Av(self) -> Union[np.ndarray, None]:
         """Getter of the global volume stiffness matrix A
 
         Returns:
@@ -1752,7 +1752,7 @@ class Cube:
             return deepcopy(self.Av)
         return self.Av
 
-    def get_As(self) -> np.ndarray or None:
+    def get_As(self) -> Union[np.ndarray, None]:
         """Getter of the Global surface stiffness matrix A
 
         Returns:
@@ -1762,7 +1762,7 @@ class Cube:
             return deepcopy(self.As)
         return self.As
 
-    def get_B(self) -> np.ndarray or None:
+    def get_B(self) -> Union[np.ndarray, None]:
         """Getter of the coefficient matrix b
 
         Returns:
@@ -1774,7 +1774,7 @@ class Cube:
             return deepcopy(self.B)
         return self.B
 
-    def get_C(self) -> np.float64 or None:
+    def get_C(self) -> Union[np.float64, None]:
         """Getter of the constant of the energy loss at the boundery.
 
         Returns:
@@ -1783,7 +1783,7 @@ class Cube:
         """
         return self.C
     
-    def get_logger(self) -> Logger or None:
+    def get_logger(self) -> Union[Logger, None]:
         """Getter of the logger.
 
         Returns:
@@ -1791,7 +1791,7 @@ class Cube:
         """
         return self.logger
     
-    def get_instance_ls(self) -> List or None:
+    def get_instance_ls(self) -> Union[List, None]:
         """Getter of the instance_ls in 3d shape.
 
         Returns:
@@ -1802,7 +1802,7 @@ class Cube:
             return deepcopy(self.instance_ls)
         return self.instance_ls
 
-    def get_rotation_angle_ls(self) -> List or None:
+    def get_rotation_angle_ls(self) -> Union[List, None]:
         """Getter of the rotation_angle_ls in 3d shape.
 
         Returns:
@@ -1813,7 +1813,7 @@ class Cube:
             return deepcopy(self.rotation_angle_ls)
         return self.rotation_angle_ls
 
-    def get_shape(self) -> Tuple[int] or None:
+    def get_shape(self) -> Union[Tuple[int], None]:
         """Getter for the shpe of the cubic FEM mesh
 
         Returns:
@@ -1913,7 +1913,7 @@ def is_fluid(_instance: Any) -> bool:
     return _instance.__class__.__base__ is Fluid
 
 
-def xm_index(i: int) -> None or int:
+def xm_index(i: int) -> Union[None, int]:
     """Index on the X- surface. If i is not on the X-, return None
 
     Args:
@@ -1934,7 +1934,7 @@ def xm_index(i: int) -> None or int:
         return 2
 
 
-def xp_index(i: int) -> None or int:
+def xp_index(i: int) -> Union[None, int]:
     """Index on the X+ surface. If i is not on the X+, return None
 
     Args:
@@ -1955,7 +1955,7 @@ def xp_index(i: int) -> None or int:
         return 2
 
 
-def ym_index(i: int) -> None or int:
+def ym_index(i: int) -> Union[None, int]:
     """Index on the Y- surface. If i is not on the Y-, return None
 
     Args:
@@ -1976,7 +1976,7 @@ def ym_index(i: int) -> None or int:
         return 2
 
 
-def yp_index(i: int) -> None or int:
+def yp_index(i: int) -> Union[None, int]:
     """Index on the Y- surface. If i is not on the Y+, return None
 
     Args:
@@ -1997,7 +1997,7 @@ def yp_index(i: int) -> None or int:
         return 3
 
 
-def zm_index(i: int) -> None or int:
+def zm_index(i: int) -> Union[None, int]:
     """Index on the Z- surface. If i is not on the Z- return None
 
     Args:
@@ -2018,7 +2018,7 @@ def zm_index(i: int) -> None or int:
         return 3
 
 
-def zp_index(i: int) -> None or int:
+def zp_index(i: int) -> Union[None, int]:
     """Index on the Z+ surface. If i is not on the Z+ return None
 
     Args:

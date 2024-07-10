@@ -542,7 +542,7 @@ def calc_nacl_activities(
         + abs(zx) * mplus * mminus * cmx
     )
 
-    # conversion between molality and molarity scale (Pitzer, 1991, eq.34)
+    # conversion between molality and molarity scale (Pitzer, 1991, Eq.34)
     y_plus = (
         ion_props[Species.Na.name][IonProp.Molality.name]
         * (1.0e-3 * rho)
@@ -568,7 +568,7 @@ def calc_nacl_activities(
 
 
 def __calc_ion_strength(ion_props: Dict) -> float:
-    """Calculate ion strength by eq.(A5) in Leroy et al. (2015)
+    """Calculate ion strength by Eq.(A5) in Leroy et al. (2015)
 
     Args:
         ion_props (Dict): Dictionary containing ion properties. Default
@@ -595,13 +595,13 @@ def __calc_f(
     ion_props: Dict,
     beta1: float,
 ) -> float:
-    """Calculate F by eq.(A3) in Leroy et al. (2015)
+    """Calculate F by Eq.(A3) in Leroy et al. (2015)
 
     Args:
         T (float): Absolute temperature (K)
         rho (float): Density of water (kg/m^3)
         dielec_water (float): Dielec permittivity of water (F/m)
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
         ion_props (Dict): Dictionary containing ion properties. Default
             values are defined in constants.py.
@@ -623,7 +623,7 @@ def __calc_f(
 
 
 def __calc_aphi(T: float, rho: float, dielec_water: float) -> float:
-    """Calculate Aφ by eq.(A4) in Leroy et al.(2015)
+    """Calculate Aφ by Eq.(A4) in Leroy et al.(2015)
 
     Args:
         T (float): Absolute temperature (K)
@@ -642,10 +642,10 @@ def __calc_aphi(T: float, rho: float, dielec_water: float) -> float:
 
 
 def __calc_bdash(ion_strength: float, beta1: float) -> float:
-    """Calculate B' by eq.(A6) in Leroy et al.(2015)
+    """Calculate B' by Eq.(A6) in Leroy et al.(2015)
 
     Args:
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
         beta1 (float): Pitzer's parameter
 
@@ -658,10 +658,10 @@ def __calc_bdash(ion_strength: float, beta1: float) -> float:
 
 
 def __calc_ki1(ion_strength: float) -> float:
-    """Calculate χ1 by eq.(A7) in Leroy et al.(2015)
+    """Calculate χ1 by Eq.(A7) in Leroy et al.(2015)
 
     Args:
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
 
     Returns:
@@ -671,10 +671,10 @@ def __calc_ki1(ion_strength: float) -> float:
 
 
 def __calc_b(ion_strength: float, beta0: float, beta1: float) -> float:
-    """Calculate B by eq.(A8) in Leroy et al.(2015)
+    """Calculate B by Eq.(A8) in Leroy et al.(2015)
 
     Args:
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
         beta0 (float): Pitzer's parameter
         beta1 (float): Pitzer's parameter
@@ -736,16 +736,16 @@ def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
     bi = 0.07779607 * GAS_CONST * Tc / Pc
     vstar = bi
 
-    # δ(T) in eq.(7)
+    # δ(T) in Eq.(7)
     dt = 0.6 * tanh(0.02 * (498.15 - T))
 
-    # E(T, X) in eq.(6)
+    # E(T, X) in Eq.(6)
     E = 1.0 + dt * (
         2.0e-5 * X / vstar
         - (ALPHA_Na + ALPHA_Cl) * X / (vstar * (1.0 + 1.6e-4 * X / vstar))
     )
 
-    # εri in eq.(1). Parameters are in Table 2.
+    # εri in Eq.(1). Parameters are in Table 2.
     A0 = -1664.4988
     A1 = -0.884533
     A2 = 0.0003635
@@ -753,7 +753,7 @@ def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
     A5 = 308.3394
     er = A0 + A1 * T + A2 * T**2 + A4 / T + A5 * log(T)
 
-    # εr* in eq.(5). (bi=v*)
+    # εr* in Eq.(5). (bi=v*)
     erstar = er * E
 
     return erstar * DIELECTRIC_VACUUM
@@ -789,7 +789,7 @@ def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     e1 = a1 * Xnacl**a2
     e2 = 1.0 - b1 * T**b2 - b3 * (Xnacl**a2) * (T**b2)
 
-    # eq.(4)
+    # Eq.(4)
     Tstar = e1 + e2 * T
     Tstar += 273.15
 
@@ -914,7 +914,7 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
 
 
 def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
-    """Calculate T* (K) of eq.(13) in Driesner(2007).
+    """Calculate T* (K) of Eq.(13) in Driesner(2007).
 
     Args:
         T (float): Absolute temperature (K)
@@ -930,10 +930,10 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     # convert Pa to bar
     P *= 1.0e-5
 
-    # parameter to calculate eq.(9)
+    # parameter to calculate Eq.(9)
     # Below parameters are based on Mao et al.(2015)
     n11 = -0.45146040e2 - 0.29812895e2 * exp(-0.13786998e-2 * P)
-    # eq.(11)
+    # Eq.(11)
     n10 = (
         330.47
         + 0.942876 * sqrt(P)
@@ -942,14 +942,14 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
         + 3.45052e-10 * P**3
     )
     n12 = -(n11 + n10)
-    # eq.(9)
+    # Eq.(9)
     n1 = n10 + n11 * (1.0 - Xnacl) + n12 * (1.0 - Xnacl) ** 2
 
-    # parameter to calculate eq.(10)
+    # parameter to calculate Eq.(10)
     n21 = -2.6105212 - 0.20362282e-3 * P
     n22 = 0.031998439 + 0.36137426e-5 * P + 0.15608215e-8 * P**2
     n20 = 1.0 - n21 * sqrt(n22)
-    # eq.(12)
+    # Eq.(12)
     n2_xnacl1 = (
         -0.0370751
         + 0.00237723 * sqrt(P)
@@ -960,7 +960,7 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     n23 = n2_xnacl1 - n20 - n21 * (sqrt(1.0 + n22))
     n2 = n20 + n21 * sqrt(Xnacl + n22) + n23 * Xnacl
 
-    # parameter to calculate eq.(14)
+    # parameter to calculate Eq.(14)
     n300 = 0.64988075e7 / (P + 0.42937670e3) ** 2
     n301 = -0.47287373e2 - 0.81190283e2 * exp(-0.59264170e-3 * P)
     n302 = 0.28803474e3 * exp(-0.56045287e-2 * P)
@@ -968,14 +968,14 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     n311 = -0.41933849e2 + 0.19198040e2 * exp(-0.10315741e-2 * P)
     n312 = -0.29097042 - 0.83864808e-3 * P
 
-    # calculate eq.(15)
+    # calculate Eq.(15)
     n30 = n300 * (exp(n301 * Xnacl) - 1.0) + n302 * Xnacl
     n31 = n310 * exp(n311 * Xnacl) + n312 * Xnacl
     D = n30 * exp(n31 * T)
 
-    # calculate eq.(14)
+    # calculate Eq.(14)
     Tv = n1 + n2 * T + D
-    # calculate eq.(7)
+    # calculate Eq.(7)
     Tv += 273.15
 
     return Tv
@@ -1333,18 +1333,18 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     Sum1 = 0.0
     P_Crit = None
     if T < TH2O_Crit:
-        # eq. 5a of Driesner (2007, part1)
+        # Eq.5a of Driesner (2007, part1)
         for i in range(7):
             Sum1 += C[i] * (TH2O_Crit - T) ** CA[i]
         P_Crit = PH2O_Crit + Sum1
     else:
         if T >= TH2O_Crit and T <= 500.0:
-            # eq. 5b of Driesner (2007, part1)
+            # Eq.5b of Driesner (2007, part1)
             for i in range(7, 11):
                 Sum1 += C[i] * (T - TH2O_Crit) ** CA[i]
             P_Crit = PH2O_Crit + Sum1
         else:
-            # eq. 5c of Driesner (2007, part1)
+            # Eq.5c of Driesner (2007, part1)
             for i in range(11, 14):
                 Sum1 += C[i] * (T - 500.0) ** [i - 11]
             P_Crit = Sum1
@@ -1352,12 +1352,12 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     Sum1 = 0.0
     x_crit = 0.0
     if T >= TH2O_Crit and T <= 600.0:
-        # eq. 7a of Driesner (2007, part1)
+        # Eq. 7a of Driesner (2007, part1)
         for i in range(7):
             Sum1 += d[i] * (T - TH2O_Crit) ** (i + 1)
         x_crit = Sum1
     elif T > 600.0:
-        # eq. 7b of Driesner (2007, part1)
+        # Eq. 7b of Driesner (2007, part1)
         for i in range(7, 11):
             Sum1 += d[i] * (T - 600.0) ** (i - 7)
         x_crit = Sum1

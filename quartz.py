@@ -79,7 +79,7 @@ class Quartz:
                 Default value is set based on Leroy et al. (2022).
                 NOTE: if "method" is specified as "leroy2013" or "leroy2022", this
                 value means equilibrium constants of >SiO- + Na+ ⇔ >SiO- ー Na+
-                (eq.5 in Leroy et al., 2013).
+                (Eq.5 in Leroy et al., 2013).
             c1 (float): Capacitance of surface used in Leroy et al.(2013) (C/m2).
                 Default value is set based on Leroy et al. (2022).
             d (float): Distance (m) of stern plane to zeta plane in Leroy et al. (2022)
@@ -92,7 +92,7 @@ class Quartz:
             charge_stern (float): Charge density at stern layer (C/m2)
             charge_diffuse (float): Charge density at diffuse layer (C/m2)
             method (str): Methods to calculate the potential of the stern surface
-                (solve eq.44 or eq.106 or Leroy et al.(2013)'s model)
+                (solve Eq.44 or Eq.106 or Leroy et al.(2013)'s model)
             logger (Logger): Logger
         """
         assert pzc is not None or k_plus is not None, "Either pzc or k_plus must be set"
@@ -116,11 +116,11 @@ class Quartz:
         if self.logger is not None:
             self.logger.info("=== Initialize Quartz ===")
 
-        # parameters in eq.(106)
+        # parameters in Eq.(106)
         self.delta: float = None
         self.eta: float = None
         self.pkw: float = None
-        # re-set k_plus (eq.91)
+        # re-set k_plus (Eq.91)
         if self.k_plus is None:
             # implicitly assume that activity coefficient of proton is 1
             _ch_pzc = 10.0 ** (-1.0 * pzc)
@@ -134,7 +134,7 @@ class Quartz:
         self.k_minus = calc_equibilium_const(dg_minus, self.temperature)
         self.k_na = calc_equibilium_const(dg_na, self.temperature)
 
-        # κ (inverted eq.(37) of Revil & Glover (1997), modified)
+        # κ (inverted Eq.(37) of Revil & Glover (1997), modified)
         _if = 0.0  # ionic strength
         for _s, _prop in self.ion_props.items():
             if _s in (Species.Na.name, Species.Cl.name):
@@ -163,7 +163,7 @@ class Quartz:
         )
         if self.potential_stern is None:
             if method == "eq44":
-                # eq.(44) in Revil & Glover (1997)
+                # Eq.(44) in Revil & Glover (1997)
                 self.potential_stern = bisect(self.__calc_eq_44, -0.5, 1.0)
                 self.potential_zeta = self.potential_stern
                 self.__calc_cond_surface_1997(nacl.get_cond())
@@ -173,7 +173,7 @@ class Quartz:
                     phidt=self.__calc_phid_tilda(self.potential_stern),
                 )
             if method == "eq106":
-                # eq.(106) in Revil & Glover (1997)
+                # Eq.(106) in Revil & Glover (1997)
                 # set δ
                 self.delta = self.k_plus / self.k_minus
                 # set η
@@ -219,7 +219,7 @@ class Quartz:
                 self.__calc_cond_potential_and_charges_2013(xn)
                 self.cond_stern = self.__calc_stern_2013()
                 self.cond_diffuse = self.__calc_diffuse_1997()
-                # eq.(28)
+                # Eq.(28)
                 self.cond_surface = (
                     1.53e-9 + self.cond_diffuse + self.cond_stern
                 ) / self.length_edl + nacl.get_cond()
@@ -235,7 +235,7 @@ class Quartz:
                     * self.ion_strength
                 )
                 self.__calc_cond_potential_and_charges_2013(xn)
-                # modify zeta plane potential by eq.(3)
+                # modify zeta plane potential by Eq.(3)
                 self.potential_zeta = (
                     self.potential_stern
                     - (self.potential_stern - self.potential_0)
@@ -243,7 +243,7 @@ class Quartz:
                     / (43.0 * const.DIELECTRIC_VACUUM)
                     * self.d
                 )
-                # eq.(28) in Leroy et al. (2013)
+                # Eq.(28) in Leroy et al. (2013)
                 self.cond_diffuse = self.__calc_diffuse_1997()
                 self.cond_stern = self.__calc_stern_2013()
                 self.cond_surface = (
@@ -258,13 +258,13 @@ class Quartz:
             self.logger.debug(f"cond surface: {self.cond_surface}")
 
     def __calc_eq_44(self, phid: float) -> float:
-        """Calculate eq.(44) (Qs+Qs0) in Revil & Glover (1997)
+        """Calculate Eq.(44) (Qs+Qs0) in Revil & Glover (1997)
 
         Args:
             phid (float): Surface (Stern) plane potential
 
         Returns:
-            float: Value of eq.(44)
+            float: Value of Eq.(44)
         """
 
         # molarities
@@ -276,10 +276,10 @@ class Quartz:
         Ah = self.ion_props[Species.H.name][IonProp.Activity.name]
         ANa = self.ion_props[Species.Na.name][IonProp.Activity.name]
 
-        # phid tilda in eqs.(100) and (103)
+        # phid tilda in Eqs.(100) and (103)
         phidt = self.__calc_phid_tilda(phid)
 
-        # charge density at diffuse layer (eq. 103)
+        # charge density at diffuse layer (Eq. 103)
         Qsd = sqrt(
             8000.0
             * self.dielec_fluid
@@ -294,13 +294,13 @@ class Quartz:
         return Qs0 + Qsd
 
     def __calc_qs0(self, ah: float, ana: float, phidt: float) -> float:
-        """Calculate surface charge density Qs0 (eq.100)
+        """Calculate surface charge density Qs0 (Eq.100)
         NOTE: ignore the 5th item in the denominator
 
         Args:
             ah (float): Activity of H+
             ana (float): Activity of Na+
-            phidt (float): φd tilda in eqs.(100) and (103)
+            phidt (float): φd tilda in Eqs.(100) and (103)
 
         Returns:
             float: Surface charge density (C/m2)
@@ -320,7 +320,7 @@ class Quartz:
         )
 
     def __calc_phid_tilda(self, phid: float) -> float:
-        """Calculate phid tilda in eqs.(100) and (103).
+        """Calculate phid tilda in Eqs.(100) and (103).
 
         Args:
             phid (float): Surface (Stern) plane potential (V)
@@ -336,13 +336,13 @@ class Quartz:
         )
 
     def __calc_eq106(self, _x: float) -> float:
-        """Calculate eq.(106) in Revil & Glover (1997)
+        """Calculate Eq.(106) in Revil & Glover (1997)
 
         Args:
-             _x (float): X in eq.(106)
+             _x (float): X in Eq.(106)
 
         Returns:
-            float: Value of eq.(106)
+            float: Value of Eq.(106)
         """
         if _x == 0.0:
             return -1 * float_info.max
@@ -449,7 +449,7 @@ class Quartz:
         return fn
 
     def __calc_f1(self, q0: float, phi0: float, phib: float) -> float:
-        # eq.(15)
+        # Eq.(15)
         A = self.__calc_A(phi0, phib)
         e = const.ELEMENTARY_CHARGE
         gamma_sio = self.gamma_o / A
@@ -462,7 +462,7 @@ class Quartz:
         return q0 + e * (gamma_sio + gamma_siom)
 
     def __calc_f2(self, qb: float, phi0: float, phib: float) -> float:
-        # eq.(16)
+        # Eq.(16)
         A = self.__calc_A(phi0, phib)
         e = const.ELEMENTARY_CHARGE
         gamma_siom = (
@@ -475,7 +475,7 @@ class Quartz:
         return qb - e * gamma_siom
 
     def __calc_f3(self, qs: float, phib: float) -> float:
-        # eq.(17)
+        # Eq.(17)
         return qs - self.qs_coeff * sinh(
             -(
                 const.ELEMENTARY_CHARGE
@@ -485,7 +485,7 @@ class Quartz:
         )
 
     def __calc_f4(self, q0: float, qb: float, qs: float) -> float:
-        # eq.(18)
+        # Eq.(18)
         return q0 + qb + qs
 
     def __calc_f5(self, q0: float, phi0: float, phib: float) -> float:
@@ -567,10 +567,10 @@ class Quartz:
         return jacobian
 
     def __calc_A(self, phi0, phib) -> float:
-        """Calculate eq.(14) in Leroy et al.(2013)
+        """Calculate Eq.(14) in Leroy et al.(2013)
 
         Returns:
-            float: Value of eq.(14)
+            float: Value of Eq.(14)
         """
         ah = self.ion_props[Species.H.name][IonProp.Activity.name]
         ana = self.ion_props[Species.Na.name][IonProp.Activity.name]
@@ -583,7 +583,7 @@ class Quartz:
         )
 
     def __calc_diffuse_1997(self) -> float:
-        """Calculate specific conductance of EDL by eq.(55) in Revil & Glover(1997)
+        """Calculate specific conductance of EDL by Eq.(55) in Revil & Glover(1997)
 
         Returns:
             float: Spesicic conductivity of EDL
@@ -618,7 +618,7 @@ class Quartz:
         return coeff * cs
 
     def __calc_stern_1997(self) -> float:
-        """Calculate stern layer conductivity by eq.(9) in Revil & Glover (1998)
+        """Calculate stern layer conductivity by Eq.(9) in Revil & Glover (1998)
 
         Returns:
             float: Conductivity of stern layer (S/m)
@@ -632,13 +632,13 @@ class Quartz:
         )
 
     def __calc_stern_2013(self) -> float:
-        """Calculate stern layer conductivity by eq.(30) in Leroy et al. (2013)
+        """Calculate stern layer conductivity by Eq.(30) in Leroy et al. (2013)
 
         Returns:
             float: Conductivity of stern layer (S/m)
         """
         A = self.__calc_A(self.potential_0, self.potential_stern)
-        # eq.(13)
+        # Eq.(13)
         gamma_siom = (
             self.gamma_o
             / A
@@ -653,15 +653,15 @@ class Quartz:
         return const.ELEMENTARY_CHARGE * self.mobility_stern * gamma_siom
 
     def __calc_ohm(self, phid: float) -> float:
-        """Calculate eq.(84) in Revil & Glover (1997).
-        Also stated in Revil & Glover (1998), eq.(10).
+        """Calculate Eq.(84) in Revil & Glover (1997).
+        Also stated in Revil & Glover (1998), Eq.(10).
 
         Returns:
             float: Ω0Na
         """
         Ah = self.ion_props[Species.H.name][IonProp.Activity.name]
         ANa = self.ion_props[Species.Na.name][IonProp.Activity.name]
-        # calculate A in eq.(84)
+        # calculate A in Eq.(84)
         # NOTE: ignore 5th term
         Ah0 = Ah * exp(self.__calc_phid_tilda(phid))
         A = 1.0 + self.k_plus * Ah0 + 1.0 / self.k_minus / Ah0 + self.k_na * ANa / Ah
@@ -711,7 +711,7 @@ class Quartz:
         return self.length_edl
 
     def get_surface_charge(self) -> Union[float, None]:
-        """Getter for the surface charge density (Qs0 in eq.100)
+        """Getter for the surface charge density (Qs0 in Eq.100)
 
         Returns:
             float: Surface charge density (C/m2)

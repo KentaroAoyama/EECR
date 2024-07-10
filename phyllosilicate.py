@@ -18,7 +18,7 @@ import constants as const
 from constants import Species, IonProp
 from fluid import NaCl
 
-# load global parameters
+# load initial parameters for Newton-Raphson method
 # for smectite, infinite diffuse layer case
 smectite_inf_init_pth: PathLike = path.join(
     path.dirname(__file__), "params", "smectite_inf_init.pkl"
@@ -81,12 +81,13 @@ class TLMParams:
             k4 (float): Equilibrium constant of >XH ⇔ >X + Na+ (※)
             c1 (float): Capacitance of stern layer (unit: F/m2).
             c2 (float): Capacitance of diffuse layer (unit: F/m2).
-        ※ >X stands for surface site >Al-O-Si<
-        ※ The subscript i means that it is used to calculate the properties of the
-        interlayer, and o means that it is used to calculate the properties of the
-        EDLs that develop in the bulk solution
+        ※ >X stands for surface site >Al-O-Si-O (e.g., smectite) or >Al-O-Si<
+            (e.g., kaolinite)
+        ※ The subscript i means that it is used to calculate the properties
+            of the interlayer, and o means that it is used to calculate the
+            properties of the EDLs that develop on the bulk solution
         """
-        # Inner
+        # Inner part
         self.gamma_1i = gamma_1i
         self.gamma_2i = gamma_2i
         self.gamma_3i = gamma_3i
@@ -98,7 +99,7 @@ class TLMParams:
         self.c1i = c1i
         self.c2i = c2i
 
-        # Outer
+        # Outer part
         self.gamma_1o = gamma_1o
         self.gamma_2o = gamma_2o
         self.gamma_3o = gamma_3o
@@ -128,19 +129,19 @@ class TLMParams:
 class Phyllosilicate:
     """
     Phyllosilicate Class
-    It has a function to calculate the EDL properties and electrical conductivity of inner and
-    outer plane.
+    It has a function to calculate the EDL properties and electrical conductivity
+        of inner and outer plane.
 
     To calculate the surface potential, we use the equations proposed by
     Gonçalvès et al. (2007). The equations have been modified in the following points:
-        1. In eq.(11), add Avogadro's number and a factor of 1000 to match units of concentration
-        2. The units of Qi in eq.(16) were modified from charges nm-2 to C/m2
-        3. The phib in eq.(23) was modified to phi0.
-        4. Multiply the first term in eq.(16) and eq.(17) by 1.0e18
-        5. Added the negative sign of the molecule of sinh in eq.(21).
-        6. Corrected phiD in eq.(21) to phid (uppercase to lowercase).
-        7. Multiply the coefficient of eq.(32) by Avogadro's constant
-        8. Cf in eq.(32) and (34) are multiplied by 1000 for unit matching.
+        1. In Eq.(11), add Avogadro's number and a factor of 1000 to match units of concentration
+        2. The units of Qi in Eq.(16) were modified from charges nm-2 to C/m2
+        3. The phib in Eq.(23) was modified to phi0.
+        4. Multiply the first term in Eq.(16) and Eq.(17) by 10^18.
+        5. Added the negative sign of the molecule of sinh in Eq.(21).
+        6. Corrected phiD in Eq.(21) to phid (uppercase to lowercase).
+        7. Multiply the coefficient of Eq.(32) by Avogadro's constant
+        8. Cf in Eq.(32) and (34) are multiplied by 1000 for unit matching.
 
     References:
         Gonçalvès J., P. Rousseau-Gueutin, A. Revil, 2007, doi:10.1016/j.jcis.2007.07.023
@@ -188,25 +189,25 @@ class Phyllosilicate:
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
-                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            potential_0_o (float, optional): Surface potential (unit: V).
-            potential_stern_o (float, optional): Stern plane potential (unit: V).
-            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
-            charge_0_o (float, optional): Charges in surface layer (unit: C/m^3).
-            charge_stern_o (float, optional): Charges in stern layer (unit: C/m^3).
-            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m^3).
-            potential_0_i (float, optional): Surface potential (unit: V).
-            potential_stern_i (float, optional): Stern plane potential (unit: V).
-            potential_zeta_i (float, optional): Zeta plane potential (unit: V).
+            layer_width (float): Distance between sheets of phyllosilicate
+                minerals (unit: m). Defaults to 1.3e-9 (length with 3 water layers).
+            potential_0_o (float, optional): Surface potential on the outer surface (unit: V).
+            potential_stern_o (float, optional): Stern plane potential on the outer surface (unit: V).
+            potential_zeta_o (float, optional): Zeta potential on the outer surface (unit: V).
+            charge_0_o (float, optional): Charges of the outer surface (unit: C/m^3).
+            charge_stern_o (float, optional): Charges of the Stern layer on the outer surface (unit: C/m^3).
+            charge_diffuse_o (float, optional): Charges of the diffuse layer on the outer surface (unit: C/m^3).
+            potential_0_i (float, optional): Surface potential on the inner surface(unit: V).
+            potential_stern_i (float, optional): Stern plane potential on the inner surface (unit: V).
+            potential_zeta_i (float, optional): Zeta potential on the inner surface (unit: V).
             potential_r_i (float, optional): Potential at the position truncated
-                inside the inter layer (unit: V).
-            charge_0_i (float, optional): Charges in surface layer (unit: C/m^3).
-            charge_stern_i (float, optional): Charges in stern layer (unit: C/m^3).
-            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m^3).
-            xd (float, optional): Distance from quartz surface to zeta plane (unit: V).
+                inside the interlayer (unit: V).
+            charge_0_i (float, optional): Charges of the inner surface (unit: C/m^3).
+            charge_stern_i (float, optional): Charges of the Stern layer in the inner surafce (unit: C/m^3).
+            charge_diffuse_i (float, optional): Charges of the diffuse layer in the inner surface (unit: C/m^3).
+            xd (float, optional): Distance from surface (i.e., the center of the oxygen in the siloxane surface) to shear plane (unit: V).
             cond_intra (float): Inter layer conductivity (unit: S/m).
-            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
+            cond_infdiffuse (float, optional): Conductivity of the outer surface (unit: S/m).
             logger (Logger): Logger for debugging.
         """
         # Check input values
@@ -304,7 +305,7 @@ class Phyllosilicate:
                 )
         self.ionic_strength = strength
 
-        # calculate kappa (eq.(11) of Gonçalvès et al., 2007)
+        # calculate kappa (Eq.(11) of Gonçalvès et al., 2007)
         # Electrolyte concentration is assumed to be equal to Na+ concentration
         top = (
             2000.0
@@ -340,14 +341,14 @@ class Phyllosilicate:
         return None
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
-        """Calculate eq.(16) of Gonçalvès et al. (2007).
+        """Calculate Eq.(16) of Gonçalvès et al. (2007).
 
         Args:
             phi0 (float): surface plane potential
             q0 (float): surface layer charge
 
         Returns:
-            float: left side of eq.(16) minus right side
+            float: left side of Eq.(16) minus right side
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
@@ -362,14 +363,14 @@ class Phyllosilicate:
         return f1
 
     def __calc_f2(self, phib: float, qb: float) -> float:
-        """Calculate eq.(17) of Gonçalvès et al. (2007).
+        """Calculate Eq.(17) of Gonçalvès et al. (2007).
 
         Args:
             phib (float): stern plane potential
             qb (float): stern layer charge
 
         Returns:
-            float: left side of eq.(17) minus right side
+            float: left side of Eq.(17) minus right side
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
@@ -389,43 +390,43 @@ class Phyllosilicate:
         return f2
 
     def __calc_f3(self, q0: float, qb: float, qs: float) -> float:
-        """Calculate eq.(18) of Gonçalvès et al. (2007).
+        """Calculate Eq.(18) of Gonçalvès et al. (2007).
 
         Args:
             q0 (float): surface layer charge
             qb (float): stern layer charge
             qs (float): diffuse layer charge
         Returns:
-            float: left side of eq.(18) minus right side
+            float: left side of Eq.(18) minus right side
         """
         return q0 + qb + qs
 
     def __calc_f4(self, phi0: float, phib: float, q0: float) -> float:
-        """Calculate eq.(19) of Gonçalvès et al. (2007).
+        """Calculate Eq.(19) of Gonçalvès et al. (2007).
 
         Args:
             phi0 (float): surface place potential
             phib (float): zeta plane potential
             q0 (float): surface layer charge
         Returns:
-            float: left side of eq.(19) minus right side
+            float: left side of Eq.(19) minus right side
         """
         return phi0 - phib - q0 / self.c1
 
     def __calc_f5(self, phib: float, phid: float, qs: float) -> float:
-        """Calculate eq.(20) of Gonçalvès et al. (2007).
+        """Calculate Eq.(20) of Gonçalvès et al. (2007).
 
         Args:
             phib (float): stern place potential
             phid (float): zeta plane potential
             qs (float): diffuse layer charge
         Returns:
-            float: left side of eq.(20) minus right side
+            float: left side of Eq.(20) minus right side
         """
         return phib - phid + qs / self.c2
 
     def __calc_f6(self, phid: float, qs: float) -> float:
-        """Calculate eq.(21) of Gonçalvès et al. (2007).
+        """Calculate Eq.(21) of Gonçalvès et al. (2007).
         When pH is shifted from 7, we need to take
         into account the contribution of H+ and OH-.
 
@@ -433,7 +434,7 @@ class Phyllosilicate:
             phid (float): zeta place potential
             qs (float): diffuse layer charge
         Returns:
-            float: left side of eq.(21) minus right side
+            float: left side of Eq.(21) minus right side
         """
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
@@ -447,7 +448,7 @@ class Phyllosilicate:
         return f6
 
     def __calc_f6_truncated(self, phid: float, phir: float, qs: float) -> float:
-        """Calculate eq.(32) of Gonçalvès et al. (2007).
+        """Calculate Eq.(32) of Gonçalvès et al. (2007).
         When pH is shifted from 7, we need to take
         into account the contribution of H+ and OH-.
 
@@ -456,7 +457,7 @@ class Phyllosilicate:
             phir (float): truncated plane potential
             qs (float): diffuse layer charge
         Returns:
-            float: left side of eq.(32) minus right side
+            float: left side of Eq.(32) minus right side
         """
         dielec = self.dielec_fluid
         kb = const.BOLTZMANN_CONST
@@ -471,7 +472,7 @@ class Phyllosilicate:
         return qs - coeff * np.sqrt(right1 - right2)
 
     def __calc_f7_truncated(self, phid: float, phir: float) -> float:
-        """Calculate eq.(34) of Gonçalvès et al. (2007).
+        """Calculate Eq.(34) of Gonçalvès et al. (2007).
         When pH is shifted from 7, we need to take
         into account the contribution of H+ and OH-.
 
@@ -480,7 +481,7 @@ class Phyllosilicate:
             phir (float): truncated plane potential
             qs (float): diffuse layer charge
         Returns:
-            float: left side of eq.(34) minus right side
+            float: left side of Eq.(34) minus right side
         """
         # TODO: ６回微分まで実装する
         # electrolyte concentration assumed equal to that of Na+
@@ -745,13 +746,13 @@ class Phyllosilicate:
         return -1.0 + _1 + _2
 
     def __calc_A(self, phi0: float) -> float:
-        """Calculate eq.(22) of Gonçalvès et al. (2007)
+        """Calculate Eq.(22) of Gonçalvès et al. (2007)
 
         Args:
             phi0 (float): surface layer potential
 
         Returns:
-            float: value of "A" in eq.(22)
+            float: value of "A" in Eq.(22)
         """
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -761,13 +762,13 @@ class Phyllosilicate:
         return 1.0 + ch / k1 * np.exp(-_e * phi0 / (kb * t))
 
     def __calc_B(self, phi0: float) -> float:
-        """Calculate eq.(23) of Gonçalvès et al. (2007)
+        """Calculate Eq.(23) of Gonçalvès et al. (2007)
 
         Args:
             phi0 (float): surface plane potential
 
         Returns:
-            float: value of "B" in eq.(23)
+            float: value of "B" in Eq.(23)
         """
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -777,13 +778,13 @@ class Phyllosilicate:
         return 1.0 + ch / k2 * np.exp(-_e * phi0 / (kb * t))
 
     def __calc_C(self, phib: float) -> float:
-        """Calculate eq.(24) of Gonçalvès et al. (2007)
+        """Calculate Eq.(24) of Gonçalvès et al. (2007)
 
         Args:
             phib (float): stern plane potential
 
         Returns:
-            float: value of "C" in eq.(23)
+            float: value of "C" in Eq.(23)
         """
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -939,7 +940,7 @@ class Phyllosilicate:
     ) -> List:
         """Calculate the potential and charge of each layer
         in the case of infinite diffuse layer development.
-        eq.(16)~(21) of Gonçalvès et al. (2007) is used.
+        Eqs.(16)~(21) of Gonçalvès et al. (2007) is used.
         Damped Newton-Raphson method is applied.
 
         x_init (List): Initial electrical parameters (length is 6)
@@ -1001,7 +1002,7 @@ class Phyllosilicate:
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_inf(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-        # The convergence condition is that the L2 norm in eqs.1~7
+        # The convergence condition is that the L2 norm in Eqs.1~7
         # becomes sufficiently small.
         cou = 0
         while convergence_condition < norm_fn:
@@ -1019,11 +1020,11 @@ class Phyllosilicate:
             while _norm_fn_tmp > _rhs:
                 # update μ
                 _mu = 1.0 / (lamda**_cou_damp)
-                # calculate left hand side of eq.(21) of [1]
+                # calculate left hand side of Eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_inf(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
-                # calculate right hand side of eq.(21) of [1]
+                # calculate right hand side of Eq.(21) of [1]
                 _rhs = (1.0 - (1.0 - beta) * _mu) * norm_fn
                 _cou_damp += 1
                 if _cou_damp > 10000:
@@ -1077,7 +1078,7 @@ class Phyllosilicate:
     ) -> List:
         """Calculate the potential and charge of each layer
         in the case of truncated diffuse layer development.
-        eq.(16)~(20), (32), (34) of Gonçalvès et al. (2007) is used.
+        Eqs.(16)~(20), (32), (34) of Gonçalvès et al. (2007) is used.
         Damped Newton-Raphson method is applied.
 
         x_init (List): Initial electrical parameters (length is 7)
@@ -1150,7 +1151,7 @@ class Phyllosilicate:
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-        # The convergence condition is that the L2 norm in eqs.1~7
+        # The convergence condition is that the L2 norm in Eqs.1~7
         # becomes sufficiently small.
         cou = 0
         is_norm_converged: bool = False
@@ -1171,11 +1172,11 @@ class Phyllosilicate:
             while _norm_fn_tmp > _rhs:
                 # update μ
                 _mu = 1.0 / (lamda**_cou_damp)
-                # calculate left hand side of eq.(21) of [1]
+                # calculate left hand side of Eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_truncated(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
-                # calculate right hand side of eq.(21) of [1]
+                # calculate right hand side of Eq.(21) of [1]
                 _rhs = (1.0 - (1.0 - beta) * _mu) * norm_fn
                 _cou_damp += 1
                 if norm_fn < convergence_condition:
@@ -1304,7 +1305,7 @@ class Phyllosilicate:
             x (float): Distance from zeta plane (m)
             s (str): Ion species existed in self.ion_props
             coeff (float): Ratio of dielectric constant to viscosity
-                (eq.26 in Leroy et al., 2015)
+                (Eq.26 in Leroy et al., 2015)
 
         Returns:
             float: Conductivity of diffuse layer (S/m)
@@ -1366,7 +1367,7 @@ class Phyllosilicate:
 
     def __calc_n_stern(self, orientation: str) -> float:
         """Calculate Na+ number density in stern layer
-        by eq.(12) of Leroy & Revil (2004)
+        by Eq.(12) of Leroy & Revil (2004)
 
         Args:
             orientation (str): Flag indicating which direction the stern

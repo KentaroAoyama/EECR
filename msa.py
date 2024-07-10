@@ -32,7 +32,7 @@ def __calc_pn(
     __gamma: float,
     _msa_props: Dict,
 ) -> float:
-    """Calculate Pn in Roger et al. (2009) by solving eq.(19)
+    """Calculate Pn in Roger et al. (2009) by solving Eq.(19)
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
@@ -56,7 +56,7 @@ def __calc_omega(
     __gamma: float,
     _msa_props: Dict,
 ) -> float:
-    """Calculate Ω in Roger et al. (2009) by solving eq.(20).
+    """Calculate Ω in Roger et al. (2009) by solving Eq.(20).
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
@@ -78,7 +78,7 @@ def __calc_omega(
 def __calc_delta(
     _msa_props: Dict,
 ) -> float:
-    """Calculate Δ in in Roger et al. (2009) by solving eq.(21).
+    """Calculate Δ in in Roger et al. (2009) by solving Eq.(21).
 
     Args:
         _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
@@ -96,7 +96,7 @@ def __calc_delta(
 
 
 def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float, _dielec: float) -> float:
-    """Left hand side - Right hand side of eq.(18) in Roger et al. (2009).
+    """Left hand side - Right hand side of Eq.(18) in Roger et al. (2009).
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
@@ -106,7 +106,7 @@ def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float, _dielec: float) -> 
         _dielec (float): Dielectric constant (F/m)
 
     Returns:
-        float: Left hand side - Right hand side of eq.(18) in Roger et al. (2009).
+        float: Left hand side - Right hand side of Eq.(18) in Roger et al. (2009).
     """
     _e: float = const.ELEMENTARY_CHARGE
     _kb: float = const.BOLTZMANN_CONST
@@ -132,7 +132,7 @@ def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float, _dielec: float) -> 
 
 
 def __calc_gamma(_msa_props: Dict, _t: float, _dielec: float) -> float:
-    """Calculate Γ in Roger et al. (2009). Solving eq.(18) by bisection method.
+    """Calculate Γ in Roger et al. (2009). Solving Eq.(18) by bisection method.
 
     Args:
         _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
@@ -228,21 +228,21 @@ def __calc_eq14(
     _gamma: float,
     _y: float,
 ) -> float:
-    """Calculate eq.(14) in Roger et al. (2009)
+    """Calculate Eq.(14) in Roger et al. (2009)
 
     Args:
         _t (float): Absolute temperature (K)
-        _ei (float): ei in eq.(14)
-        _ej (float): ej in eq.(14)
-        _qp (float): qp in eq.(14)
-        _kappa (float): κ in eq.(14)
-        _sigmaij (float): σij in eq.(14)
+        _ei (float): ei in Eq.(14)
+        _ej (float): ej in Eq.(14)
+        _qp (float): qp in Eq.(14)
+        _kappa (float): κ in Eq.(14)
+        _sigmaij (float): σij in Eq.(14)
         _dielec_water (float): Dielectric constant of pure water.
         _gamma (float): Γ in Roger et al. (2009)
         _y (float): Y in Roger et al. (2009)
 
     Returns:
-        float: Value fo eq.(14)
+        float: Value fo Eq.(14)
     """
     _kb: float = const.BOLTZMANN_CONST
     qp_root = sqrt(_qp)
@@ -287,7 +287,7 @@ def __calc_y(_msa_props: Dict[str, Dict], _kappa: float, _gamma: float) -> float
 
 
 def __calc_eq12(alpha: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -> float:
-    """Calculate eq.(12) in Roger et al. (2009).
+    """Calculate Eq.(12) in Roger et al. (2009).
     ※ ωk is modified to ωi
 
     Args:
@@ -297,7 +297,7 @@ def __calc_eq12(alpha: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -
         _t_ls (List): List containing t in Roger et al. (2009)
 
     Returns:
-        float: Value of eq.(12)
+        float: Value of Eq.(12)
     """
     _sum = 0.0
     for _ti, _omegai in zip(_t_ls, _omega_ls):
@@ -321,12 +321,12 @@ def __calc_alphap(
     _min: float = 0.0,
     _max: float = 1.0e5,
 ) -> float:
-    """Calculate α by Solving eq.(12) in Roger et al. (2009).
+    """Calculate α by Solving Eq.(12) in Roger et al. (2009).
 
     Args:
-        _omega_ls (float): List containing ωi in eq.(12)
-        _omega_bar (float): ω with bar in eq.(18)
-        _t_ls (List): List containing ti in eq.(18)
+        _omega_ls (float): List containing ωi in Eq.(12)
+        _omega_bar (float): ω with bar in Eq.(18)
+        _t_ls (List): List containing ti in Eq.(18)
         _min (float, optional): The minimum value used in the bisection method.
             Defaults to 0.0.
         _max (float, optional): The maximum value used in the bisection method.
@@ -345,9 +345,9 @@ def __calc_np(omega_ls: List, t_ls: List, _alphap: float) -> float:
     """Calculate Np in Roger et al. (2009)
 
     Args:
-        omega_ls (List): List containing ω in eq.(11)
-        t_ls (List): List containing ti in eq.(11)
-        _alphap (float): αp in eq.(11)
+        omega_ls (List): List containing ω in Eq.(11)
+        t_ls (List): List containing ti in Eq.(11)
+        _alphap (float): αp in Eq.(11)
 
     Returns:
         float: Np
@@ -362,10 +362,10 @@ def __calc_qp(_alphap: float, _omega_bar: float, _omega_ls: List, _t_ls: List) -
     """Calculate qp in Roger et al. (2009)
 
     Args:
-        _alphap (float): αp in eq.(9)
-        _omega_bar (float): ω with bar in eq.(9)
-        _omega_ls (List): List containing ωk in eq.(9)
-        _t_ls (List): List containing ti in eq.(9)
+        _alphap (float): αp in Eq.(9)
+        _omega_bar (float): ω with bar in Eq.(9)
+        _omega_ls (List): List containing ωk in Eq.(9)
+        _t_ls (List): List containing ti in Eq.(9)
 
     Returns:
         float: qp
@@ -414,13 +414,13 @@ def __calc_dkkkk(
         _k (str): Ion Species
         _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
                 values are properties of dict.
-        ki_pk (Dict[Tuple, float]): χpk in eq.(4)
-        sigma_ij (Dict[Tuple, float]): σij in eq.(4)
-        _t (float): Absolute temperature (K) in eq.(4)
+        ki_pk (Dict[Tuple, float]): χpk in Eq.(4)
+        sigma_ij (Dict[Tuple, float]): σij in Eq.(4)
+        _t (float): Absolute temperature (K) in Eq.(4)
         _dielec (float): Dielectric constant of water (F/m)
-        _kappa (float): κ in in eq.(4)
-        _gamma (float): Γ in eq.(4)
-        _y (float): Y in eq.(4)
+        _kappa (float): κ in in Eq.(4)
+        _gamma (float): Γ in Eq.(4)
+        _y (float): Y in Eq.(4)
 
     Returns:
         float: δkk/kk
@@ -467,7 +467,7 @@ def __calc_dkkkk(
 
 
 def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
-    """Calculate the mobility of a single ion species using eq.(1)
+    """Calculate the mobility of a single ion species using Eq.(1)
 
     Args:
         _s (str): Ion species
@@ -476,7 +476,7 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
                 values are properties of dict.
 
     Returns:
-        float: eq.(1) / (e * abs(z) * n)
+        float: Eq.(1) / (e * abs(z) * n)
     """
     _e: float = const.ELEMENTARY_CHARGE
     _kb: float = const.BOLTZMANN_CONST

@@ -745,7 +745,7 @@ class Cube:
         _is[5] = 18
         _is[6] = 17
         _is[7] = 16
-        # δr in eq.(9), Garboczi (1997)
+        # δr in Eq.(9), Garboczi (1997)
         xn: List = list(range(8))
         # x=nx face
         i = nx - 1
@@ -2049,7 +2049,7 @@ def _energy_bounds(
     zmoff: bool = False,
 ) -> Tuple[float, float]:
     """Calculate the energy produced by periodic boundary conditions
-        (b and c of eq.(10) in Garboczi, 1997)
+        (b and c of Eq.(10) in Garboczi, 1997)
 
     Args:
         xn (List[float]): Electric potential at the boundary.

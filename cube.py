@@ -1,5 +1,5 @@
 """Create input to be passed to the solver class"""
-# TODO: fix stiffness matrix index (pixを参照するか, mをインデックスとするか, 統一する)
+# TODO: fix stiffness matrix index (unify whether pix is referenced or m is indexed)
 # pylint: disable=no-name-in-module
 # pylint: disable=import-error
 from copy import deepcopy
@@ -54,41 +54,40 @@ class Cube:
         """Initialize Cube class.
 
         Args:
-            pix_tensor (List): 3d list of pix. Each index indicate node. First index increases
-                along z direction and second index increases along y direction, and third index
-                increases along z direction.
+            pix_tensor (List): Containing the indecies of conductivity tensor.
+                Each index corresponds to an element. The first index increases
+                    along the z direction, the second increases along the y
+                    direction, and the third increases along the x direction.
             dkv (List): 1d list containing volume stiffness matrix described at pp.8 in Garboczi (1998).
                 First index indicates argument variable of sigma's first index and second and third
                 index (0 to 7) indicates the location of the node (see Fig.1 of Garboczi, 1998).
-            sigmav (List): 3d list of conductivity tensor adescribed at pp.6 in in Garboczi (1998).
-                First index is the identifier of the tensor. Second and third indexes indicate the
-                row and column of conductivity tensor respectively.
-            sigmas (List): 3d list (nxyz × 6 × (Debye length (m), surface conductivity (S/m)))
-                containing surface conductivity.
+            sigmav (List): 3d list containing the conductivity tensor described
+                at pp.6 in Garboczi (1998). The first index is the identifier
+                of the tensor. The second and third indexes indicate the row
+                and column of the conductivity tensor, respectively.
+            sigmas (List): 3d list (nxyz × 6 × 2(Debye length (m), surface
+                conductivity (S/m))) containing surface conductivity.
             edge_length (float): Edge length of cubic cell (m).
-            ib (List): 2d list of neighbor labelling described at pp.8 to 11 in Garboczi (1998).
-                First index indicates one dimensional labbeling scheme (m) and second index
-                indicates neighbor node index of m'th node. m is calculated as follows:
-                    m=nx*ny*(k-1)+nx*(j-1)+i
-                where nx, ny, and nz are pix size of x, y, and z direction. And i, j, and k
-                are the indexes of x, y, and z direction.
-            pix (List): 1d list to get the first index of sigma described at pp.8 in in
-                Garboczi (1998). Index indicates one dimensional labbeling scheme (m).
-            ex (float): Electrical field of x direction. Note that the unit is volt/Δx (Δx is
-                the pix size of x direction), which is somewhat differnt from the description
-                at pp.7 in Garboczi (1998).
-            ey (float): Electrical field of y direction. Note that the unit is volt/Δy (Δy is
-                the pix size of y direction), which is somewhat differnt from the description
-                at pp.7 in Garboczi (1998).
-            ez (float): Electrical field of z direction. Note that the unit is volt/Δz (Δz is
-                the pix size of z direction), which is somewhat differnt from the description
-                at pp.7 in Garboczi (1998).
-            A (np.ndarray): Gloval stiffness matrix (Av + As, Number of elements × 27)
-            Av (np.ndarray): Gloval volume stiffness matrix (Number of elements × 27)
-            As (np.ndarray): Gloval surface stiffness matrix (Number of elements × 27)
+            ib (List): 2d list of neighbor labelling described at pp.8 to 11
+                in  Garboczi (1998). The first index corresponds to the
+                one-dimensional label (m), and the second index indicates
+                the neighbor node index of the math node. m is calculated
+                as follows:  m=nx*ny*(k-1)+nx*(j-1)+i,
+                where nx, ny, and nz are pix size of x, y, and z direction,
+                and i, j, and k are the indexes of x, y, and z direction, respectively.
+            pix (List): 1d list to get the first index of sigma described at pp.8
+                pp.8 in Garboczi (1998). Index indicates one dimensional labbeling (m).
+            ex (float, ※): Electrical field of x direction.
+            ey (float, ※): Electrical field of y direction.
+            ez (float, ※): Electrical field of z direction.
+            A (np.ndarray): Global stiffness matrix (Av + As, Number of elements × 27)
+            Av (np.ndarray): Global volume stiffness matrix (Number of elements × 27)
+            As (np.ndarray): Global surface stiffness matrix (Number of elements × 27)
             B (np.ndarray): Constants for energy diverging at the boundary
             C (float): Constants for energy diverging at the boundary
             logger (Logger): Logger for debugging
+        
+        NOTE: Unit is volt/n (n is the total number of the grid size for each direction)
         """
         self.pix_tensor: np.ndarray = pix_tensor
         self.dkv: List = dkv
@@ -137,30 +136,36 @@ class Cube:
         mass fractions.
 
         Args:
-            shape (Tuple[int]): Pixel size of (nz, ny, nx).
-            edge_length (float): Length of a edge of a cube pixel (m).
-            volume_frac_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
-                and value is the volume fraction. The phases are assigned in the order of the keys,
-                so if you need to consider the order, give OrderedDict.
-            instance_range_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
-                and value is the tuple containing anisotoropic scaling factors of y and z axis.
-            instance_adj_rate_dict (Dict): Dictionary whose key is the instance of the mineral or fluid
-                and value is the tuple containing instance to be considered adjacent or not and the
-                adjacent rate.
-            cluster_size (Dict): Dictionary containing whose key is the instance of the mineral or fluid
-                and value is the cluster size. Cluster size indicates the length of the sides of a
-                cube-shaped cluster. NOTE: Currently, only the first element of volume_frac_dict can
-                apply this method
-            surface (str): Flag specifying how surface conductivity is to be implemented.
-                "average": Add volume average surface conductivity to the fluid conductivity tensor
+            shape (Tuple[int]): Grid size (nz, ny, nx).
+            edge_length (float): Edge length of the cube pixel (m).
+            volume_frac_dict (Dict): Dictionary whose key is the instance
+                of the mineral or fluid and whose value is the volume fraction.
+                Those instances (i.e., phase) are assigned in the order.
+                If you need to consider the order, give OrderedDict.
+            instance_range_dict (Dict): Dictionary whose key is the instance
+                of the mineral or fluid and the value is the tuple containing
+                anisotropic scaling factors of the y and z axis.
+            instance_adj_rate_dict (Dict): Dictionary whose key is the instance
+                of the mineral or fluid and the value is the tuple containing
+                instance to be considered adjacent or not and the adjacent rate.
+            cluster_size (Dict): Dictionary containing whose key is the instance
+                of the mineral or fluid and the value is the cluster size.
+                Cluster size indicates the length of the edges of a cube-shaped
+                cluster. NOTE: Currently, only the first element of
+                volume_frac_dict can apply this method.
+            surface (str): Strings specifying how surface conductivity is added:
+                "average": Add volume averaged surface conductivity to the fluid
+                    conductivity tensor.
                 "boundary": Build surface stiffness matrix (4×4)
                 None: Ignore surface conductivity.
-            seed (int): Seed for assigning elements
-            rotation_setting (str or Dict): Argument that control the rotation of the conductivity
-                tensor of each element. If you set as "rondom", conductivity tensor are rotated
-                by randomly generated angle. Else if you set dict whose keys are instance of each
-                element and values are rotation angles for axis x, y, and z in degree, conductivity
-                tensors are rotated based on these angles (Defaults to "random").
+            seed (int): Random seed. 
+            rotation_setting (str or Dict): The argument that controls the
+                rotation matrices for each element. If you set it as "random",
+                the conductivity tensor is rotated by a randomly generated
+                rotation matrix. Otherwise, if you set a dict whose keys 
+                are instances of each element and values are rotation angles 
+                for axis x, y, and z in degree, conductivity tensors are 
+                rotated based on these angles (Defaults to "random").
         """
         # Set following member variables:
         #   - self.edge_length
@@ -175,13 +180,13 @@ class Cube:
 
         self.edge_length = edge_length
         assert len(volume_frac_dict) > 0
-        # Check to see if the volume fractions sum to 1
+        # check if the volume fractions sum to 1
         _sum = 0.0
         for _, frac in volume_frac_dict.items():
             _sum += frac
         assert isclose(_sum, 1.0, abs_tol=1.0e-10)
 
-        # Check to see if shape is valid
+        # check if shape is valid
         for n in shape:
             assert isinstance(n, int) and n > 0
         nx, ny, nz = shape
@@ -219,10 +224,8 @@ class Cube:
                 )
                 rot_mat_const.setdefault(_instance, np.matmul(np.matmul(rx, ry), rz))
 
-        # ib
         self.set_ib(shape)
 
-        # first create pixel as 3d list
         instance_set_ls: List = []
         frac_ls: List = []
         for instance, frac in volume_frac_dict.items():
@@ -231,16 +234,14 @@ class Cube:
                 get_cond_tensor is not None
             ), f'{instance.__name__} don\'t have "get_cond_tensor method"'
             instance_set_ls.append(instance)
-            # Prevent the probability p given to random.sample from becoming negative
             if frac < 0.0:
                 frac = float_info.min
             frac_ls.append(frac)
 
-        # conductivity tensor will be stored for each element
         pix_tensor: List = np.zeros(shape=shape, dtype=np.float64).tolist()
-        # rotation angles (x, y, z) will be stored for each element
+        # Rotation matrices will be assigned for each element
         rotation_angle_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
-        # instance will be stored for each element
+        # Instance will be assigned for each element
         instance_ls: List = np.zeros(shape=shape, dtype=np.float64).tolist()
         # build pix_tensor, rotation_angle_ls, instance_ls
         np.random.seed(seed)
@@ -341,7 +342,7 @@ class Cube:
         self.pix = pix_ls
         self.instance_ls = instance_ls
 
-        # For simplicity, set default values of sigmas and dks
+        # set default values of sigmas and dks
         if self.sigmas is None:
             self.sigmas = [[(0.0, 0.0) for _ in range(6)] for _ in range(ns)]
         if self.dks is None:
@@ -350,8 +351,8 @@ class Cube:
                 for _ in range(ns)
             ]
 
-        # If the cell is a fluid and there are minerals next to it, add the conductivities of
-        # the stern and diffusion layers.
+        # If the cell is a fluid and there are minerals next to it, add
+        # the specific surface conductivities.
         if surface == "average":
             self.add_sigmas_by_average()
         elif surface == "boundary":
@@ -367,11 +368,11 @@ class Cube:
         for k in range(nz):
             for j in range(ny):
                 for i in range(nx):
-                    # Checks whether instance has an attribute for the electric double layer.
+                    # checks whether instance has an attribute for the electric double layer.
                     instance = self.instance_ls[k][j][i]
-                    # surface conductance (S/m)
+                    # surface conductivity (S/m)
                     get_cond_surface = getattr(instance, "get_cond_surface", None)
-                    # debye length
+                    # EDL thickness
                     get_double_layer_length = getattr(
                         instance, "get_double_layer_length", None
                     )
@@ -411,11 +412,11 @@ class Cube:
             for j in range(ny):
                 for i in range(nx):
                     m = calc_m(i, j, k, nx, ny)
-                    # Checks whether instance has an attribute for the electric double layer.
+                    # checks whether instance has an attribute for the electric double layer.
                     instance = self.instance_ls[k][j][i]
-                    # surface conductance (S/m)
+                    # surface conductivity (S/m)
                     get_cond_surface = getattr(instance, "get_cond_surface", None)
-                    # debye length
+                    # EDL thickness
                     get_double_layer_length = getattr(
                         instance, "get_double_layer_length", None
                     )
@@ -502,8 +503,8 @@ class Cube:
         cond_infdiffuse: float,
         double_layer_length: float,
     ) -> None:
-        """Add the conductivity of the electric double layer to the pixels in contact with the
-        surface.
+        """Add the conductivity of the electric double layer to the pixels in
+        contact with the surface.
 
         Args:
             pix_tensor (List): 3d list containing the 2d conductivity tensor
@@ -511,10 +512,10 @@ class Cube:
             i (int): Index of X direction
             j (int): Index of Y direction
             k (int): Index of Z direction
-            edge_length (float): Pixel edge length (unit: m)
-            cond_infdiffuse (float): Conductivity of the electrical double layer developped in
-                the infinite diffuse layer
-            double_layer_length (float): Length of the electrical double layer (from surface to
+            edge_length (float): Voxel's edge length (unit: m)
+            cond_infdiffuse (float): Conductivity of the EDL faced to the
+                free electrolyte.
+            double_layer_length (float): EDL thickness (from surface to
                 the end of the diffuse layer).
         """
         nz, ny, nx = np.array(instance_ls).shape
@@ -576,16 +577,17 @@ class Cube:
         ratio_edl: float,
         ratio_fluid: float,
     ) -> None:
-        """Add electrical double layer conductivity to adjacent cells
+        """Add the electrical conductivity of the EDL to the adjacent voxels.
 
         Args:
             pix_tensor (List): 3d list containing the 2d conductivity tensor
             instance_ls (List): 3d list containing instance of fluid or mineral
-            idx_adj (Tuple[int]): Adjacent cell index (k, j, i)
-            adj_axis (str): String indicating the direction of adjacent direction (x or y or z)
-            cond_infdiffuse (float): Conductivity of the electrical double layer
-            ratio_edl (float): Ratio of the electrical double layer in the cell volume
-            ratio_fluid (float): Ratio of the fluid in the cell volume
+            idx_adj (Tuple[int]): Adjacent voxel's index (k, j, i)
+            adj_axis (str): Strings indicating the direction of adjacent direction
+                (x, y, or z)
+            cond_infdiffuse (float): Electrical conductivity of the EDL
+            ratio_edl (float): Ratio of the EDL's edge length to the voxel's edge
+            ratio_fluid (float): Ratio of the fluid volume in the voxel's volume
         """
         iadj, jadj, kadj = idx_adj
         instance = instance_ls[kadj][jadj][iadj]
@@ -914,7 +916,7 @@ class Cube:
         m_remain: Set,
         _num: int,
     ) -> Set[int]:
-        """Gives a completely random distribution (i.e., nugget model)
+        """Gives a completely random distribution.
 
         Args:
             m_remain (Set): Flatten global indices set
@@ -932,13 +934,12 @@ class Cube:
         nxyz: Tuple[int],
         cluster_size: int,
     ) -> Union[Set, None]:
-        """_summary_
+        """Gives a distribution of clustered elements
 
         Args:
             num (int): Number to be selected
             nxyz (Tuple[int]): Tuple containing nx, ny, nz
-            cluster_size (int): Number indicates the length of the sides of a
-                cube-shaped cluster
+            cluster_size (int): Grid size of a cube-shaped cluster
 
         Returns:
             Set: Selected global flatten indecies
@@ -986,9 +987,9 @@ class Cube:
         nxyz: Tuple[int],
         range_yz: Tuple[float, float],
     ) -> Set[int]:
-        """Calculate the anisotropic distribution of pore
+        """Calculate the anisotropic distribution.
         Args:
-            m_remain (Set): Flatten global indices set
+            m_remain (Set): Flatten global indices to be selected
             _num (int): Number to be selected
             nxyz (Tuple[int]): Tuple containing nx, ny, nz
             range_yz (Tuple[float, float]): Anisotoropic scaling of y and z axis
@@ -1000,7 +1001,7 @@ class Cube:
         nx, ny, nz = nxyz
         ay, az = range_yz
         range_scale: np.ndarray = np.array([1.0, 1.0 / ay, 1.0 / az])
-        # Set initial points (if exists: 1, else: 0)
+        # set initial points (if exists: 1, else: 0)
         num_init = int(min((0.05 * nx * ny * nz, 0.5 * _num)))
         if num_init == 0:
             num_init = 1
@@ -1016,20 +1017,20 @@ class Cube:
         values_init: List = []
         for m in m_initial:
             i, j, k = calc_ijk(m, nx, ny)
-            # considering periodic boundary conditions.
+            # consider periodic boundary conditions
             for i_tmp in (i - nx, i, i + nx):
                 for j_tmp in (j - ny, j, j + ny):
                     for k_tmp in (k - nz, k, k + nz):
                         values_init.append(random.random())
                         init_p_ls.append(self.__calc_position(i_tmp, j_tmp, k_tmp))
 
-        # Generate distance matrix of initial points
+        # generate distance matrix of initial points
         init_p_arr = np.array(init_p_ls)
         dist_init: np.ndarray = np.linalg.norm(
             (init_p_arr[:, np.newaxis, :] - init_p_arr) * range_scale, axis=2
         )
 
-        # dist to initial points to interpolation points (Γ(X - xn)^T)
+        # distance to initial points to interpolation points (Γ(X - xn)^T)
         dist_interp: List = []
         for m in m_remain:
             point_n = self.__calc_position(*calc_ijk(m, nx, ny))
@@ -1055,7 +1056,7 @@ class Cube:
 
         wn: np.ndarray = np.matmul(gamma_init_inv, gamma_interp)[:n_init]
         # get m
-        # The sum of weights is considered a probability
+        # The sum of the weights is considered a probability
         values: np.ndarray = np.array(values_init)
         prob = np.matmul(values, wn)
         m_selected: List = np.array(m_remain)[
@@ -1065,7 +1066,7 @@ class Cube:
         return set(m_selected)
 
     def __calc_position(self, i: int, j: int, k: int) -> np.ndarray:
-        """Calculate potition from 3d indecices.
+        """Calculate the location from 3d indices.
         Give a random number to prevent the distance matrix from falling in rank.
         Args:
             i (int): Index of X coordinates
@@ -1082,17 +1083,17 @@ class Cube:
         self, m_remain: Set, num: int, m_target: Set, adj_rate: float, shape: Tuple
     ) -> Set:
         """Set elements based on the lowest rate adjacent to a particular
-        element
+        element.
 
         Args:
             m_remain (Set): Set of global indices that may be assigned
             num (int): Number to be selected
             m_target (Set): Set of elements to be considered adjacent or not
             adj_rate (float): Lowest rate of adjacent
-            shape (int): Tuple containing nx, ny, nz
+            shape (int): Tuple containing nx, ny, and nz
 
         Returns:
-            Set: Set of global indecies selected.
+            Set: Set of global indecies selected
         """
         # number of objective adjacent elements
         num_adj_obs: int = int(float(num) * adj_rate)
@@ -1136,7 +1137,7 @@ class Cube:
 
         Args:
             m_target (Set): Set of global indices
-            shape (Tuple): Tuple containing nx, ny, nz
+            shape (Tuple): Tuple containing nx, ny, and nz
 
         Returns:
             Set: Set of adjacent global indeces
@@ -1189,9 +1190,9 @@ class Cube:
         return 0.5 * (1.0 - np.exp(-1.0 * c * _dist))
 
     def set_ib(self, shape: Tuple[int, int, int] = None) -> None:
-        """set local indices (0~26) to global indices (0~m)"""
+        """Set local indices (0–26) to global indices (0–m)"""
         # Construct the neighbor table, ib(m,n)
-        # First construct 27 neighbor table in terms of delta i, delta j, delta k
+        # First, construct 27 neighbor table in terms of delta i, delta j, delta k
         # (See Table 3 in manual)
         if shape is None:
             nz, ny, nx, _, _ = self.get_pix_tensor().shape
@@ -1281,8 +1282,7 @@ class Cube:
             self.__set_av_m(Av=Av, m=m, ib=self.ib, dk=self.dkv, pix=self.pix)
         self.Av = np.array(Av, dtype=np.float64)
         # As
-        # Assuming matrices for the same face are equal
-        # (e.g., dks[ib[0][1]]==dks[ib[1][0]])
+        # dks[ib[0][1]]==dks[ib[1][0]]
         if self.dks is not None:
             As: List = [None for _ in range(ns)]
             for m in range(ns):
@@ -1299,7 +1299,7 @@ class Cube:
         Args:
             Av (List): 2d list of global matrix A.
             m (int): Global 1d labelling index.
-            ib (List): Neighbor labeling 2d list.
+            ib (List): Neighbor 2d labeling list.
             dk (List): Stiffness matrix (nphase, 8, 8)
             pix (List): 1d list identifying conductivity tensors
         """
@@ -1386,21 +1386,21 @@ class Cube:
         """
         ib_m = ib[m]
         am = [None for _ in range(27)]
-        # Faces perpendicular to X axis (counterclockwise from bottom left)
+        # faces perpendicular to X axis (counterclockwise from bottom left)
         x0, x1, x2, x3 = (
             dk[ib_m[12]][0],
             dk[ib_m[24]][0],
             dk[ib_m[26]][0],
             dk[ib_m[4]][0],
         )
-        # Faces perpendicular to Y axis (counterclockwise from bottom left)
+        # faces perpendicular to Y axis (counterclockwise from bottom left)
         y0, y1, y2, y3 = (
             dk[ib_m[14]][2],
             dk[ib_m[24]][2],
             dk[ib_m[26]][2],
             dk[ib_m[6]][2],
         )
-        # Faces perpendicular to Z axis (counterclockwise from bottom left)
+        # faces perpendicular to Z axis (counterclockwise from bottom left)
         z0, z1, z2, z3 = dk[ib_m[5]][4], dk[ib_m[4]][4], dk[ib_m[26]][4], dk[ib_m[6]][4]
 
         am[0] = z2[3][0] + z3[2][1] + x1[2][3] + x2[1][0]
@@ -1449,8 +1449,10 @@ class Cube:
         """Setter of the self.pix_tensor
 
         Args:
-            _pix_tensor (List[List[List[np.ndarray]]]): List containing the
-                conductivity tensor corresponding to the element (int) of self.pix
+            _pix_tensor (List[List[List[np.ndarray]]]): 3d list containing the
+                conductivity tensor. The first index increases along the
+                z direction, the second increases along the y direction,
+                and the third increases along the x direction.
         """
         self.pix_tensor = _pix_tensor
 
@@ -1458,8 +1460,9 @@ class Cube:
         """Setter of the self.dkv
 
         Args:
-            dkv (List[np.ndarray]): List containing the stiffness matrix of each
-                representative elementary volume
+            dkv (List[np.ndarray]): 1d list containing the stiffness matrix 
+                in order of the global indices (m). See pp.8 in 
+                Garboczi (1998) for details.
         """
         self.dkv = dkv
 
@@ -1467,9 +1470,9 @@ class Cube:
         """Setter of the self.dks
 
         Args:
-            _dks (List[List[np.ndarray]]): List containing surface stiffness matrix
-                1st index: Global index (m)
-                2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+            _dks (List[List[np.ndarray]]): List containing surface stiffness
+                matrix in order of global indices (m). See "add_sigmas_by_ventcel"
+                in this class for details.
         """
         self.dks = _dks
 
@@ -1477,8 +1480,8 @@ class Cube:
         """Setter of the self.sigmav
 
         Args:
-            _sigmav (List[np.ndarray]): List containing the conductivity tensor
-                for each element (index: m)
+            _sigmav (List[np.ndarray]): List containing the electrical
+                conductivity tensor (3×3) in order of global indices (m).
         """
         self.sigmav = _sigmav
 
@@ -1486,8 +1489,8 @@ class Cube:
         """Setter of the self.sigmas
 
         Args:
-            _sigmas (List[List[Tuple[float, float]]]): List containing the pair of the
-                Debye length (m) and surface conductivity tensor
+            _sigmas (List[List[Tuple[float, float]]]): List containing the pair
+            of the EDL thickness (in m) and surface conductivity tensor
             1st index: Global index (m)
             2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
         """
@@ -1505,7 +1508,8 @@ class Cube:
         """Setter of the self.pix
 
         Args:
-            _pix (List[int]): Index of conductivity tensors ordered by global index (m)
+            _pix (List[int]): Index of conductivity tensors ordered by
+                global index (m). See pp.8 in Garboczi for details.
         """
         self.pix = _pix
 

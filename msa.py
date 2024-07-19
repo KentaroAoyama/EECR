@@ -37,7 +37,7 @@ def __calc_pn(
     Args:
         __gamma (float): Γ in Roger et al. (2009).
         _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+                values are properties of each species.
 
     Returns:
         float: Pn
@@ -60,8 +60,8 @@ def __calc_omega(
 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
-        _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+        _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
+            values are properties of each species.
 
     Returns:
         float: Ω
@@ -81,8 +81,8 @@ def __calc_delta(
     """Calculate Δ in in Roger et al. (2009) by solving Eq.(21).
 
     Args:
-        _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+        _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
+            values are properties of each species.
 
     Returns:
         float: Δ
@@ -101,12 +101,12 @@ def __calc_eq18(__gamma: float, _msa_props: Dict, _t: float, _dielec: float) -> 
     Args:
         __gamma (float): Γ in Roger et al. (2009).
         _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+                values are properties of each species.
         _t (float): Absolute temperature (K)
         _dielec (float): Dielectric constant (F/m)
 
     Returns:
-        float: Left hand side - Right hand side of Eq.(18) in Roger et al. (2009).
+        float: Left-hand side minus right-hand side of Eq.(18) in Roger et al. (2009).
     """
     _e: float = const.ELEMENTARY_CHARGE
     _kb: float = const.BOLTZMANN_CONST
@@ -136,7 +136,7 @@ def __calc_gamma(_msa_props: Dict, _t: float, _dielec: float) -> float:
 
     Args:
         _msa_props (Dict): keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+                values are properties of each species.
         _t (float): Absolute temperature (K)
         _dielec (float): Dielectric constant of water (F/m)
 
@@ -181,7 +181,7 @@ def __calc_dvhydi(
 
     Args:
         _msa_props (Dict): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+            values are properties of each species.
         _t (float): Absolute temperature (K)
         _p (float): Absolute pressure (Pa)
         _dielec (float): Dielectric constant of water (F/m)
@@ -262,7 +262,7 @@ def __calc_y(_msa_props: Dict[str, Dict], _kappa: float, _gamma: float) -> float
 
     Args:
         _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+            values are properties of each species.
         _kappa (float): κ in Roger et al. (2009)
         _gamma (float): Γ in Roger et al. (2009)
 
@@ -327,9 +327,9 @@ def __calc_alphap(
         _omega_ls (float): List containing ωi in Eq.(12)
         _omega_bar (float): ω with bar in Eq.(18)
         _t_ls (List): List containing ti in Eq.(18)
-        _min (float, optional): The minimum value used in the bisection method.
+        _min (float): The minimum value used in the bisection method.
             Defaults to 0.0.
-        _max (float, optional): The maximum value used in the bisection method.
+        _max (float): The maximum value used in the bisection method.
             Defaults to 1.0e5.
 
     Returns:
@@ -381,7 +381,7 @@ def __calc_kappa(_msa_props: Dict[str, Dict], _t: float, _dielec: float) -> floa
 
     Args:
         _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+            values are properties of each species.
         _t (float): Absolute temperature (K)
         _dielec (float): Dielectric constant (F/m)
 
@@ -411,9 +411,9 @@ def __calc_dkkkk(
     """Calculate δkk/kk in Roger et al. (2009)
 
     Args:
-        _k (str): Ion Species
+        _k (str): Name of ion species
         _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+            values are properties of each species.
         ki_pk (Dict[Tuple, float]): χpk in Eq.(4)
         sigma_ij (Dict[Tuple, float]): σij in Eq.(4)
         _t (float): Absolute temperature (K) in Eq.(4)
@@ -470,10 +470,10 @@ def __calc_mobility(_s: str, _t: float, _msa_props: Dict[str, Dict]) -> float:
     """Calculate the mobility of a single ion species using Eq.(1)
 
     Args:
-        _s (str): Ion species
+        _s (str): Name of ion species
         _t (float): Absolute temperature (K)
         _msa_props (Dict[str, Dict]): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+            values are properties of each species.
 
     Returns:
         float: Eq.(1) / (e * abs(z) * n)
@@ -505,9 +505,9 @@ def calc_mobility(
 
     Args:
         ion_props (Dict): Keys are ionic species (Na, Cl, etc.), and
-                values are properties of dict.
+            values are properties of each species.
         temperature (float): Absolute temperature (K)
-        dielec (float): Dielectric permittivity (F)
+        dielec (float): Dielectric permittivity (F/m)
         pressure (float): Absolute pressure (Pa)
 
     Returns:
@@ -533,7 +533,7 @@ def calc_mobility(
         if _si in _ion_props:
             del _ion_props[_si]
 
-    # Assume that the set of keys in _ion_props excluding H+ and OH- is equal to the set
+    # assume that the set of keys in _ion_props excluding H+ and OH- is equal to the set
     # of keys in _msa_props
     assert set(list(_ion_props.keys())) <= set(list(_msa_props.keys()))
 

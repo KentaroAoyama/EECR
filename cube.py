@@ -24,11 +24,11 @@ class Cube:
     This program is based on Garboczi (1998).
 
     Reference: Garboczi, E. (1998), Finite Element and Finite Difference Programs for
-                    Computing the Linear Electric and Elastic Properties of Digital
-                    Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
-                    National Institute of Standards and Technology, Gaithersburg, MD,
-                    [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
-                    (Accessed January 20, 2023)
+        Computing the Linear Electric and Elastic Properties of Digital
+        Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
+        National Institute of Standards and Technology, Gaithersburg, MD,
+        [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
+        (Accessed January 20, 2023)
     """
 
     def __init__(
@@ -1517,7 +1517,7 @@ class Cube:
         """Setter of the self.ex
 
         Args:
-            ex (float): Electric field in X direction (V/grid number)
+            ex (float): Electric field in X-axis (V/grid number)
         """
         self.ex = ex
 
@@ -1525,15 +1525,15 @@ class Cube:
         """Setter of the self.ey
 
         Args:
-            ey (float): Electric field in Y direction (V/grid number)
+            ey (float): Electric field in Y-axis (V/grid number)
         """
         self.ey = ey
 
     def set_ez(self, ez: float) -> None:
-        """Setter of the self.ey
+        """Setter of the self.ez
 
         Args:
-            ez (float): Electric field in Y direction (V/grid number)
+            ez (float): Electric field in Z-axis (V/grid number)
         """
         self.ez = ez
 
@@ -1541,7 +1541,7 @@ class Cube:
         """Setter of the self.A
 
         Args:
-            A (np.ndarray): 2d global stiffness matrix (number of the element × 27) 
+            A (np.ndarray): Global stiffness matrix (number of the element × 27)
         """
         self.A = A
 
@@ -1549,16 +1549,17 @@ class Cube:
         """Setter of the self.Av
 
         Args:
-            Av (np.ndarray): 2d global stiffness matrix of representative elementary volume
+            Av (np.ndarray): Global stiffness matrix for volume element
                 (number of the element × 27) 
         """
         self.Av = Av
     
     def set_As(self, As: np.ndarray) -> None:
-        """Setter of the self.Av
+        """Setter of the self.As
 
         Args:
-            As (np.ndarray): 2d global stiffness matrix of surface (number of the element × 27) 
+            As (np.ndarray): Global stiffness matrix for surface element
+                (number of the element × 27) 
         """
         self.As = As
 
@@ -1611,9 +1612,10 @@ class Cube:
         """Getter of the pix in 5d shape.
 
         Returns:
-            np.ndarray or None: 5d array of conductivity tensor. Each index indicate node.
-                First index increases along z direction and second index increases along y
-                direction, and third index increases along z direction. If the pix is not
+            np.ndarray or None: 5d array containing the conductivity tensor.
+                Each index indicates a voxel. The first index increases along
+                the z-axis, the second increases along the y-axis, and the
+                third increases along the x-axis. If the pix_tensor is not
                 created, return None.
         """
         if self.pix_tensor is not None:
@@ -1624,22 +1626,26 @@ class Cube:
         """Getter of the stiffness matrix of representative elementary volume.
 
         Returns:
-            List[np.ndarray] or None: Stiffness matrix described at pp.8 in Garboczi (1998). First
-                index indicates argument variable of sigma's indices (0 to 7) indicates
-                the location of the node (see Fig.1 of Garboczi, 1998). If the stiffness
-                matrix is not calculated, return None.
+            List[np.ndarray] or None: Stiffness matrix described at pp.8 in
+                Garboczi (1998). The first index corresponds to the integer
+                obtained by pix(m) (see pp.8 in Garboczi, 1998). The second
+                and third indices  (0 to 7) indicates the location of the 
+                node for each volume element (see Fig.1 of Garboczi, 1998).
+                If the stiffness matrix is not calculated, return None.
         """
         if self.dkv is not None:
             return deepcopy(self.dkv)
         return self.dkv
 
     def get_dks(self) -> Union[List[List[np.ndarray]], None]:
-        """Getter of the stiffness matrix in 3d shape.
+        """Getter of the surfacestiffness matrix in 3d shape.
 
         Returns:
             List[List[np.ndarray]]: List containing surface stiffness matrix
                 1st index: Global index (m)
                 2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+                3rd & 4th indices: Location of the node for each surface element
+            If the surface stiffness matrix is not calculated, return None.
         """
         if self.dks is not None:
             return deepcopy(self.dks)
@@ -1649,30 +1655,34 @@ class Cube:
         """Getter of the conductivity tensor in 3d shape.
 
         Returns:
-            List or None: 3d list of conductivity tensor adescribed at pp.6 in in Garboczi
-                (1998). First index is the identifier of the tensor. Second and
-                third indexes indicate the row and column of conductivity tensor
-                respectively. If the sigma is not calculated, return None.
+            List or None: 3d list of conductivity tensor adescribed at
+                pp.6 in in Garboczi (1998). The first index is the global
+                index (m). The second and third indexes indicate the row
+                and column of conductivity tensor respectively.
+                If the conductivity tensor is not assigned, return None.
         """
         if self.sigmav is not None:
             return deepcopy(self.sigmav)
         return self.sigmav
     
     def get_sigmas(self) -> Union[List, None]:
-        """Getter of the surface conductivity tensor in 3d shape.
+        """Getter of the surface conductivity for each surface element.
 
         Returns:
-            List or None: 3d list of surface conductivity tensor.
+            List or None: 2d list of surface conductivity
+                1st index: Global index (m)
+                2nd index: Face index (X-, X+, Y-, Y+, Z-, Z+)
+            If the surface conductivity is not assigned, return None.   
         """
         if self.sigmas is not None:
             return deepcopy(self.sigmas)
         return self.sigmas
     
     def get_edge_length(self) -> Union[float, None]:
-        """Getter of the edge length (m) of cubic cell.
+        """Getter of the edge length (in m) of cubic cell.
 
         Returns:
-            float or None: Edge length of cubic cell (m)
+            float or None: Edge length of cubic cell (in m)
         """
         return self.edge_length
     
@@ -1680,26 +1690,28 @@ class Cube:
         """Getter of the neighbor labelling list in 2d shape.
 
         Returns:
-            List or None: 2d list of neighbor labelling described at pp.8 to 11 in Garboczi
-                (1998). First index indicates one dimensional labbeling scheme (m)
-                and second index indicates neighbor node index of m'th node. m is
-                calculated as follows:
+            List or None: 2d list of neighbor labelling described in
+                pp.8 to 11 in Garboczi (1998). The first index indicates
+                one dimensional labbeling scheme (m) and second index
+                indicates neighbor node index of m'th node. m is calculated
+                as follows:
                     m=nx*ny*(k-1)+nx*(j-1)+i
-                where nx, ny, and nz are pix_tensor size of x, y, and z direction. And i,
-                j, and k are the indexes of x, y, and z direction. If the conductivity
-                tensor is not calculated, return None.
+                where nx, ny, and nz are total number of grid in x, y,
+                and z-axis. i, j, and k are the indices of x, y, and z-axis.
+                If the neighbor labelling list is not calculated, return None.
         """
         if self.ib is not None:
             return deepcopy(self.ib)
         return self.ib
 
     def get_pix(self) -> Union[List, None]:
-        """Getter of the 1d list mapping the index of the conductivity tensor from the
-        index (m) of the one dimensional labbling scheme
+        """Getter of the 1d list mapping the index of the self.dkv from
+        the one dimensional labbling scheme (m). See pp.8 in Garboczi (1998)
+        for details.
 
         Returns:
-            List or None: 1d list to get the first index of sigma described at pp.8 in in
-                Garboczi (1998). Index indicates one dimensional labbeling scheme (m).
+            List or None: 1d list for mapping the one dimensional labeling
+                scheme to the index of the self.dkv. 
                 If the pix is not created, return None.
         """
         if self.pix is not None:
@@ -1707,32 +1719,32 @@ class Cube:
         return self.pix
 
     def get_ex(self) -> Union[np.float64, None]:
-        """Getter of the electric field in the x direction.
+        """Getter of the electric field in the x-axis.
 
         Returns:
             np.float64 or None: Electrical field of x direction. The unit is volt/Δx
-                (Δx is the pix size of x direction), which is somewhat differnt from
-                the description at pp.7 in Garboczi (1998). If the ex is not set, return None.
+                (Δx is the total grid size in x-axis).
+                If the ex is not set, return None.
         """
         return self.ex
 
     def get_ey(self) -> Union[np.float64, None]:
-        """Getter of the electric field in the y direction.
+        """Getter of the electric field in the y-axis.
 
         Returns:
             np.float64 or None: Electrical field of y direction. The unit is volt/Δy
-                (Δy is the pix size of y direction), which is somewhat differnt from
-                the description at pp.7 in Garboczi (1998). If the ey is not set, return None.
+                (Δy is the total grid size in y-axis).
+                If the ey is not set, return None.
         """
         return self.ey
 
     def get_ez(self) -> Union[np.float64, None]:
-        """Getter of the electric field in the z direction.
+        """Getter of the electric field in the z-axis.
 
         Returns:
-            np.float64 or None: Electrical field of z direction. Note that the unit is volt/Δz
-                (Δz is the pix size of z direction), which is somewhat differnt from the
-                description at pp.7 in Garboczi (1998). If the ez is not set, return None.
+            np.float64 or None: Electrical field of z-axis. The unit is volt/Δz
+                (Δz is the total grid size in z-axis). 
+                If the ez is not set, return None.
         """
         return self.ez
 
@@ -1747,7 +1759,8 @@ class Cube:
         return self.A
 
     def get_Av(self) -> Union[np.ndarray, None]:
-        """Getter of the global volume stiffness matrix A
+        """Getter of the global volume stiffness matrix Av
+            (same as the "A" in Garboczi, 1998).
 
         Returns:
             np.ndarray or None: global volume stiffness matrix
@@ -1757,7 +1770,7 @@ class Cube:
         return self.Av
 
     def get_As(self) -> Union[np.ndarray, None]:
-        """Getter of the Global surface stiffness matrix A
+        """Getter of the global surface stiffness matrix As
 
         Returns:
             np.ndarray or None: Global surface stiffness matrix
@@ -1770,9 +1783,10 @@ class Cube:
         """Getter of the coefficient matrix b
 
         Returns:
-            np.ndarray or None: Coefficient matrix described at pp.11 in Garboczi (1998).
-                By calculating the inner product of u and b, the energy loss at the boundary
-                can be calculated. If b is not calculated, return None.
+            np.ndarray or None: Coefficient matrix described at pp.11 in 
+                Garboczi (1998). By calculating the inner product of potential 
+                (u) and b, the energy loss at the boundary can be calculated. 
+                If b is not calculated, return None.
         """
         if self.B is not None:
             return deepcopy(self.B)
@@ -1782,8 +1796,9 @@ class Cube:
         """Getter of the constant of the energy loss at the boundery.
 
         Returns:
-            np.float64 or None: Constant of the energy loss at the boundery which is described
-                at pp.11 in Garboczi (1998). If c is not calculated, return None.
+            np.float64 or None: Constant of the energy loss at the boundery
+                which is described at pp.11 in Garboczi (1998).
+                If c is not calculated, return None.
         """
         return self.C
     
@@ -1818,7 +1833,7 @@ class Cube:
         return self.rotation_angle_ls
 
     def get_shape(self) -> Union[Tuple[int], None]:
-        """Getter for the shpe of the cubic FEM mesh
+        """Getter for the shpe of the cubic mesh
 
         Returns:
             Tuple[int] or None: shape (nz, ny, nx)
@@ -1836,7 +1851,7 @@ def round_half_up(f: float) -> int:
         f (float): Float number
 
     Returns:
-        int: Int number
+        int: Integer
     """
     return int(Decimal(f).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
@@ -1850,8 +1865,8 @@ def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
         i (int): Index of x direction.
         j (int): Index of y direction.
         k (int): Index of z direction.
-        nx (int): pix size of x direction.
-        ny (int): pix size of y direction.
+        nx (int): Total grid size in x-axis.
+        ny (int): Total grid size in y-axis.
 
     Returns:
         int: One dimensional labbeling index (m)
@@ -1860,15 +1875,15 @@ def calc_m(i: int, j: int, k: int, nx: int, ny: int) -> int:
 
 
 def calc_ijk(m: int, nx: int, ny: int) -> Tuple[int]:
-    """Find the index, i, j, k of a 3-dimensional list from m
+    """Find the voxel's index, i, j, k from global index (m)
 
     Args:
         m (int): One dimensional labbeling index (m)
-        nx (int): pix size of x direction.
-        ny (int): pix size of y direction.
+        nx (int): Total grid size in x-axis.
+        ny (int): Total grid size in y-axis.
 
     Returns:
-        int: i, j, k of a 3-dimensional list
+        Tuple[int]: Voxel's index i (x-axis), j (y-axis), k (z-axis).
     """
     _m, i = divmod(m, nx)
     k, j = divmod(_m, ny)
@@ -1878,7 +1893,7 @@ def calc_ijk(m: int, nx: int, ny: int) -> Tuple[int]:
 def random_rotation_matrix() -> np.ndarray:
     """Calculate rotation matrix
     Returns:
-        np.ndarray: 3d rotation matrix with 3 rows and 3 columns
+        np.ndarray: Rotation matrix (3×3) 
     """
     random_matrix = np.random.rand(3, 3)
     q, _ = np.linalg.qr(random_matrix)
@@ -1892,7 +1907,7 @@ def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.
     """Round up minute negative values
 
     Args:
-        _arr (np.ndarray): Square matrix rounded up
+        _arr (np.ndarray): Square matrix to round up
         threshold (float): Negative value to be considered 0
 
     Returns:
@@ -1906,13 +1921,13 @@ def roundup_small_negative(_arr: np.ndarray, threshold: float = -1.0e-16) -> np.
 
 
 def is_fluid(_instance: Any) -> bool:
-    """Function to return whether the parent class of _instance is Fluid or not.
+    """Function to judge whether the parent class of _instance is Fluid or not.
 
     Args:
-        _instance (Any): Instances generated from any class
+        _instance (Any): Instances to be judged
 
     Returns:
-        bool: If parant class of the _instance is Fluid, return True
+        bool: True if parant class of the _instance is Fluid
     """
     return _instance.__class__.__base__ is Fluid
 
@@ -1921,10 +1936,10 @@ def xm_index(i: int) -> Union[None, int]:
     """Index on the X- surface. If i is not on the X-, return None
 
     Args:
-        i (int): Index of the node on each element.
+        i (int): Index of the volume element.
 
     Returns:
-        None or int: Index on the X- surface.
+        None or int: Index on the X- surface element.
     """
     if i in (1, 2, 5, 6):
         return None
@@ -1942,10 +1957,10 @@ def xp_index(i: int) -> Union[None, int]:
     """Index on the X+ surface. If i is not on the X+, return None
 
     Args:
-        i (int): Index of the node on each element.
+        i (int): Index of the volume element.
 
     Returns:
-        None or int: Index on the X+ surface.
+        None or int: Index on the X+ surface element.
     """
     if i in (0, 3, 4, 7):
         return None
@@ -1963,10 +1978,10 @@ def ym_index(i: int) -> Union[None, int]:
     """Index on the Y- surface. If i is not on the Y-, return None
 
     Args:
-        i (int): Index of the node on each element.
+        i (int): Index of the volume element.
 
     Returns:
-        None or int: Index on the Y- surface.
+        None or int: Index on the Y- surface element.
     """
     if i in (2, 3, 6, 7):
         return None
@@ -1984,10 +1999,10 @@ def yp_index(i: int) -> Union[None, int]:
     """Index on the Y- surface. If i is not on the Y+, return None
 
     Args:
-        i (int): Index of the node on each element.
+        i (int): Index of the volume element.
 
     Returns:
-        None or int: Index on the Y+ surface.
+        None or int: Index on the Y+ surface element.
     """
     if i in (0, 1, 4, 5):
         return None
@@ -2005,10 +2020,10 @@ def zm_index(i: int) -> Union[None, int]:
     """Index on the Z- surface. If i is not on the Z- return None
 
     Args:
-        i (int): Index of the node on each element.
+        i (int): Index of the volume element.
 
     Returns:
-        None or int: Index on the Z- surface.
+        None or int: Index on the Z- surface element.
     """
     if i in (4, 5, 6, 7):
         return None
@@ -2026,10 +2041,10 @@ def zp_index(i: int) -> Union[None, int]:
     """Index on the Z+ surface. If i is not on the Z+ return None
 
     Args:
-        i (int): Index of the node on each element.
+        i (int): Index of the volume element.
 
     Returns:
-        None or int: Index on the Z+ surface.
+        None or int: Index on the Z+ surface element.
     """
     if i in (0, 1, 2, 3):
         return None
@@ -2052,7 +2067,7 @@ def _energy_bounds(
     ymoff: bool = False,
     zmoff: bool = False,
 ) -> Tuple[float, float]:
-    """Calculate the energy produced by periodic boundary conditions
+    """Calculate the energy generated by periodic boundary conditions
         (b and c of Eq.(10) in Garboczi, 1997)
 
     Args:
@@ -2060,9 +2075,9 @@ def _energy_bounds(
         mm (int): Index of each node (corresponding to the index of b)
         dkvm (np.ndarray): Volumetric stiffness matrix (8×8)
         dksm (List[np.ndarray]): Surface stiffness matrix (6×4×4)
-        xmoff (bool): Whether to calculate the energy diverging in the plane of X- or not
-        ymoff (bool): Whether to calculate the energy diverging in the plane of Y- or not
-        zmoff (bool): Whether to calculate the energy diverging in the plane of Z- or not
+        xmoff (bool): True if not calculated in the X- plane.
+        ymoff (bool): True if not calculated in the Y- plane.
+        zmoff (bool): True if not calculated in the Z- plane.
 
     Returns:
         Tuple[float, float]: Energy generated at the boundary (b and c)

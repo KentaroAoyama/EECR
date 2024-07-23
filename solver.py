@@ -15,11 +15,11 @@ class FEM_Cube:
     This program is based on Garboczi (1998).
 
     Reference: Garboczi, E. (1998), Finite Element and Finite Difference Programs for
-                    Computing the Linear Electric and Elastic Properties of Digital
-                    Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
-                    National Institute of Standards and Technology, Gaithersburg, MD,
-                    [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
-                    (Accessed January 20, 2023)
+        Computing the Linear Electric and Elastic Properties of Digital
+        Images of Random Materials, NIST Interagency/Internal Report (NISTIR),
+        National Institute of Standards and Technology, Gaithersburg, MD,
+        [online], https://tsapps.nist.gov/publication/get_pdf.cfm?pub_id=860168
+        (Accessed January 20, 2023)
     """
 
     def __init__(self, fem_input: Cube = None, logger: Logger = None):
@@ -57,7 +57,7 @@ class FEM_Cube:
 
     def __init_default(self) -> None:
         """Initialize the following member variables:
-        self.u (np.ndarray): 1d array of the electrical potential (shape is m).
+        self.u (np.ndarray): 1d array of the electrical potential (length is m).
         self.A (np.ndarray): 2d array of global matrix (m rows and 27 colums)
             described at pp.11 to 12 in Garboczi (1998). By computing the inner
             product with self.u[m] in each row self.A[m], the gradient vector can
@@ -116,15 +116,15 @@ class FEM_Cube:
             self.logger.info("__init__ (solver) done")
 
     def run(self, kmax: int = 40, ldemb: int = 50, gtest: float = None) -> None:
-        """Calculate the distribution of electrical potentials that minimize the electrical
-        energy of the system using the conjugate gradient method.
+        """Calculate the distribution of electrical potentials that minimize
+        the electrical energy of the system using the conjugate gradient method.
 
         Args:
-            kmax (int): Maximum number to call __calc_dembx. Total number to conjugate gradient
-                calculation is kmax*ldemb.
+            kmax (int): Maximum number to call __calc_dembx.
             ldemb (int): Maximum number of conjugate gradient iterations.
-            gtest (float): Threshold used to determine convergence. When the squared value of
-                the L2 norm of gradient exceeds this value, the calculation is aborted.
+            gtest (float): Threshold used to determine convergence. When
+                the squared value of the L2 norm of gradient exceeds
+                this value, the calculation is stopped.
         """
         pix_tensor = self.fem_input.get_pix_tensor()
         if gtest is None:
@@ -187,8 +187,9 @@ class FEM_Cube:
                     self.logger.debug(f"condzs: {sum(self.currzs) / (ns * ez)}")
 
     def __calc_energy(self) -> None:
-        """Calculate the gradient (self.gb), the amount of electrostatic energy (self.u_tot),
-        and the square value of the step width (self.gg), and update the these member variables.
+        """Calculate the gradient (self.gb), the amount of electrostatic
+        energy (self.u_tot), and the square value of the step width (self.gg),
+        and update the these member variables.
         """
         assert isinstance(self.u, np.ndarray)
         assert isinstance(self.u2d, np.ndarray)
@@ -241,11 +242,7 @@ class FEM_Cube:
             self.h = self.gb + gamma * self.h
 
     def __calc_current_and_cond(self):
-        """Calculate and update macro currents (self.currx_ave, m_curry_ave, m_currz_ave)
-        and micro currents (self.currxv, m_curryv, m_currzv) and macro conductivity
-        (self.cond_x, self.cond_y, self.cond_z). af is the average field matrix, average
-        field in a pixel is af*u(pixel). The matrix af relates the nodal voltages to the
-        average field in the pixel.
+        """Calculate and update the electrical currents and conductivity.
         """
         # volumetric current density: iv=∫Σep(σpq)dv
         af = np.zeros(shape=(3, 8)).tolist()
@@ -274,7 +271,7 @@ class FEM_Cube:
         af[2][6] = -0.25
         af[2][7] = -0.25
 
-        # now compute current in each pixel
+        # now compute current for each pixel
         pix = self.fem_input.get_pix()
         pix_tensor = self.fem_input.get_pix_tensor()
         nz, ny, nx, _, _ = np.array(pix_tensor).shape
@@ -301,9 +298,10 @@ class FEM_Cube:
                     uu[5] = self.u[ib[m][18]]
                     uu[6] = self.u[ib[m][17]]
                     uu[7] = self.u[ib[m][16]]
-                    # Correct for periodic boundary conditions, some voltages are wrong
-                    # for a pixel on a periodic boundary. Since they come from an opposite
-                    # face, need to put in applied fields to correct them.
+                    # Correct for periodic boundary conditions, some voltages
+                    # are wrong for a pixel on a periodic boundary. Since 
+                    # they come from an opposite face, need to put in applied 
+                    # fields to correct them.
                     if i == nx - 1:
                         uu[1] -= ex * nx
                         uu[2] -= ex * nx
@@ -417,7 +415,7 @@ class FEM_Cube:
             self.currys = currys
             self.currzs = currzs
 
-        # Volume average currents
+        # volume average currents
         currx_ave, curry_ave, currz_ave = None, None, None
         if self.currxs is not None:
             currx_ave = np.mean(np.array(self.currxv) + np.array(self.currxs))

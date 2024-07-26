@@ -1,7 +1,7 @@
-"""Calculate the electrical properties of quartz
+"""Calculate the electrochemical properties of quartz
 """
 
-from typing import Dict
+from typing import Dict, Union
 from math import sqrt, exp, log, log10, sinh, cosh
 from logging import Logger
 from copy import deepcopy
@@ -65,12 +65,12 @@ class Quartz:
         xn: np.ndarray = None,
         logger: Logger = None,
     ):
-        """Initialize Quartz class. pH is assumed to be near the neutral.
+        """Initialize Quartz class.
 
         Args:
             nacl (NaCl): Instance of NaCl
-            gamma_o (float): Surface site density (Unit: sites/nm^2). Default value is
-                set based on Leroy et al. (2022).
+            gamma_o (float): Surface site density (Unit: sites/nm^2).
+                Default value is set based on Leroy et al. (2022).
             k_plus (float): Equilibrium constants of >SiOH + H+ ⇔ >SiOH2 at 25℃.
                 Default value is set based on Leroy et al. (2022).
             k_minus (float): Equilibrium constants of >SiOH ⇔ >SiO- + H+ at 25℃.
@@ -79,20 +79,34 @@ class Quartz:
                 Default value is set based on Leroy et al. (2022).
                 NOTE: if "method" is specified as "leroy2013" or "leroy2022", this
                 value means equilibrium constants of >SiO- + Na+ ⇔ >SiO- ー Na+
-                (eq.5 in Leroy et al., 2013).
-            c1 (float): Capacitance of surface used in Leroy et al.(2013) (C/m2).
+                (Eq.[5] in Leroy et al., 2013).
+            c1 (float): Capacitance of surface used in Leroy et al.(2013) (C/m^2).
                 Default value is set based on Leroy et al. (2022).
-            d (float): Distance (m) of stern plane to zeta plane in Leroy et al. (2022)
-            pzc (float): pH at point of zero charge. Default value is based on Revil &
-                Glover (1997).
+            d (float): Distance (m) of the Stern plane to the shear plane.
+                Default value is set based Leroy et al. (2022)
+            pzc (float): pH at point of zero charge. Default value is based on
+                Revil & Glover (1997).
             potential_0 (float): Surface plane potential (V)
             potential_stern (float): Stern plane potential (V)
-            potential_zeta (float): Zeta plane potential (V)
-            charge_0 (float): Charge density at O-layer (C/m2)
-            charge_stern (float): Charge density at stern layer (C/m2)
-            charge_diffuse (float): Charge density at diffuse layer (C/m2)
-            method (str): Methods to calculate the potential of the stern surface
-                (solve eq.44 or eq.106 or Leroy et al.(2013)'s model)
+            potential_zeta (float): Zeta potential (V)
+            charge_0 (float): Charge density of 0-layer (C/m^2)
+            charge_stern (float): Charge density of the Stern layer (C/m^2)
+            charge_diffuse (float): Charge density of the diffuse layer (C/m^2)
+            method (str): Methods to calculate the Stern potential:
+                "eq44": Eq.(44) in Revil & Glover (1997)
+                "eq106": Eq.(106) in Revil & Glover (1997)
+                "leroy2013": Basic Stern layer model proposed by Leroy et al. (2013)
+                "leroy2022": Basic Stern layer model proposed by Leroy et al. (2022)
+            xn (np.ndarray): Initial electrochemical parameter values used for the
+                Newton-Raphson method to solve the equations of BSM (Leroy et al. 2013;
+                Leroy et al. 2022). This column vector should contain the following
+                electrochemical properties in this order:
+                [[Surface potential (V),]
+                 [Stern plane potential (V),]
+                 [Zeta potential (V),]
+                 [Charge density on surface (C/m^2),]
+                 [Charge density of the Stern layer (C/m^2),]
+                 [Charge density of the diffuse layer (C/m^2)]]
             logger (Logger): Logger
         """
         assert pzc is not None or k_plus is not None, "Either pzc or k_plus must be set"
@@ -116,17 +130,16 @@ class Quartz:
         if self.logger is not None:
             self.logger.info("=== Initialize Quartz ===")
 
-        # parameters in eq.(106)
+        # parameters in Eq.(106)
         self.delta: float = None
         self.eta: float = None
         self.pkw: float = None
-        # re-set k_plus (eq.91)
+        # re-set k_plus (Eq.91)
         if self.k_plus is None:
-            # implicitly assume that activity coefficient of proton is 1
             _ch_pzc = 10.0 ** (-1.0 * pzc)
             self.k_plus = self.k_minus / (_ch_pzc**2)
 
-        # consider temperature dependence of equilibrium constant
+        # calculate equilibrium constant at given temperature
         dg_plus = calc_standard_gibbs_energy(self.k_plus, 298.15)
         dg_minus = calc_standard_gibbs_energy(self.k_minus, 298.15)
         dg_na = calc_standard_gibbs_energy(self.k_na, 298.15)
@@ -134,7 +147,7 @@ class Quartz:
         self.k_minus = calc_equibilium_const(dg_minus, self.temperature)
         self.k_na = calc_equibilium_const(dg_na, self.temperature)
 
-        # κ (inverted eq.(37) of Revil & Glover (1997), modified)
+        # κ (inverted Eq.(37) of Revil & Glover (1997), modified)
         _if = 0.0  # ionic strength
         for _s, _prop in self.ion_props.items():
             if _s in (Species.Na.name, Species.Cl.name):
@@ -156,14 +169,14 @@ class Quartz:
         self.qs_coeff: float = None
         self.cond_diffuse: float = None
         self.cond_stern: float = None
-        # stern plane mobility of Na+ (based on Zhang et al., 2011)
+        # mobility of Na+ in the Stern layer (based on Zhang et al., 2011)
         self.mobility_stern = self.ion_props[Species.Na.name][IonProp.Mobility.name] * (
             0.1
             + exp(-7.0 * self.ion_props[Species.Na.name][IonProp.Molality.name] - 0.105)
         )
         if self.potential_stern is None:
             if method == "eq44":
-                # eq.(44) in Revil & Glover (1997)
+                # Eq.(44) in Revil & Glover (1997)
                 self.potential_stern = bisect(self.__calc_eq_44, -0.5, 1.0)
                 self.potential_zeta = self.potential_stern
                 self.__calc_cond_surface_1997(nacl.get_cond())
@@ -173,7 +186,7 @@ class Quartz:
                     phidt=self.__calc_phid_tilda(self.potential_stern),
                 )
             if method == "eq106":
-                # eq.(106) in Revil & Glover (1997)
+                # Eq.(106) in Revil & Glover (1997)
                 # set δ
                 self.delta = self.k_plus / self.k_minus
                 # set η
@@ -207,7 +220,7 @@ class Quartz:
                     phidt=self.__calc_phid_tilda(self.potential_stern),
                 )
             if method == "leroy2013":
-                # Basic stern layer model proposed by Leroy et al. (2013)
+                # Basic Stern model proposed by Leroy et al. (2013)
                 self.qs_coeff = sqrt(
                     8000.0
                     * self.dielec_fluid
@@ -219,12 +232,12 @@ class Quartz:
                 self.__calc_cond_potential_and_charges_2013(xn)
                 self.cond_stern = self.__calc_stern_2013()
                 self.cond_diffuse = self.__calc_diffuse_1997()
-                # eq.(28)
+                # Eq.(28)
                 self.cond_surface = (
                     1.53e-9 + self.cond_diffuse + self.cond_stern
                 ) / self.length_edl + nacl.get_cond()
             if method == "leroy2022":
-                # Basic stern layer model proposed by Leroy et al. (2022).
+                # Basic Stern model proposed by Leroy et al. (2022).
                 # This model is a slight modification of Leroy et al. (2013).
                 self.qs_coeff = sqrt(
                     8000.0
@@ -235,7 +248,7 @@ class Quartz:
                     * self.ion_strength
                 )
                 self.__calc_cond_potential_and_charges_2013(xn)
-                # modify zeta plane potential by eq.(3)
+                # modify zeta potential by Eq.(3)
                 self.potential_zeta = (
                     self.potential_stern
                     - (self.potential_stern - self.potential_0)
@@ -243,7 +256,7 @@ class Quartz:
                     / (43.0 * const.DIELECTRIC_VACUUM)
                     * self.d
                 )
-                # eq.(28) in Leroy et al. (2013)
+                # Eq.(28) in Leroy et al. (2013)
                 self.cond_diffuse = self.__calc_diffuse_1997()
                 self.cond_stern = self.__calc_stern_2013()
                 self.cond_surface = (
@@ -258,13 +271,13 @@ class Quartz:
             self.logger.debug(f"cond surface: {self.cond_surface}")
 
     def __calc_eq_44(self, phid: float) -> float:
-        """Calculate eq.(44) (Qs+Qs0) in Revil & Glover (1997)
+        """Calculate Eq.(44) (Qs+Qs0) in Revil & Glover (1997)
 
         Args:
             phid (float): Surface (Stern) plane potential
 
         Returns:
-            float: Value of eq.(44)
+            float: Value of Eq.(44)
         """
 
         # molarities
@@ -276,10 +289,10 @@ class Quartz:
         Ah = self.ion_props[Species.H.name][IonProp.Activity.name]
         ANa = self.ion_props[Species.Na.name][IonProp.Activity.name]
 
-        # phid tilda in eqs.(100) and (103)
+        # phid tilda in Eqs.(100) and (103)
         phidt = self.__calc_phid_tilda(phid)
 
-        # charge density at diffuse layer (eq. 103)
+        # charge density at diffuse layer (Eq. 103)
         Qsd = sqrt(
             8000.0
             * self.dielec_fluid
@@ -294,13 +307,13 @@ class Quartz:
         return Qs0 + Qsd
 
     def __calc_qs0(self, ah: float, ana: float, phidt: float) -> float:
-        """Calculate surface charge density Qs0 (eq.100)
+        """Calculate surface charge density Qs0 (Eq.100 in Revil & Glover, 1997)
         NOTE: ignore the 5th item in the denominator
 
         Args:
             ah (float): Activity of H+
             ana (float): Activity of Na+
-            phidt (float): φd tilda in eqs.(100) and (103)
+            phidt (float): φd tilda in Eqs.(100) and (103)
 
         Returns:
             float: Surface charge density (C/m2)
@@ -320,10 +333,10 @@ class Quartz:
         )
 
     def __calc_phid_tilda(self, phid: float) -> float:
-        """Calculate phid tilda in eqs.(100) and (103).
+        """Calculate phid tilda in Eqs.(100) and (103) in Revil & Glover (1997)
 
         Args:
-            phid (float): Surface (Stern) plane potential (V)
+            phid (float): Zeta potential (V)
 
         Returns:
             float: Phid tilda (V)
@@ -336,13 +349,13 @@ class Quartz:
         )
 
     def __calc_eq106(self, _x: float) -> float:
-        """Calculate eq.(106) in Revil & Glover (1997)
+        """Calculate Eq.(106) in Revil & Glover (1997)
 
         Args:
-             _x (float): X in eq.(106)
+             _x (float): X in Eq.(106)
 
         Returns:
-            float: Value of eq.(106)
+            float: Value of Eq.(106)
         """
         if _x == 0.0:
             return -1 * float_info.max
@@ -359,10 +372,11 @@ class Quartz:
         return _t1 * _t2 * _t3 * _t4 + _t5
 
     def __calc_cond_surface_1997(self, cw: float) -> None:
-        """Calculate the specific conductivity of diffuse layer by Revil & Glover(1998)
+        """Calculate the specific surface conductivity of diffuse layer by
+        Revil & Glover(1998)
 
         Args:
-             cw (float): Conductivity of adjacent water
+             cw (float): Electrical conductivity of the free electrolyte
         """
         s_diffuse = self.__calc_diffuse_1997()
         s_stern = self.__calc_stern_1997()
@@ -380,7 +394,26 @@ class Quartz:
         oscillation_tol: float = 0.013,
         beta: float = 0.75,
         lamda: float = 2.0,
-    ) -> float:
+    ) -> None:
+        """Calculate the electrochemical properties on the surface of
+        quartz or amorphous silica. Eqs.(15)–(19) are solved by the damped
+        Newton-Raphson method.
+
+        Args:
+            xn (np.ndarray): Initial value of electrochemical properties (length is 6).
+            iter_max (int): Maximum number of iterations of the Newton-Raphson method.
+            convergence_condition (float): Convergence conditions (the L2 norm of the
+                equations) for the Newton-Raphson method.
+            oscillation_tol (float):Oscillation tolerance.
+            beta (float): Hyperparameter for damping((0, 1)). The larger this value,
+                the smaller the damping effect.
+            lamda (float): Hyperparameter for damping([1, ∞]); i.e., the amount
+                by which the step-width coefficients are updated in a single iteration.
+
+        Raises:
+            RuntimeError: Occurs if the loop count exceeds m_iter_max and
+                norm of step exceeds oscillation_tol
+        """
         if xn is None:
             t_ls = list(init_params.keys())
             _idx = np.argmin(np.square(np.array(t_ls) - self.temperature))
@@ -398,7 +431,7 @@ class Quartz:
         cou = 0
         while convergence_condition < norm_fn:
             _j = self.__calc_2013_jacobian(xn[0][0], xn[1][0])
-            # To avoid overflow when calculating the inverse matrix
+            # avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
             _j_inv = np.linalg.inv(_j)
             step = np.matmul(_j_inv, fn)
@@ -427,7 +460,7 @@ class Quartz:
                     )
                 else:
                     break
-        # NOTE: stern layer potential is equal to zeta potential
+        # NOTE: Stern potential is assumed to be equal to the zeta potential
         self.potential_0 = xn[0][0]
         self.potential_stern = xn[1][0]
         self.potential_zeta = xn[1][0]
@@ -436,6 +469,20 @@ class Quartz:
         self.charge_diffuse = xn[4][0]
 
     def __calc_functions(self, xn: np.ndarray) -> np.ndarray:
+        """Calculate f1–f5 in this class.
+
+        Args:
+            xn (np.ndarray): Containing the following electrochemical properties:
+                [Surface potential (V),
+                 Stern plane potential (V),
+                 Zeta potential (V),
+                 Charge density on surface (C/m^2),
+                 Charge density of the Stern layer (C/m^2),
+                 Charge density of the diffuse layer (C/m^2)]
+
+        Returns:
+            np.ndarray: Column vector containing the values of each function
+        """
         f1 = self.__calc_f1(
             xn[2][0],
             xn[0][0],
@@ -449,7 +496,16 @@ class Quartz:
         return fn
 
     def __calc_f1(self, q0: float, phi0: float, phib: float) -> float:
-        # eq.(15)
+        """Calculate Eq.(15) in Leroy et al. (2013).
+
+        Args:
+            q0 (float): Charge density on the surface (C/m^2)
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: Left-hand side minus right-hand side of Eq.(15)
+        """
         A = self.__calc_A(phi0, phib)
         e = const.ELEMENTARY_CHARGE
         gamma_sio = self.gamma_o / A
@@ -462,7 +518,16 @@ class Quartz:
         return q0 + e * (gamma_sio + gamma_siom)
 
     def __calc_f2(self, qb: float, phi0: float, phib: float) -> float:
-        # eq.(16)
+        """Calculate Eq.(15) in Leroy et al. (2013).
+
+        Args:
+            qb (float): Charge density of Stern layer (C/m^2)
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: Left-hand side minus right-hand side of Eq.(16)
+        """
         A = self.__calc_A(phi0, phib)
         e = const.ELEMENTARY_CHARGE
         gamma_siom = (
@@ -475,7 +540,15 @@ class Quartz:
         return qb - e * gamma_siom
 
     def __calc_f3(self, qs: float, phib: float) -> float:
-        # eq.(17)
+        """Calculate Eq.(17) in Leroy et al. (2013).
+
+        Args:
+            qs (float): Charge density of the diffuse layer (C/m^2)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: Left-hand side minus right-hand side of Eq.(17)
+        """
         return qs - self.qs_coeff * sinh(
             -(
                 const.ELEMENTARY_CHARGE
@@ -485,13 +558,41 @@ class Quartz:
         )
 
     def __calc_f4(self, q0: float, qb: float, qs: float) -> float:
-        # eq.(18)
+        """Calculate Eq.(18) in Leroy et al. (2013).
+
+        Args:
+            q0 (float): Charge density on the surface (C/m^2)
+            qb (float): Charge density of the Stern layer (C/m^2)
+            qs (float): Charge density of the diffuse layer (C/m^2)
+
+        Returns:
+            float: Left-hand side minus right-hand side of Eq.(18)
+        """
         return q0 + qb + qs
 
     def __calc_f5(self, q0: float, phi0: float, phib: float) -> float:
+        """Calculate Eq.(19) in Leroy et al. (2013).
+
+        Args:
+            q0 (float): Charge density on the surface (C/m^2)
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: Left-hand side minus right-hand side of Eq.(19)
+        """
         return phi0 - phib - q0 / self.c1
 
     def __calc_f1_phi0(self, phi0: float, phib: float) -> float:
+        """Calculate ∂f1/∂phi0
+
+        Args:
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: ∂f1/∂phi0
+        """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29Q+%2B+Divide%5BE*C%2Ca%2Bb*exp%5C%2840%29c*x%5C%2841%29%2Bd*exp%5C%2840%29c*y%5C%2841%29%5D*%5C%2840%291%2Bd*exp%5C%2840%29c*y%5C%2841%29%5C%2841%29%5C%2841%29%2Cx%5D&lang=ja
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
@@ -506,6 +607,15 @@ class Quartz:
         )
 
     def __calc_f1_phib(self, phi0: float, phib: float) -> float:
+        """Calculate ∂f1/∂phib
+
+        Args:
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: ∂f1/∂phib
+        """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29Q+%2B+Divide%5BA*C%2Ca%2Bb*exp%5C%2840%29c*x%5C%2841%29%2Bd*exp%5C%2840%29c*y%5C%2841%29%5D*%5C%2840%291%2Bd*exp%5C%2840%29c*y%5C%2841%29%5C%2841%29%5C%2841%29%2Cy%5D&lang=ja
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
@@ -519,6 +629,15 @@ class Quartz:
         ) ** 2
 
     def __calc_f2_phi0(self, phi0: float, phib: float) -> float:
+        """Calculate ∂f2/∂phi0
+
+        Args:
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: ∂f2/∂phi0
+        """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29Divide%5B-A*C%2Ca%2Bb*exp%5C%2840%29c*x%5C%2841%29%2Bd*exp%5C%2840%29c*y%5C%2841%29%5D*d*exp%5C%2840%29c*y%5C%2841%29%5C%2841%29%2Cx%5D&lang=ja
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
@@ -532,6 +651,15 @@ class Quartz:
         ) ** 2
 
     def __calc_f2_phib(self, phi0: float, phib: float) -> float:
+        """Calculate ∂f2/∂phib
+
+        Args:
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: ∂f2/∂phib
+        """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29Divide%5B-A*C%2Ca%2Bb*exp%5C%2840%29c*x%5C%2841%29%2Bd*exp%5C%2840%29c*y%5C%2841%29%5D*d*exp%5C%2840%29c*y%5C%2841%29%5C%2841%29%2Cy%5D&lang=ja
         e = const.ELEMENTARY_CHARGE
         kbt = const.BOLTZMANN_CONST * self.temperature
@@ -546,10 +674,27 @@ class Quartz:
         )
 
     def __calc_f3_phib(self, phib: float) -> float:
+        """Calculate ∂f3/∂phib
+
+        Args:
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            float: ∂f3/∂phib
+        """
         a = -const.ELEMENTARY_CHARGE / (2.0 * const.BOLTZMANN_CONST * self.temperature)
         return -self.qs_coeff * a * cosh(a * phib)
 
     def __calc_2013_jacobian(self, phi0: float, phib: float) -> np.ndarray:
+        """Calculate jacobians of f1 to f5 in this class.
+
+        Args:
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+
+        Returns:
+            np.ndarray: Jacobians (5×5)
+        """
         jacobian = np.zeros((5, 5), dtype=np.float64)
         jacobian[0][0] = self.__calc_f1_phi0(phi0, phib)
         jacobian[0][1] = self.__calc_f1_phib(phi0, phib)
@@ -567,10 +712,14 @@ class Quartz:
         return jacobian
 
     def __calc_A(self, phi0, phib) -> float:
-        """Calculate eq.(14) in Leroy et al.(2013)
+        """Calculate Eq.(14) in Leroy et al.(2013)
+        
+        Args:
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
 
         Returns:
-            float: Value of eq.(14)
+            float: Value of Eq.(14)
         """
         ah = self.ion_props[Species.H.name][IonProp.Activity.name]
         ana = self.ion_props[Species.Na.name][IonProp.Activity.name]
@@ -583,10 +732,11 @@ class Quartz:
         )
 
     def __calc_diffuse_1997(self) -> float:
-        """Calculate specific conductance of EDL by eq.(55) in Revil & Glover(1997)
+        """Calculate specific surface conductance of EDL by Eq.(55) in
+        Revil & Glover(1997)
 
         Returns:
-            float: Spesicic conductivity of EDL
+            float: Spesicic surface conductivity of EDL (S/m)
         """
         coeff = (
             2000.0 * const.AVOGADRO_CONST * self.length_edl * const.ELEMENTARY_CHARGE
@@ -618,10 +768,11 @@ class Quartz:
         return coeff * cs
 
     def __calc_stern_1997(self) -> float:
-        """Calculate stern layer conductivity by eq.(9) in Revil & Glover (1998)
+        """Calculate the Stern layer conductivity by Eq.(9) in
+        Revil & Glover (1998)
 
         Returns:
-            float: Conductivity of stern layer (S/m)
+            float: Conductivity of the Stern layer (S/m)
         """
         e = const.ELEMENTARY_CHARGE
         return (
@@ -632,13 +783,14 @@ class Quartz:
         )
 
     def __calc_stern_2013(self) -> float:
-        """Calculate stern layer conductivity by eq.(30) in Leroy et al. (2013)
+        """Calculate the Stern layer conductivity by Eq.(30) in
+        Leroy et al. (2013)
 
         Returns:
-            float: Conductivity of stern layer (S/m)
+            float: Conductivity of the Stern layer (S/m)
         """
         A = self.__calc_A(self.potential_0, self.potential_stern)
-        # eq.(13)
+        # Eq.(13)
         gamma_siom = (
             self.gamma_o
             / A
@@ -653,22 +805,25 @@ class Quartz:
         return const.ELEMENTARY_CHARGE * self.mobility_stern * gamma_siom
 
     def __calc_ohm(self, phid: float) -> float:
-        """Calculate eq.(84) in Revil & Glover (1997).
-        Also stated in Revil & Glover (1998), eq.(10).
+        """Calculate Eq.(84) in Revil & Glover (1997).
+        (also found in Revil & Glover (1998), Eq.[10])
 
+        Args:
+            phid (float): Zeta potential (V)
+        
         Returns:
             float: Ω0Na
         """
         Ah = self.ion_props[Species.H.name][IonProp.Activity.name]
         ANa = self.ion_props[Species.Na.name][IonProp.Activity.name]
-        # calculate A in eq.(84)
+        # calculate A in Eq.(84)
         # NOTE: ignore 5th term
         Ah0 = Ah * exp(self.__calc_phid_tilda(phid))
         A = 1.0 + self.k_plus * Ah0 + 1.0 / self.k_minus / Ah0 + self.k_na * ANa / Ah
         return self.k_na * ANa / (Ah * A)
 
     def __calc_cond_tensor(self):
-        """Calculate the conductivity tensor"""
+        """Calculate the electrical conductivity tensor"""
         cond_silica = 1.0e-12
         cond_tensor = np.array(
             [[cond_silica, 0.0, 0.0], [0.0, cond_silica, 0.0], [0.0, 0.0, cond_silica]],
@@ -676,45 +831,45 @@ class Quartz:
         )
         self.cond_tensor = cond_tensor
 
-    def get_cond_tensor(self) -> np.ndarray or None:
-        """Getter for the conductivity tensor
+    def get_cond_tensor(self) -> Union[np.ndarray, None]:
+        """Getter for the electrical conductivity tensor
 
         Returns:
-            np.ndarray: Conductivity tensor with 3 rows and 3 columns
+            np.ndarray: Electrical conductivity tensor (3×3)
         """
         if self.cond_tensor is not None:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
-    def get_potential_stern(self) -> float or None:
-        """Getter for the stern potential
+    def get_potential_stern(self) -> Union[float, None]:
+        """Getter for the Stern plane potential (V)
 
         Returns:
-            float: Stern plane potential
+            float: Stern plane potential (V)
         """
         return self.potential_stern
 
-    def get_cond_surface(self) -> float or None:
-        """Getter for the conductivity of infinite diffuse layer
+    def get_cond_surface(self) -> Union[float, None]:
+        """Getter for the electrical conductivity of the diffuse layer
 
         Returns:
-            float: Conductivity of the stern layer (Unit: S/m)
+            float: Electrical conductivity of the stern layer (S/m)
         """
         return self.cond_surface
 
-    def get_double_layer_length(self) -> float or None:
-        """Getter for the double layer length (surface to the end of the diffuse layer)
+    def get_double_layer_length(self) -> Union[float, None]:
+        """Getter for the EDL thickness (the Debye length by default)
 
         Returns:
-            float or None: Length of the electrical double layer
+            float or None: EDL thickness (m)
         """
         return self.length_edl
 
-    def get_surface_charge(self) -> float or None:
-        """Getter for the surface charge density (Qs0 in eq.100)
+    def get_surface_charge(self) -> Union[float, None]:
+        """Getter for the surface charge density (Qs0 in Eq.100)
 
         Returns:
-            float: Surface charge density (C/m2)
+            float: Surface charge density (C/m^2)
         """
         return self.charge_0
 

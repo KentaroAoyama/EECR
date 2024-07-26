@@ -2,26 +2,23 @@
 # pylint: disable=import-error
 # pylint: disable=invalid-name
 # pylint: disable=no-member
-from typing import Dict, List, Tuple, Set
+from typing import Dict, List, Tuple, Union
 from logging import Logger
 from sys import float_info
 from os import path, PathLike
 import math
 from copy import deepcopy
 from functools import partial
-import random
 
 import pickle
 import numpy as np
 from scipy.integrate import quad
-from deap import creator, base, tools
-import optuna
 
 import constants as const
 from constants import Species, IonProp
 from fluid import NaCl
 
-# load global parameters
+# load initial parameters for Newton-Raphson method
 # for smectite, infinite diffuse layer case
 smectite_inf_init_pth: PathLike = path.join(
     path.dirname(__file__), "params", "smectite_inf_init.pkl"
@@ -45,7 +42,7 @@ with open(smectite_trun_init_pth, "rb") as pkf:
 
 
 class TLMParams:
-    """TLM parameters"""
+    """Parameters of triple layer model (TLM)"""
 
     def __init__(
         self,
@@ -74,22 +71,22 @@ class TLMParams:
         """
         Args:
             T (float): Absolute temperature (K)
-            gamma_1 (float): Surface site densities of aluminol (unit: sites/nm^2).
-            gamma_2 (float): Surface site densities of sianol (unit: sites/nm^2).
-            gamma_3 (float): Surface site densities of >Si-O-Al< (unit: sites/nm^2).
-            qi (float): Layer charge density (charge/nm^2).
-            k1 (float): Equilibrium constant of >AlOH2 ⇔ >AlOH + H+
-            k2 (float): Equilibrium constant of >SiOH ⇔ >SiO + H+
-            k3 (float): Equilibrium constant of >XH ⇔ >X + H+ (※)
-            k4 (float): Equilibrium constant of >XH ⇔ >X + Na+ (※)
-            c1 (float): Capacitance of stern layer (unit: F/m2).
-            c2 (float): Capacitance of diffuse layer (unit: F/m2).
-        ※ >X stands for surface site >Al-O-Si<
-        ※ The subscript i means that it is used to calculate the properties of the
-        interlayer, and o means that it is used to calculate the properties of the
-        EDLs that develop in the bulk solution
+            gamma_1 (float, ※1): Surface site densities of aluminol (sites/nm^2).
+            gamma_2 (float, ※1): Surface site densities of sianol (sites/nm^2).
+            gamma_3 (float, ※1): Surface site densities of >Si-O-Al-O (sites/nm^2).
+            qi (float, ※1): Layer charge density (charge/nm^2).
+            k1 (float, ※1): Equilibrium constant of >AlOH2 ⇔ >AlOH + H+
+            k2 (float, ※1): Equilibrium constant of >SiOH ⇔ >SiO + H+
+            k3 (float, ※1): Equilibrium constant of >XH ⇔ >X + H+ (※2)
+            k4 (float, ※1): Equilibrium constant of >XH ⇔ >X + Na+ (※2)
+            c1 (float, ※1): Capacitance of stern layer (unit: F/m2).
+            c2 (float, ※1): Capacitance of diffuse layer (unit: F/m2).
+        ※1 The subscript i indicates that it is used to calculate the properties
+            of the interlayer, and o indicates that it is used to calculate the
+            properties of the EDLs that develop on the bulk solution
+        ※2 >X stands for the surface site >Al-O-Si<
         """
-        # Inner
+        # Inner part
         self.gamma_1i = gamma_1i
         self.gamma_2i = gamma_2i
         self.gamma_3i = gamma_3i
@@ -101,7 +98,7 @@ class TLMParams:
         self.c1i = c1i
         self.c2i = c2i
 
-        # Outer
+        # Outer part
         self.gamma_1o = gamma_1o
         self.gamma_2o = gamma_2o
         self.gamma_3o = gamma_3o
@@ -114,7 +111,7 @@ class TLMParams:
         self.c2o = c2o
 
     def calc_K_T(self, K: float, T: float) -> float:
-        """Corrects the equilibrium constant for temperature.
+        """Calculate the equilibrium constant at temperature T.
 
         Args:
             K (float): Equilibrium constant at 25℃
@@ -122,28 +119,34 @@ class TLMParams:
 
         Returns:
             float: Equilibrium constant at T (K)
+        NOTE: This equation assumes that the standard Gibbs
+            energy of formation is constant
         """
+        # NOTE: This equation assumes that the standard Gibbs
+        # energy of formation is constant
         return const.calc_equibilium_const(
             const.calc_standard_gibbs_energy(K, 298.15), T
         )
 
 
+# TODO: modify tensor calculations to be overridden by each inherited class
 class Phyllosilicate:
     """
     Phyllosilicate Class
-    It has a function to calculate the EDL properties and electrical conductivity of inner and
-    outer plane.
+    It has a function to calculate the EDL properties and electrical conductivity
+        of inner and outer plane.
 
     To calculate the surface potential, we use the equations proposed by
-    Gonçalvès et al. (2007). The equations have been modified in the following points:
-        1. In eq.(11), add Avogadro's number and a factor of 1000 to match units of concentration
-        2. The units of Qi in eq.(16) were modified from charges nm-2 to C/m2
-        3. The phib in eq.(23) was modified to phi0.
-        4. Multiply the first term in eq.(16) and eq.(17) by 1.0e18
-        5. Added the negative sign of the molecule of sinh in eq.(21).
-        6. Corrected phiD in eq.(21) to phid (uppercase to lowercase).
-        7. Multiply the coefficient of eq.(32) by Avogadro's constant
-        8. Cf in eq.(32) and (34) are multiplied by 1000 for unit matching.
+    Gonçalvès et al. (2007). Those equations have been modified in the following points:
+        1. Eq.(11): Avogadro's number and a factor of 1000 to match concentration
+            units were added.
+        2. Eq.(16): The Qi unit was modified from "charges nm-2" to "C/m2."
+        3. Eq.(23): "phib" was modified to "phi0."
+        4. Eq.(16) & (17): 10^18 was multipled by the surface site densities.
+        5. Eq.(21): The negative sign was added in sinh.
+        6. Eq.(21): The symbol "phiD" was modified to "phid" (uppercase to lowercase).
+        7. Eq.(32): Avogadro's number was multiplied by the right hand side.
+        8. Eq.(32) & (34): A factor of 1000 was multiplied by the Cf.
 
     References:
         Gonçalvès J., P. Rousseau-Gueutin, A. Revil, 2007, doi:10.1016/j.jcis.2007.07.023
@@ -161,6 +164,8 @@ class Phyllosilicate:
         Zhang L., Lu X., Liu X., Zhou J., Zhou H., Hydration and Mobility of Interlayer
             Ions of (Nax,Cay)-Montmorillonite: A Molecular Dynamics Study, 2014,
             https://doi.org/10.1021/jp508427c
+
+    NOTE: This class can only treat chemical reactions at the interface with NaCl solution.
     """
 
     # pylint: disable=dangerous-default-value
@@ -191,29 +196,34 @@ class Phyllosilicate:
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
-                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
-            potential_0_o (float, optional): Surface potential (unit: V).
-            potential_stern_o (float, optional): Stern plane potential (unit: V).
-            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
-            charge_0_o (float, optional): Charges in surface layer (unit: C/m^3).
-            charge_stern_o (float, optional): Charges in stern layer (unit: C/m^3).
-            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m^3).
-            potential_0_i (float, optional): Surface potential (unit: V).
-            potential_stern_i (float, optional): Stern plane potential (unit: V).
-            potential_zeta_i (float, optional): Zeta plane potential (unit: V).
-            potential_r_i (float, optional): Potential at the position truncated
-                inside the inter layer (unit: V).
-            charge_0_i (float, optional): Charges in surface layer (unit: C/m^3).
-            charge_stern_i (float, optional): Charges in stern layer (unit: C/m^3).
-            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m^3).
-            xd (float, optional): Distance from quartz surface to zeta plane (unit: V).
-            cond_intra (float): Inter layer conductivity (unit: S/m).
-            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
-            logger (Logger): Logger for debugging.
+            layer_width (float): Thickness of the interlayer (m)
+            tlm_params (TLMParams): TLM parameter
+            potential_0_o (float): Surface potential of the outer surface (V)
+            potential_stern_o (float): Stern potential of the outer surface (V)
+            potential_zeta_o (float): Zeta potential of the outer surface (V)
+            charge_0_o (float): Charge density of the outer surface (C/m^2)
+            charge_stern_o (float): Charge density of the Stern layer on the
+                outer surface (C/m^2)
+            charge_diffuse_o (float): Charge density of the diffuse layer on
+                the outer surface (C/m^2)
+            potential_0_i (float): Surface potential of the inner surface (V)
+            potential_stern_i (float): Stern potential of the inner surface (V)
+            potential_zeta_i (float): Zeta potential of the inner surface (V)
+            potential_r_i (float): Potential at the midpoint of the interlayer
+                (i.e., truncation point) (V)
+            charge_0_i (float): Charge density of the inner surface (C/m^2)
+            charge_stern_i (float): Charge density of the Stern layer in
+                the inner surafce (C/m^2)
+            charge_diffuse_i (float): Charge density of the diffuse layer
+                in the inner surface (C/m^2)
+            xd (float): Distance from the surface (i.e., the center of the oxygen
+                in the siloxane surface) to the shear plane (V)
+            cond_intra (float): Inter layer conductivity (S/m)
+            cond_infdiffuse (float): Conductivity of the outer surface (S/m)
+            logger (Logger): Logger for debugging
         """
-        # Check input values
-        # xd must be smaller than layer width, so we should check that
+        # sanity check
+        # xd must be smaller than layer width
         if (isinstance(xd, float) or isinstance(xd, int)) and (
             isinstance(layer_width, float) or isinstance(layer_width, int)
         ):
@@ -228,6 +238,7 @@ class Phyllosilicate:
         self.ion_props: Dict = nacl.get_ion_props()
         self.dielec_fluid: float = nacl.get_dielec_fluid()
         self.viscosity: float = nacl.get_viscosity()
+
         ####################################################
         # Specific parameters of phyllosilicate
         ####################################################
@@ -245,14 +256,14 @@ class Phyllosilicate:
         self.c2: float = None
         self.mobility_stern: float = self.__calc_mobility_stern()
 
-        # electrical properties at outer surface
+        # electrochemical properties at the outer surface
         self.potential_0_o: float = potential_0_o
         self.potential_stern_o: float = potential_stern_o
         self.potential_zeta_o: float = potential_zeta_o
         self.charge_0_o: float = charge_0_o
         self.charge_stern_o: float = charge_stern_o
         self.charge_diffuse_o: float = charge_diffuse_o
-        # electrical properties at inner surface
+        # electrochemical properties at the inner surface
         self.potential_0_i: float = potential_0_i
         self.potential_stern_i: float = potential_stern_i
         self.potential_zeta_i: float = potential_zeta_i
@@ -263,8 +274,7 @@ class Phyllosilicate:
         self.xd: float = xd
         self.cond_intra: float = cond_intra
         self.cond_infdiffuse: float = cond_infdiffuse
-        # Parameters subordinate to those required for phyllosilicate initialization,
-        # but useful to be obtained in advance
+        # auxiliary variables
         self.ionic_strength: float = None
         self.kappa: float = None
         self.kappa_truncated: float = None
@@ -272,7 +282,6 @@ class Phyllosilicate:
         self.qs_coeff2_inf: float = None
         self.cond_tensor: np.ndarray = None
         self.double_layer_length: float = None
-
         # other properties (TODO:)
         self.partition_coefficient: float = None
         self.swelling_pressure: float = None
@@ -280,25 +289,25 @@ class Phyllosilicate:
         self.osmotic_pressure: float = None
 
         ####################################################
-        # DEBUG LOGGER
+        # LOGGER
         ####################################################
         self.logger = logger
 
-        # START DEBUGGING
+        # start debugging
         if self.logger is not None:
             self.logger.info("=== Initialize Phyllosilicate ===")
 
-        # Calculate frequently used constants and parameters.
+        # calculate frequently used parameters.
         self.__init_default()
 
     def __init_default(self) -> None:
-        """Calculate constants and parameters commonly used when computing
-        electrical parameters
+        """Calculate parameters frequently used when computing
+        electrochemical properties.
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
 
-        # Ionic strength (based on Leroy & Revil, 2004)
+        # ionic strength (based on Leroy & Revil, 2004)
         strength = 0.0
         for elem, props in self.ion_props.items():
             if elem in (Species.Na.name, Species.Cl.name):
@@ -307,8 +316,8 @@ class Phyllosilicate:
                 )
         self.ionic_strength = strength
 
-        # calculate kappa (eq.(11) of Gonçalvès et al., 2007)
-        # Electrolyte concentration is assumed to be equal to Na+ concentration
+        # calculate κ (Eq.[11] in Gonçalvès et al., 2007)
+        # electrolyte concentration is assumed to be equal to Na+ concentration
         top = (
             2000.0
             * self.ion_props[Species.Na.name][IonProp.Molarity.name]
@@ -319,18 +328,19 @@ class Phyllosilicate:
         self.kappa = np.sqrt(top / bottom)
 
     def __calc_mobility_stern(self) -> float:
-        """Calculate mobility of Na+ at stern plane"""
-        # Mobility of the stern layer is assumed to be half of the bulk water
+        """Calculate mobility of Na+ at the Stern plane"""
+        # NOTE: mobility of the stern layer is assumed to be half of the bulk water
         d_cf = self.ion_props[Species.Na.name][IonProp.Mobility.name] * 0.5
         return d_cf
 
-    def __calc_mobility_diffuse(self, _x: float, _s: str) -> float or None:
-        """Calculate mobility of Na+ and Cl- at diffuse layer based on Bourg &
-        Sposito (2011).
+    def __calc_mobility_diffuse(self, _x: float, _s: str) -> Union[float, None]:
+        """Calculate the mobility of Na+ and Cl- in diffuse layer based on
+        Bourg & Sposito (2011).
 
         Args:
-            _x (float): Distance from smectite surface (m)
-            _s (str): Ion species
+            _x (float): Distance from the smectite surface (center of the oxygen
+                in the siloxane) (m)
+            _s (str): Strings of ion species
         """
         assert _s in (Species.Na.name, Species.Cl.name)
         _m = self.ion_props[_s][IonProp.Mobility.name] * (
@@ -343,14 +353,14 @@ class Phyllosilicate:
         return None
 
     def __calc_f1(self, phi0: float, q0: float) -> float:
-        """Calculate eq.(16) of Gonçalvès et al. (2007).
+        """Calculate Eq.(16) in Gonçalvès et al. (2007).
 
         Args:
-            phi0 (float): surface plane potential
-            q0 (float): surface layer charge
+            phi0 (float): Surface potential (V)
+            q0 (float): Charge density on the surface (C/m^2)
 
         Returns:
-            float: left side of eq.(16) minus right side
+            float: Left-hand side minus right-hand side of Eq.(16)
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
@@ -365,14 +375,14 @@ class Phyllosilicate:
         return f1
 
     def __calc_f2(self, phib: float, qb: float) -> float:
-        """Calculate eq.(17) of Gonçalvès et al. (2007).
+        """Calculate Eq.(17) in Gonçalvès et al. (2007).
 
         Args:
-            phib (float): stern plane potential
-            qb (float): stern layer charge
+            phib (float): Stern plane potential (V)
+            qb (float): Charge density of Stern layer (C/m^2)
 
         Returns:
-            float: left side of eq.(17) minus right side
+            float: Left-hand side minus right-hand side of Eq.(17)
         """
         _e = const.ELEMENTARY_CHARGE
         _kb = const.BOLTZMANN_CONST
@@ -392,51 +402,51 @@ class Phyllosilicate:
         return f2
 
     def __calc_f3(self, q0: float, qb: float, qs: float) -> float:
-        """Calculate eq.(18) of Gonçalvès et al. (2007).
+        """Calculate Eq.(18) in Gonçalvès et al. (2007).
 
         Args:
-            q0 (float): surface layer charge
-            qb (float): stern layer charge
-            qs (float): diffuse layer charge
+            q0 (float): Charge density on the surface (C/m^2)
+            qb (float): Charge density of the Stern layer (C/m^2)
+            qs (float): Charge density of the diffuse layer (C/m^2)
         Returns:
-            float: left side of eq.(18) minus right side
+            float: Left-hand side minus right-hand side of Eq.(18)
         """
         return q0 + qb + qs
 
     def __calc_f4(self, phi0: float, phib: float, q0: float) -> float:
-        """Calculate eq.(19) of Gonçalvès et al. (2007).
+        """Calculate Eq.(19) in Gonçalvès et al. (2007).
 
         Args:
-            phi0 (float): surface place potential
-            phib (float): zeta plane potential
-            q0 (float): surface layer charge
+            phi0 (float): Surface plane potential (V)
+            phib (float): Stern plane potential (V)
+            q0 (float): Charge density on the surface (C/m^2)
         Returns:
-            float: left side of eq.(19) minus right side
+            float: Left-hand side minus right-hand side of Eq.(19)
         """
         return phi0 - phib - q0 / self.c1
 
     def __calc_f5(self, phib: float, phid: float, qs: float) -> float:
-        """Calculate eq.(20) of Gonçalvès et al. (2007).
+        """Calculate Eq.(20) in Gonçalvès et al. (2007).
 
         Args:
-            phib (float): stern place potential
-            phid (float): zeta plane potential
-            qs (float): diffuse layer charge
+            phib (float): Stern place potential (V)
+            phid (float): Zeta potential (V)
+            qs (float): Charge density of the diffuse layer (C/m^2)
         Returns:
-            float: left side of eq.(20) minus right side
+            float: Left-hand side minus right-hand side of Eq.(20)
         """
         return phib - phid + qs / self.c2
 
     def __calc_f6(self, phid: float, qs: float) -> float:
-        """Calculate eq.(21) of Gonçalvès et al. (2007).
-        When pH is shifted from 7, we need to take
+        """Calculate Eq.(21) in Gonçalvès et al. (2007).
+        NOTE: When pH is shifted from 7, we may need to take
         into account the contribution of H+ and OH-.
 
         Args:
-            phid (float): zeta place potential
-            qs (float): diffuse layer charge
+            phid (float): Zeta potential (V)
+            qs (float): Charge density of the diffuse layer (C/m^2)
         Returns:
-            float: left side of eq.(21) minus right side
+            float: Left-hand side minus right-hand side Eq.(21)
         """
         _e = const.ELEMENTARY_CHARGE
         _na = const.AVOGADRO_CONST
@@ -450,16 +460,16 @@ class Phyllosilicate:
         return f6
 
     def __calc_f6_truncated(self, phid: float, phir: float, qs: float) -> float:
-        """Calculate eq.(32) of Gonçalvès et al. (2007).
-        When pH is shifted from 7, we need to take
+        """Calculate Eq.(32) in Gonçalvès et al. (2007).
+        NOTE: When pH is shifted from 7, we may need to take
         into account the contribution of H+ and OH-.
 
         Args:
-            phid (float): zeta place potential
-            phir (float): truncated plane potential
-            qs (float): diffuse layer charge
+            phid (float): Zeta potential (V)
+            phir (float): Truncated plane potential (V)
+            qs (float): Charge density of the diffuse layer (C/m^2)
         Returns:
-            float: left side of eq.(32) minus right side
+            float: Left-hand side minus right-hand side of Eq.(32)
         """
         dielec = self.dielec_fluid
         kb = const.BOLTZMANN_CONST
@@ -474,19 +484,18 @@ class Phyllosilicate:
         return qs - coeff * np.sqrt(right1 - right2)
 
     def __calc_f7_truncated(self, phid: float, phir: float) -> float:
-        """Calculate eq.(34) of Gonçalvès et al. (2007).
-        When pH is shifted from 7, we need to take
+        """Calculate Eq.(34) in Gonçalvès et al. (2007).
+        NOTE: When pH is shifted from 7, we may need to take
         into account the contribution of H+ and OH-.
 
         Args:
-            phid (float): zeta place potential
-            phir (float): truncated plane potential
-            qs (float): diffuse layer charge
+            phid (float): Zeta potential (V)
+            phir (float): Truncated plane potential (V)
         Returns:
-            float: left side of eq.(34) minus right side
+            float: Left-hand side minus right-hand side of Eq.(34)
         """
-        # TODO: ６回微分まで実装する
-        # electrolyte concentration assumed equal to that of Na+
+        # TODO: implement sixth derivative?
+        # electrolyte concentration is assumed to be equal to Na+
         cf = self.ion_props[Species.Na.name][IonProp.Molarity.name] * 1.0e3
         _e = const.ELEMENTARY_CHARGE
         dielec = self.dielec_fluid
@@ -510,12 +519,12 @@ class Phyllosilicate:
         """Calculate jacobians of f1 to f6.
 
         Args:
-            phi0 (float): surface plane potential
-            phib (float): stern plane potential
-            phid (float): zeta plane potential
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+            phid (float): Zeta potential (V)
 
         Returns:
-            np.ndarray: 6 rows and 6 columns of Jacobians
+            np.ndarray: Jacobians (6×6)
         """
         f1_phi0 = self.__calc_f1_phi0(phi0)
         f1_q0 = 1.0
@@ -550,13 +559,13 @@ class Phyllosilicate:
         """Calculate jacobians of f1 to f7 for trucated case.
 
         Args:
-            phi0 (float): surface plane potential
-            phib (float): stern plane potential
-            phid (float): zeta plane potential
-            phir (float): truncated plane potential
+            phi0 (float): Surface potential (V)
+            phib (float): Stern plane potential (V)
+            phid (float): Zeta potential (V)
+            phir (float): Truncated plane potential (V)
 
         Returns:
-            np.ndarray: 7 rows and 7 columns of Jacobians
+            np.ndarray: Jacobians (7×7)
         """
         f1_phi0 = self.__calc_f1_phi0(phi0)
         f1_q0 = 1.0
@@ -595,7 +604,7 @@ class Phyllosilicate:
         """Calculate ∂f1/∂phi0
 
         Args:
-            phi0 (float): surface plane potential
+            phi0 (float): Surface potential (V)
 
         Returns:
             float: ∂f1/∂phi0
@@ -627,7 +636,7 @@ class Phyllosilicate:
         """Calculate ∂f2/∂phib
 
         Args:
-            phib (float): stern plane potential
+            phib (float): Stern plane potential (V)
 
         Returns:
             float: ∂f2/∂phib
@@ -652,7 +661,7 @@ class Phyllosilicate:
         """Calculate ∂f6/∂phid
 
         Args:
-            phid (float): zeta plane potential
+            phid (float): Zeta potential (V)
 
         Returns:
             float: ∂f6/∂phid
@@ -672,14 +681,14 @@ class Phyllosilicate:
         """Calculate ∂f6/∂phid for truncated case
 
         Args:
-            phid (float): zeta plane potential
-            phir (float): truncated plane potential
+            phid (float): Zeta potential (V)
+            phir (float): Truncated plane potential (V)
 
         Returns:
             float: ∂f6/∂phid
         """
         # https://www.wolframalpha.com/input?i2d=true&i=D%5B%5C%2840%29-b*Sqrt%5Bcosh%5C%2840%29c*x%5C%2841%29-cosh%5C%2840%29c*y%5C%2841%29%5D%5C%2841%29%2Cx%5D&lang=ja
-        # x: phir, y: phid
+        # (x: phir, y: phid)
         dielec = self.dielec_fluid
         kb = const.BOLTZMANN_CONST
         _t = self.temperature
@@ -699,8 +708,8 @@ class Phyllosilicate:
         """Calculate ∂f6/∂phir for truncated case
 
         Args:
-            phid (float): zeta plane potential
-            phir (float): truncated plane potential
+            phid (float): Zeta potential (V)
+            phir (float): Truncated plane potential (V)
 
         Returns:
             float: ∂f6/∂phir
@@ -725,7 +734,7 @@ class Phyllosilicate:
         """Calculate ∂f7/∂phir for truncated case
 
         Args:
-            phir (float): truncated plane potential
+            phir (float): Truncated plane potential (V)
 
         Returns:
             float: ∂f7/∂phir
@@ -748,13 +757,13 @@ class Phyllosilicate:
         return -1.0 + _1 + _2
 
     def __calc_A(self, phi0: float) -> float:
-        """Calculate eq.(22) of Gonçalvès et al. (2007)
+        """Calculate Eq.(22) in Gonçalvès et al. (2007)
 
         Args:
-            phi0 (float): surface layer potential
+            phi0 (float): Surface potential (V)
 
         Returns:
-            float: value of "A" in eq.(22)
+            float: Value of "A" in Eq.(22)
         """
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -764,13 +773,13 @@ class Phyllosilicate:
         return 1.0 + ch / k1 * np.exp(-_e * phi0 / (kb * t))
 
     def __calc_B(self, phi0: float) -> float:
-        """Calculate eq.(23) of Gonçalvès et al. (2007)
+        """Calculate Eq.(23) in Gonçalvès et al. (2007)
 
         Args:
-            phi0 (float): surface plane potential
+            phi0 (float): Surface potential (V)
 
         Returns:
-            float: value of "B" in eq.(23)
+            float: Value of "B" in Eq.(23)
         """
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -780,13 +789,13 @@ class Phyllosilicate:
         return 1.0 + ch / k2 * np.exp(-_e * phi0 / (kb * t))
 
     def __calc_C(self, phib: float) -> float:
-        """Calculate eq.(24) of Gonçalvès et al. (2007)
+        """Calculate Eq.(24) in Gonçalvès et al. (2007)
 
         Args:
-            phib (float): stern plane potential
+            phib (float): Stern plane potential (V)
 
         Returns:
-            float: value of "C" in eq.(23)
+            float: Value of "C" in Eq.(23)
         """
         _e = const.ELEMENTARY_CHARGE
         kb = const.BOLTZMANN_CONST
@@ -798,19 +807,20 @@ class Phyllosilicate:
         return 1.0 + (ch / k3 + cna / k4) * np.exp(-_e * phib / (kb * t))
 
     def __calc_functions_inf(self, xn: np.ndarray) -> np.ndarray:
-        """Calculate functions 1 to 6 for infinite diffuse layer version
+        """Calculate functions 1 to 6 for infinite (i.e., not truncated)
+        diffuse layer case
 
         Args:
-            xn (np.ndarray): 2d array of electrical parameters (column vector).
-            xn[0][0]: potential of O plane
-            xn[1][0]: potential of Stern plane
-            xn[2][0]: potential of Zeta plane
-            xn[3][0]: charge of O layer
-            xn[4][0]: charge of Stern layer
-            xn[5][0]: charge of Diffuse layer
+            xn (np.ndarray): 2d array of electrochemical properties (column vector).
+            xn[0][0]: Potential of the 0-plane
+            xn[1][0]: Potential of the Stern plane
+            xn[2][0]: Potential of the shear plane
+            xn[3][0]: Charge density on the surface
+            xn[4][0]: Charge density of the Stern layer
+            xn[5][0]: Charge density of the diffuse layer
 
         Returns:
-            np.ndarray: 2d array containing the value of each function
+            np.ndarray: 2d array containing the residuals of each function
         """
         f1 = self.__calc_f1(xn[0][0], xn[3][0])
         f2 = self.__calc_f2(xn[1][0], xn[4][0])
@@ -822,20 +832,20 @@ class Phyllosilicate:
         return fn
 
     def __calc_functions_truncated(self, xn: np.ndarray) -> np.ndarray:
-        """Calculate functions 1 to 7 for truncated version
+        """Calculate functions 1 to 7 for truncated diffuse layer case
 
         Args:
-            xn (np.ndarray): 2d array of electrical parameters (column vector).
-            xn[0][0]: potential of O plane
-            xn[1][0]: potential of Stern plane
-            xn[2][0]: potential of Zeta plane
-            xn[3][0]: potential of Truncated plane
-            xn[4][0]: charge of O layer
-            xn[5][0]: charge of Stern layer
-            xn[6][0]: charge of Diffuse layer
+            xn (np.ndarray): 2d array of electrochemical properties (column vector).
+            xn[0][0]: Potential of the 0-plane
+            xn[1][0]: Potential of the Stern plane
+            xn[2][0]: Potential of the shear plane
+            xn[3][0]: Potential of truncated plane
+            xn[4][0]: Charge density of the surface
+            xn[5][0]: Charge density of the Stern layer
+            xn[6][0]: Charge density of the diffuse layer
 
         Returns:
-            np.ndarray: 2d array containing the value of each function
+            np.ndarray: 2d array containing residuals of each function
         """
         f1 = self.__calc_f1(xn[0][0], xn[4][0])
         f2 = self.__calc_f2(xn[1][0], xn[5][0])
@@ -853,7 +863,7 @@ class Phyllosilicate:
         surface in the case of infinite diffuse layer development
 
         Args:
-            _x (float): Distance from surface to pore
+            _x (float): Distance from the surface to pore
 
         Returns:
             float: Charge density at _x distance from the surface (C/m3)
@@ -867,6 +877,7 @@ class Phyllosilicate:
         )
 
     def __calc_qs_coeff_inf(self) -> None:
+        # TODO: should remove?
         """Amount of charge in an infinitely developing diffuse layer."""
         assert self._check_if_calculated_electrical_params_inf(), (
             "Before calculating xd, we should obtain electrical"
@@ -885,11 +896,11 @@ class Phyllosilicate:
         )
 
     def __check_if_calculated_qs_coeff(self) -> bool:
-        """Find out if the coefficients for calculating Qs
+        """Return true if the coefficients for calculating Qs
         have already been calculated.
 
         Returns:
-            bool: if already calculated, True
+            bool: True if already calculated
         """
         flag = True
         if self.qs_coeff1_inf is None:
@@ -899,36 +910,34 @@ class Phyllosilicate:
         return flag
 
     def calc_xd(self) -> float:
-        """Calculate the distance from the surface to the zeta plane (shear plane)
-        Based on MD simulation results of Zhang et al.(2014)
+        """Calculate the distance from the surface to the shear plane
+        based on the MD simulation results by Zhang et al.(2014)
 
         Returns:
             float: xd (m)
         """
-        # TODO: simplify
         xd: float = None
-        r = self.layer_width * 1.0e10
-        if r < 9.4:
-            xd = 2.0845481049562675
-        elif r < 12.3:
-            l = 12.3 - 9.4
-            r -= 9.4
-            xd = 2.4187499999999993 * abs(r / l) + 2.0845481049562675 * abs(l - r) / l
-        elif r < 15.2:
-            l = 15.2 - 12.3
-            r -= 12.3
-            xd = 4.206896551724138 * abs(r / l) + 2.4187499999999993 * abs(l - r) / l
-        elif r < 18.4:
-            l = 18.4 - 15.2
-            r -= 15.2
-            xd = 4.182509505703424 * abs(r / l) + 4.206896551724138 * abs(l - r) / l
-        elif r < 21.6:
-            l = 21.6 - 18.4
-            r -= 18.4
-            xd = 4.220116618075801 * abs(r / l) + 4.182509505703424 * abs(l - r) / l
+        rintp = self.layer_width * 1.0e10
+        r_ls = (9.4, 12.3, 15.2, 18.4, 21.6)
+        xd_ls = (
+            2.0845481049562675,
+            2.4187499999999993,
+            4.206896551724138,
+            4.182509505703424,
+            4.220116618075801,
+        )
+        xdintp: float = None
+        if rintp < r_ls[0]:
+            xdintp = xd_ls[0]
+        elif rintp > r_ls[-1]:
+            xdintp = xd_ls[-1]
         else:
-            xd = 4.220116618075801
-        self.xd = xd * 1.0e-10
+            for i, (r, xd) in enumerate(zip(r_ls, xd_ls)):
+                if r <= rintp <= r_ls[i + 1]:
+                    dr = rintp - r
+                    xdintp = xd + dr * ((xd_ls[i + 1] - xd) / (r_ls[i + 1] - r))
+                    break
+        self.xd = xdintp * 1.0e-10
         return self.xd
 
     def calc_potentials_and_charges_inf(
@@ -940,34 +949,40 @@ class Phyllosilicate:
         beta: float = 0.75,
         lamda: float = 2.0,
     ) -> List:
-        """Calculate the potential and charge of each layer
-        in the case of infinite diffuse layer development.
-        eq.(16)~(21) of Gonçalvès et al. (2007) is used.
-        Damped Newton-Raphson method is applied.
+        """Calculate the electrochemical properties for the case of infinite
+        (i.e., not truncated) diffuse layer.
+        Eqs.(16)–(21) in Gonçalvès et al. (2007) are solved by the damped
+        Newton-Raphson method
 
-        x_init (List): Initial electrical parameters (length is 6)
-        iter_max (int): Maximum number of iterations when calculating potential and charge
-            using the Newton-Raphson method. Defaults to 1000.
-        convergence_condition (float): Convergence conditions for calculating potential
-            nd charge using the Newton-Raphson method. Defaults to 1.0e-10.
-        oscillation_tol (float): Oscillation tolerance. Defaults to 1.0e-5.
-        beta (float): Hyper parameter for damping(0, 1). The larger this value,
+        x_init (List): Initial value of electrochemical properties (length is 6).
+            Need to place the electrochemical properties in the same order as
+            the return value.
+        iter_max (int): Maximum number of iterations of the Newton-Raphson method.
+        convergence_condition (float): Convergence conditions (the L2 norm of the
+            equations) for the Newton-Raphson method.
+        oscillation_tol (float): Oscillation tolerance.
+        beta (float): Hyperparameter for damping((0, 1)). The larger this value,
             the smaller the damping effect.
-        lamda (float): Hyper parameter for damping([1, ∞]). The amount by which
-            the step-width coefficients are updated in a single iteration
+        lamda (float): Hyperparameter for damping([1, ∞]); i.e., the amount
+            by which the step-width coefficients are updated in a single iteration.
 
         Raises:
-            RuntimeError: Occurs when loop count exceeds m_iter_max &
+            RuntimeError: Occurs if the loop count exceeds m_iter_max and
              norm of step exceeds oscillation_tol
 
         Returns:
-            List: list containing potentials and charges
-              [phi0, phib, phid, q0, qb, qs]
+            List: Containing the following electrochemical properties:
+              [Surface potential (V),
+               Stern plane potential (V),
+               Zeta potential (V),
+               Charge density on surface (C/m^2)
+               Charge density of the Stern layer (C/m^2),
+               Charge density of the diffuse layer (C/m^2)]
         """
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
 
-        # set params
+        # set constants
         self.gamma_1 = self.tlm_params.gamma_1o
         self.gamma_2 = self.tlm_params.gamma_2o
         self.gamma_3 = self.tlm_params.gamma_3o
@@ -981,10 +996,10 @@ class Phyllosilicate:
 
         if x_init is None:
             # Set initial electrical parameters
-            if self.qi < 0.0 and self.gamma_1 == 0.0:
+            if isinstance(self, Smectite):
                 # for smectite case
                 params = smectite_inf_init_params
-            elif self.qi == 0.0 and self.gamma_1 > 0.0:
+            elif isinstance(self, Kaolinite):
                 # for kaolinite case
                 params = kaolinite_init_params
             else:
@@ -1004,29 +1019,27 @@ class Phyllosilicate:
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_inf(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-        # The convergence condition is that the L2 norm in eqs.1~7
-        # becomes sufficiently small.
         cou = 0
         while convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian(xn[0][0], xn[1][0], xn[2][0])
-            # To avoid overflow when calculating the inverse matrix
+            # avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
             _j_inv = np.linalg.inv(_j)
             step = np.matmul(_j_inv, fn)
-            # Damping is applied. References are listed below:
+            # Damping is applied. References:
             # [1] http://www.misojiro.t.u-tokyo.ac.jp/~murota/lect-suchi/newton130805.pdf
             # [2] http://www.ep.sci.hokudai.ac.jp/~gfdlab/comptech/y2016/resume/070_newton/2014_0626-mkuriki.pdf
             _cou_damp: int = 0
             _norm_fn_tmp, _rhs = float_info.max, float_info.min
-            # At least once, enter the following loop
+            # enter the following loop at least once
             while _norm_fn_tmp > _rhs:
                 # update μ
                 _mu = 1.0 / (lamda**_cou_damp)
-                # calculate left hand side of eq.(21) of [1]
+                # calculate left hand side of Eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_inf(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
-                # calculate right hand side of eq.(21) of [1]
+                # calculate right hand side of Eq.(21) of [1]
                 _rhs = (1.0 - (1.0 - beta) * _mu) * norm_fn
                 _cou_damp += 1
                 if _cou_damp > 10000:
@@ -1064,7 +1077,7 @@ class Phyllosilicate:
             self.logger.debug(f"charge_stern_o: {self.charge_stern_o}")
             self.logger.debug(f"charge_diffuse_o: {self.charge_diffuse_o}")
 
-        # calc length to the zeta plane
+        # calculates the distance from the surface to shear plane
         self.calc_xd()
         return xn
 
@@ -1078,32 +1091,36 @@ class Phyllosilicate:
         beta: float = 0.75,
         lamda: float = 2.0,
     ) -> List:
-        """Calculate the potential and charge of each layer
-        in the case of truncated diffuse layer development.
-        eq.(16)~(20), (32), (34) of Gonçalvès et al. (2007) is used.
-        Damped Newton-Raphson method is applied.
+        """Calculate the electrochemical properties for the case of
+        truncated diffuse layer development.
+        Eqs.(16)–(20), (32), and (34) in Gonçalvès et al. (2007) are solved
+        by the damped Newton-Raphson method.
 
-        x_init (List): Initial electrical parameters (length is 7)
-        iter_max (int): Maximum number of iterations when calculating potential and charge
-            using the Newton-Raphson method. Defaults to 1000.
-        convergence_condition (float): Convergence conditions for calculating potential
-            nd charge using the Newton-Raphson method. Defaults to 1.0e-10.
-        step_tol (float): Tolerance of step. If the step width is smaller than
-            this value, the calculation is considered to have converged, even if the
-            calculation does not converge sufficiently up to iter_max. If you do not
-            want to use this value for convergence judgment, set it to a negative value.
-        oscillation_tol (float): Oscillation tolerance. Defaults to 1.0e-5.
-        beta (float): Hyper parameter for damping. The larger this value,
+        x_init (List): Initial value of electrochemical properties (length is 7).
+            Need to place the electrochemical properties in the same order as
+            the return value.
+        iter_max (int): Maximum number of iterations of the Newton-Raphson method.
+        convergence_condition (float): Convergence conditions (the L2 norm of the
+            equations) for the Newton-Raphson method.
+        oscillation_tol (float): Oscillation tolerance.
+        beta (float): Hyper parameter for damping((0, 1)). The larger this value,
             the smaller the damping effect.
-        lamda (float): Hyper parameter for damping. The amount by which
-            the step-width coefficients are updated in a single iteration
+        lamda (float): Hyperparameter for damping([1, ∞]); i.e., the amount
+            by which the step-width coefficients are updated in a single iteration.
+
         Raises:
-            RuntimeError: Occurs when loop count exceeds iter_max &
+            RuntimeError: Occurs if the loop count exceeds m_iter_max and
              norm of step exceeds oscillation_tol
 
         Returns:
-            List: list containing potentials and charges
-              [phi0, phib, phid, phir, q0, qb, qs]
+            List: Containing the following electrochemical properties:
+              [Surface potential (V),
+               Stern plane potential (V),
+               Zeta potential (V),
+               Truncated plane potential (V),
+               Charge density on surface (C/m^2)
+               Charge density of the Stern layer (C/m^2),
+               Charge density of the diffuse layer (C/m^2)]
         """
         # assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert 0.0 < beta < 1.0
@@ -1138,7 +1155,7 @@ class Phyllosilicate:
             )
             x_init = cna_dct[cna_ls[_idx]]
 
-        # set params
+        # set constants
         self.gamma_1 = self.tlm_params.gamma_1i
         self.gamma_2 = self.tlm_params.gamma_2i
         self.gamma_3 = self.tlm_params.gamma_3i
@@ -1153,32 +1170,30 @@ class Phyllosilicate:
         xn = np.array(x_init, np.float64).reshape(-1, 1)
         fn = self.__calc_functions_truncated(xn)
         norm_fn: float = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-        # The convergence condition is that the L2 norm in eqs.1~7
-        # becomes sufficiently small.
         cou = 0
         is_norm_converged: bool = False
         while convergence_condition < norm_fn:
             _j = self._calc_Goncalves_jacobian_truncated(
                 xn[0][0], xn[1][0], xn[2][0], xn[3][0]
             )
-            # To avoid overflow when calculating the inverse matrix
+            # avoid overflow when calculating the inverse matrix
             _j = _j + float_info.min
             _j_inv = np.linalg.inv(_j)
             step = np.matmul(_j_inv, fn)
-            # Damping is applied. References are listed below:
+            # Damping is applied. References:
             # [1] http://www.misojiro.t.u-tokyo.ac.jp/~murota/lect-suchi/newton130805.pdf
             # [2] http://www.ep.sci.hokudai.ac.jp/~gfdlab/comptech/y2016/resume/070_newton/2014_0626-mkuriki.pdf
             _cou_damp: int = 0
             _norm_fn_tmp, _rhs = float_info.max, float_info.min
-            # At least once, enter the following loop
+            # enter the following loop at least once
             while _norm_fn_tmp > _rhs:
                 # update μ
                 _mu = 1.0 / (lamda**_cou_damp)
-                # calculate left hand side of eq.(21) of [1]
+                # calculate left hand side of Eq.(21) of [1]
                 xn_tmp: np.ndarray = xn - _mu * step
                 fn_tmp = self.__calc_functions_truncated(xn_tmp)
                 _norm_fn_tmp = np.sum(np.sqrt(np.square(fn_tmp)), axis=0)[0]
-                # calculate right hand side of eq.(21) of [1]
+                # calculate right hand side of Eq.(21) of [1]
                 _rhs = (1.0 - (1.0 - beta) * _mu) * norm_fn
                 _cou_damp += 1
                 if norm_fn < convergence_condition:
@@ -1200,7 +1215,6 @@ class Phyllosilicate:
                         f"Loop count exceeded {iter_max} times &"
                         f" exceeds oscillation tolerance: {norm_step}"
                     )
-                    # log
                     if self.logger is not None:
                         self.logger.error(_msg)
                     raise RuntimeError(_msg)
@@ -1219,7 +1233,7 @@ class Phyllosilicate:
         # zeta potential
         if math.isclose(self.potential_zeta_i, self.potential_r_i):
             self.potential_r_i = self.potential_zeta_i
-        # Align zeta potential and truncated plane potential to the same sign
+        # make zeta potential and truncated plane potential the same sign
         elif self.potential_zeta_i <= 0.0:
             if self.potential_r_i > 0.0:
                 self.potential_r_i -= 2.0 * self.potential_r_i
@@ -1243,259 +1257,12 @@ class Phyllosilicate:
 
         return xn, is_norm_converged
 
-    def calc_potentials_and_charges_truncated_by_ga(
-        self,
-        x_init: List = None,
-        convergence_tol=1.0e-6,
-        seed: int = 42,
-        g_gen: int = 100000,
-        pop_size: int = 100,
-        cx_pb: float = 0.8,
-        mut_pb: float = 0.2,
-    ) -> List:
-        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
-
-        # obtain init values based on infinity developed diffuse layer
-        # phi0, phib, phid, phir, q0, qb, qs
-        if not self._check_if_calculated_electrical_params_inf():
-            self.calc_potentials_and_charges_inf()
-        if self.xd is None:
-            self.calc_xd()
-        if x_init is None:
-            # layer width
-            r_ls = list(smectite_trun_init_params.keys())
-            _r = self.layer_width
-            _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
-            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
-            # pH
-            _ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
-            _cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
-            ch_ls = list(ch_cna_dict.keys())
-            _idx = np.argmin(
-                np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
-            )
-            # sodium concentration
-            cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
-            cna_ls = list(cna_dct.keys())
-            _idx = np.argmin(
-                np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
-            )
-            x_init = cna_dct[cna_ls[_idx]]
-
-        # set params
-        self.gamma_1 = self.tlm_params.gamma_1i
-        self.gamma_2 = self.tlm_params.gamma_2i
-        self.gamma_3 = self.tlm_params.gamma_3i
-        self.qi = self.tlm_params.qii
-        self.k1 = self.tlm_params.k1i
-        self.k2 = self.tlm_params.k2i
-        self.k3 = self.tlm_params.k3i
-        self.k4 = self.tlm_params.k4i
-        self.c1 = self.tlm_params.c1i
-        self.c2 = self.tlm_params.c2i
-
-        num = len(x_init)
-        random.seed(seed)
-        np.random.seed(seed)
-        # set properties
-        _methods: Set[str] = set(dir(creator))
-        # set creator
-        if "FitnessMin" not in _methods:
-            creator.create("FitnessMin", base.Fitness, weights=(-1.0,))
-        if "Individual" not in _methods:
-            creator.create("Individual", list, fitness=creator.FitnessMin)
-
-        # set toolbox
-        toolbox = base.Toolbox()
-        toolbox.register("attr_gene", lambda: random.random() - 1.0)
-        toolbox.register(
-            "individual",
-            tools.initRepeat,
-            creator.Individual,
-            toolbox.attr_gene,
-            num,
-        )
-        toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-        # evaluation function
-        def __callback(xn: List):
-            fn = self.__calc_functions_truncated(np.array(xn).reshape(-1, 1))
-            cost = np.sum(np.sqrt(np.square(fn)), axis=0)[0]
-            if np.isnan(cost):
-                return (float_info.max,)
-            if not (fn[0][0] <= fn[1][0] <= fn[2][0] <= fn[3][0]):
-                return (float_info.max,)
-            if fn[0][0] > 0.0 or fn[1][0] > 0.0 or fn[2][0] > 0.0 or fn[3][0] > 0.0:
-                return (float_info.max,)
-            return (cost,)
-
-        toolbox.register("evaluate", __callback)
-        toolbox.register("mate", tools.cxBlend, alpha=0.4)
-        toolbox.register("mutate", tools.mutShuffleIndexes, indpb=0.2)
-        toolbox.register("select", tools.selTournament, tournsize=5)
-        cou: int = 0
-        pop = toolbox.population(n=pop_size)
-        # Set initial values for no dupulicates
-        _mu, _std = np.array(x_init), np.abs(np.array(x_init)) * 10.0
-        for i, ind in enumerate(pop):
-            ind.clear()
-            if i == 0:
-                ind.extend(x_init)
-            ind.extend(np.random.normal(_mu, _std).tolist())
-
-        # start roop
-        fitnesses = list(map(toolbox.evaluate, pop))
-        flag_converged = True
-        flag_approriate = False
-        _f = float_info.max
-        best_ind_ls = [__callback(x_init)[0], x_init]  # norm, gene
-        while _f > convergence_tol:
-            cou += 1
-            offspring = toolbox.select(pop, len(pop))
-            offspring = list(map(toolbox.clone, offspring))
-            for child1, child2 in zip(offspring[::2], offspring[1::2]):
-                if random.random() < cx_pb:
-                    toolbox.mate(child1, child2)
-                    del child1.fitness.values
-                    del child2.fitness.values
-
-            for mutant in offspring:
-                if random.random() < mut_pb:
-                    toolbox.mutate(mutant)
-                    del mutant.fitness.values
-            invalid_ind = [ind for ind in offspring if not ind.fitness.valid]
-            fitnesses = list(map(toolbox.evaluate, invalid_ind))
-            for ind, fit in zip(invalid_ind, fitnesses):
-                ind.fitness.values = fit
-            pop[:] = offspring
-            fits = [ind.fitness.values[0] for ind in pop]
-            _f = min(fits)
-            best_ind = tools.selBest(pop, 1)[0]
-            if cou % 500 == 0:
-                print(best_ind_ls)
-                for i, ind in enumerate(pop):
-                    if i > int(pop_size / 4):
-                        ind.clear()
-                        ind.extend(np.random.normal(_mu, _std).tolist())
-            if best_ind_ls[0] is None:
-                continue
-            elif _f < best_ind_ls[0]:
-                best_ind_ls[0] = _f
-                best_ind_ls[1] = best_ind
-            if not flag_approriate and best_ind_ls[0] < 1.0:
-                cou = 0
-            if g_gen > cou:
-                flag_converged = False
-                break
-        if not flag_converged:
-            return best_ind_ls[1], flag_converged
-        return best_ind_ls[1], flag_converged
-
-    def calc_potentials_and_charges_truncated_by_bayse(
-        self,
-        x_init: List = None,
-    ) -> List:
-        assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
-
-        # obtain init values based on infinity developed diffuse layer
-        # phi0, phib, phid, phir, q0, qb, qs
-        if not self._check_if_calculated_electrical_params_inf():
-            self.calc_potentials_and_charges_inf()
-        if self.xd is None:
-            self.calc_xd()
-        if x_init is None:
-            # layer width
-            r_ls = list(smectite_trun_init_params.keys())
-            _r = self.layer_width
-            _idx = np.argmin(np.square((np.array(r_ls, dtype=np.float64) - _r)))
-            ch_cna_dict: Dict = smectite_trun_init_params[r_ls[_idx]]
-            # pH
-            _ch = self.ion_props[Species.H.name][IonProp.Molarity.name]
-            _cna = self.ion_props[Species.Na.name][IonProp.Molarity.name]
-            ch_ls = list(ch_cna_dict.keys())
-            _idx = np.argmin(
-                np.square((np.log10(ch_ls, dtype=np.float64) - np.log10(_ch)))
-            )
-            # sodium concentration
-            cna_dct: Dict = ch_cna_dict[ch_ls[_idx]]
-            cna_ls = list(cna_dct.keys())
-            _idx = np.argmin(
-                np.square((np.log10(cna_ls, dtype=np.float64) - np.log10(_cna)))
-            )
-            x_init = cna_dct[cna_ls[_idx]]
-
-        # set params
-        self.gamma_1 = self.tlm_params.gamma_1i
-        self.gamma_2 = self.tlm_params.gamma_2i
-        self.gamma_3 = self.tlm_params.gamma_3i
-        self.qi = self.tlm_params.qii
-        self.k1 = self.tlm_params.k1i
-        self.k2 = self.tlm_params.k2i
-        self.k3 = self.tlm_params.k3i
-        self.k4 = self.tlm_params.k4i
-        self.c1 = self.tlm_params.c1i
-        self.c2 = self.tlm_params.c2i
-
-        def objective(trial):
-            x1 = trial.suggest_float(
-                "x1",
-                -1.0,
-                0.0,
-            )
-            x2 = trial.suggest_float(
-                "x2",
-                -1.0,
-                0.0,
-            )
-            x3 = trial.suggest_float(
-                "x3",
-                -1.0,
-                0.0,
-            )
-            x4 = trial.suggest_float(
-                "x4",
-                -1.0,
-                0.0,
-            )
-            x5 = trial.suggest_float(
-                "x5",
-                -1.0,
-                1.0,
-            )
-            x6 = trial.suggest_float(
-                "x6",
-                -1.0,
-                1.0,
-            )
-            x7 = trial.suggest_float(
-                "x7",
-                -1.0,
-                1.0,
-            )
-
-            obj = np.sum(
-                np.sqrt(
-                    np.square(np.array([x1, x2, x3, x4, x5, x6, x7]).reshape(-1, 1))
-                ),
-                axis=0,
-            )[0]
-            if np.isnan(obj):
-                return float_info.max
-            return obj
-
-        # We use the multivariate TPE sampler.
-        sampler = optuna.samplers.TPESampler(multivariate=True)
-
-        study = optuna.create_study(sampler=sampler)
-        study.optimize(objective, n_trials=10000)
-
-        print(study.best_params)
-
     def _check_if_calculated_electrical_params_inf(self) -> bool:
-        """Check if the electrical properties for infinite diffuse layer
-         has already been calculated
+        """Check if the electrochemical properties of the infinite
+        (i.e., not truncated) diffuse layer has already been calculated.
 
         Returns:
-            bool: if already calculated, return True
+            bool: True if already calculated
         """
         flag = True
         if self.potential_0_o is None:
@@ -1513,11 +1280,12 @@ class Phyllosilicate:
         return flag
 
     def _check_if_calculated_electrical_params_truncated(self) -> bool:
-        """Check if the electrical properties for truncated diffuse layer
-         has already been calculated
+        """Check if the electrochemical properties for the truncated diffuse layer
+        has already been calculated.
 
         Returns:
-            bool: if already calculated, return True
+            bool: True if already calculated the electrochemical properties
+                for the truncated diffuse layer
         """
         flag = True
         if self.potential_0_i is None:
@@ -1539,8 +1307,8 @@ class Phyllosilicate:
         return flag
 
     def __calc_kappa_truncated(self) -> None:
-        """Calculate the kappa of the potential (instead of Eq. 11
-        of Gonçalvès et al., 2007) when the diffuse layer is truncated
+        """In the truncated diffuse layer, calculate the damping parameter
+        κ instead of Eq.(11) in Gonçalvès et al. (2007).
         """
         _r = self.layer_width * 0.5
         self.kappa_truncated = (
@@ -1548,25 +1316,29 @@ class Phyllosilicate:
         )
 
     def __calc_cond_diffuse_inf(self, x: float, s: str, coeff: float) -> float:
-        """Calculate conductivity in diffuse layer
+        """Calculate the electrical conductivity of the infinite
+        (i.e., not truncated) diffuse layer normalized by the
+        elementary charge.
 
         Args:
-            x (float): Distance from zeta plane (m)
-            s (str): Ion species existed in self.ion_props
+            x (float): Distance from the shear plane (m)
+            s (str): Ion species name
             coeff (float): Ratio of dielectric constant to viscosity
-                (eq.26 in Leroy et al., 2015)
+                (Eq.[26] in Leroy et al., 2015)
 
         Returns:
-            float: Conductivity of diffuse layer (S/m)
+            float: Electrical conductivity normalized by the
+                elementary charge (S/(m・C))
         """
-        # calc number density
+        # calculate number density
         potential: float = self.potential_zeta_o * np.exp((-1.0) * self.kappa * x)
         _props: Dict = self.ion_props[s]
         v = _props[IonProp.Valence.name]
-        # mobility at position x
+        # ion mobility at position x
         bx = _props[IonProp.Mobility.name] + (v / abs(v)) * coeff * (
             potential - self.potential_zeta_o
         )
+        # number density of the ion species "s"
         n = (
             np.exp(
                 -v
@@ -1582,14 +1354,15 @@ class Phyllosilicate:
         return bx * n
 
     def __calc_cond_diffuse_truncated(self, _x: float) -> float:
-        """Calculate Na+ number density in diffuse layer
+        """Calculate the electrical conductivity of the truncated diffuse
+        layer normalized by the elementary charge.
 
         Args:
-            x (float): Distance from zeta plane (m)
+            _x (float): Distance from the shear plane (m)
         Returns:
-            float: Number density of Na+ (-/m^3)
+            float: Electrical conductivity normalized by the
+                elementary charge (S/(m・C))
         """
-        # calc number density
         potential: float = self.potential_zeta_i * np.exp(
             (-1.0) * self.kappa_truncated * _x
         )
@@ -1615,15 +1388,16 @@ class Phyllosilicate:
         return _cond
 
     def __calc_n_stern(self, orientation: str) -> float:
-        """Calculate Na+ number density in stern layer
-        by eq.(12) of Leroy & Revil (2004)
+        """Calculate Na+ number density of the Stern layer
+        by Eq.(12) in Leroy & Revil (2004).
 
         Args:
-            orientation (str): Flag indicating which direction the stern
-                layer extends ("outer" or "inner")
+            orientation (str): Strings indicating where the Stern
+                layer exists. Set "outer" for the outer surface and
+                "inner" for the inner surface, i.e., interlayer.
 
         Returns:
-            float: Number density of Na+ (-/m^2)
+            float: Number density of Na+ (m^-2)
         """
         phib = None
         if orientation == "outer":
@@ -1646,26 +1420,25 @@ class Phyllosilicate:
         return n
 
     def calc_cond_interlayer(self) -> Tuple[float, Tuple[float, float]]:
-        """Calculate the Stern + EDL conductivity of the inter layer
+        """Calculate the electrical conductivity of the Stern + difusse layer
+        for the interlayer.
 
         Returns:
-            Tuple[float, Tuple[float, float]]: Conductivity of interlayer (S/m),
-                and tuple contains conductivity of stern layer, conductivity
-                of diffuse layer.
+            Tuple[float, Tuple[float, float]]: Electrical conductivity of
+                the interlayer (S/m), and the tuple containing conductivity of
+                the Stern layer and the diffuse layer (both S/m).
         """
-        assert self._check_if_calculated_electrical_params_truncated(), (
-            "Before calculating the conductivity of interlayer, we should "
-            "obtain electrical parameters for truncated diffuse layer case"
-        )
         if self.xd is None:
             self.calc_xd()
+        if not self._check_if_calculated_electrical_params_truncated():
+            self.calc_potentials_and_charges_truncated()
         if self.kappa_truncated is None:
             self.__calc_kappa_truncated()
 
-        # Na+ number (n/m^2) in stern layer
+        # Na+ number density (m^-2) of the Stern layer
         gamma_stern = self.__calc_n_stern("inner")
         _xdl = self.layer_width * 0.5
-        # Na+ number (n/m^2) in diffuse layer
+        # Na+ number density (m^-2) of the diffuse layer
         cond_diffuse = 0.0
         if not math.isclose(self.xd, _xdl):
             cond_diffuse, _ = quad(self.__calc_cond_diffuse_truncated, self.xd, _xdl)
@@ -1676,7 +1449,7 @@ class Phyllosilicate:
             const.ELEMENTARY_CHARGE * (cond_stern + cond_diffuse)
         ) / _xdl
 
-        # log
+        # DEBUG
         if self.logger is not None:
             self.logger.debug(f"cond_intra: {cond_intra}")
 
@@ -1684,22 +1457,23 @@ class Phyllosilicate:
         return self.cond_intra, (cond_stern, cond_diffuse)
 
     def calc_cond_infdiffuse(self) -> Tuple[float, Tuple[float, float]]:
-        """Calculate the Stern + EDL conductivity for the inifinite diffuse
-         layer case.
+        """Calculate the electrical conductivity of the Stern + diffuse layer
+        for the inifinite (i.e., not truncated) diffuse layer.
 
         Returns:
-            Tuple[float, Tuple[float, float]]: Conductivity of EDl (S/m) and
-                tuple contains conductivity of diffuse layer and stern layer.
+            Tuple[float, Tuple[float, float]]: Electrical conductivity of
+                the EDL (S/m), and the tuple containing conductivity of
+                the Stern layer and the diffuse layer (both S/m).
         """
         if not self._check_if_calculated_electrical_params_inf():
             self.calc_potentials_and_charges_inf()
         if self.xd is None:
             self.calc_xd()
 
-        # Na+ number (n/m^2) at stern layer
+        # Na+ number density (m^-2) of the Stern layer
         gamma_stern = self.__calc_n_stern("outer")
         cond_stern = gamma_stern * self.mobility_stern
-        # Na+ number (n/m^2) at diffuse layer
+        # Na+ number density (m^-2) of the diffuse layer
         xdl = 1.0 / self.kappa
         coeff = self.dielec_fluid / self.viscosity
         __callback = partial(
@@ -1709,7 +1483,7 @@ class Phyllosilicate:
         )
         cond_na_diffuse, _ = quad(__callback, 0.0, xdl)
 
-        # Cl- number (n/m^2) at diffuse layer
+        # Cl- number density (m^-2) of the diffuse layer
         __callback = partial(
             self.__calc_cond_diffuse_inf,
             s=Species.Cl.name,
@@ -1717,12 +1491,12 @@ class Phyllosilicate:
         )
         cond_cl_diffuse, _ = quad(__callback, 0.0, xdl)
 
-        # calc conductivity
+        # calculate conductivity
         cond_diffuse: float = (
             const.ELEMENTARY_CHARGE * (cond_stern + cond_na_diffuse + cond_cl_diffuse)
         ) / xdl
 
-        # log
+        # DEBUG
         if self.logger is not None:
             self.logger.debug(f"cond_diffuse: {cond_diffuse}")
 
@@ -1731,73 +1505,38 @@ class Phyllosilicate:
 
         return self.cond_infdiffuse, (cond_stern, cond_na_diffuse)
 
-    def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
-        """Calculate conductivity tensor in smectite with layers aligned
-         perpendicular to the z-plane. The T-O-T plane is assumed to be an
-         insulator, following Watanabe (2005). The T-O-T plane is the xy-plane,
-         and perpendicular to it is the z-axis.
-
-        Returns:
-            np.ndarray: 3 rows and 3 columns condutivity tensor
-        """
-        assert self._check_if_calculated_electrical_params_truncated, (
-            "Before calculating the conductivity of the smectite cell, we should"
-            "calculate electrical parameters for truncated diffuse layer case"
-        )
-        sigma_intra = self.cond_intra
-        assert sigma_intra is not None, (
-            "Before calculating the conductivity"
-            "of the smectite cell, we should calculate interlayer conductivity"
-        )
-        # conductivity and width of the TOT layer
-        ctot, dtot = 1.0e-12, 6.6e-10
-        sigma_h = (sigma_intra * self.layer_width + ctot * dtot) / (dtot + self.layer_width)
-        sigma_v = (self.layer_width + dtot) / (self.layer_width / sigma_intra + dtot / ctot)
-        cond_tensor = np.array(
-            [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
-            dtype=np.float64,
-        )
-        return cond_tensor
-
-    def calc_kaol_cond_tensor_cube_oxyz(self) -> np.ndarray:
-        """Calculate conductivity tensor in kaolinite.
-
-        Args:
-            edge_length (float): Lengths of the edges of the cube's cells
-
-        Returns:
-            np.ndarray: 3 rows and 3 columns condutivity tensor
-        """
+    def calc_cond_tensor(self) -> None:
+        """Calculate conductivity tensor."""
         cond_silica = 1.0e-12
         cond_tensor = np.array(
             [[cond_silica, 0.0, 0.0], [0.0, cond_silica, 0.0], [0.0, 0.0, cond_silica]],
             dtype=np.float64,
         )
-        return cond_tensor
-
-    def calc_cond_tensor(self) -> None:
-        """Calculate conductivity tensor. Separate cases by smectite and kaolinite."""
-        if self.qi < 0.0 and self.gamma_1 == 0.0:
-            tensor = self.calc_smec_cond_tensor_cube_oxyz()
-        else:
-            tensor = self.calc_kaol_cond_tensor_cube_oxyz()
-
-        self.cond_tensor = tensor
-
         if self.logger is not None:
             self.logger.info(f"cond_tensor: {self.cond_tensor}")
+        self.cond_tensor = cond_tensor
+        return cond_tensor    
 
     def __calc_na_density_at_x(self, x: float) -> float:
+        """Calculate Na+ number density at distance x from the shear plane.
+
+        Args:
+            x (float): Distance from the shear plane
+
+        Returns:
+            float: Na+ number density (m^-3)
+        """
         phix = self.potential_zeta_i * np.exp(-self.kappa_truncated * x)
         return self.ion_props[Species.Na.name][IonProp.Molarity.name] * np.exp(
             -const.ELEMENTARY_CHARGE * phix / (const.BOLTZMANN_CONST * self.temperature)
         )
 
     def calc_partition_coefficient(self) -> float:
-        """Calculate (charge of the stern layer)/(total charge of the EDL)
+        """Calculate the ratio of the number density of Na+ in the Stern layer
+        to the total number of the EDL (i.e., partition coefficient).
 
         Returns:
-            float: Partition coefficient
+            float: Partition coefficient (-)
         """
         if self.xd is None:
             self.calc_xd()
@@ -1834,53 +1573,67 @@ class Phyllosilicate:
         return self.osmotic_pressure
 
     def set_cond_tensor(self, cond_tensor: np.ndarray) -> None:
-        """Setter of the conductivity tensor"""
+        """Setter of the electrical conductivity tensor
+
+        Args:
+            cond_tensor (np.ndarray): Electrical conductivity tensor (3×3; S/m)
+        """
         self.cond_tensor = cond_tensor
 
     def set_cond_surface(self, cond_surface: float) -> None:
-        """Setter of the conductivity of EDL developped at bulk liquid"""
+        """Setter of the electrical conductivity of the EDL faced to
+        the bulk liquid
+
+        Args:
+            cond_surface (float): Electrical conductivity of the EDL faced
+                to the bulk liquid (S/m)
+        """
         self.cond_infdiffuse = cond_surface
 
     def set_double_layer_length(self, double_layer_length: float) -> None:
-        """Setter of the Debye length of EDL developped at bulk liquid"""
+        """Setter of the user defined length of the EDL face to the bulk liquid
+
+        Args:
+            double_layer_length (float): User defined length of the EDL (m)
+        """
         self.double_layer_length = double_layer_length
 
     def get_logger(self) -> Logger:
-        """Getter for the logging.Logger
+        """Getter for the Logger
 
         Returns:
-            Logger: Logger containing debugging information
+            Logger: Containing debugging information, etc.
         """
         return self.logger
 
-    def get_cond_tensor(self) -> np.ndarray or None:
+    def get_cond_tensor(self) -> Union[np.ndarray, None]:
         """Getter for the conductivity tensor
 
         Returns:
-            np.ndarray: Conductivity tensor with 3 rows and 3 columns
+            np.ndarray: Electrical conductivity tensor (3×3; S/m)
         """
         if self.cond_tensor is not None:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
-    def get_cond_surface(self) -> float or None:
-        """Getter for the stern potential
+    def get_cond_surface(self) -> Union[float, None]:
+        """Getter for the Stern plane potential
 
         Returns:
-            float: Conductivity of the stern layer (Unit: S/m)
+            float: Electrical conductivity of the Stern layer (S/m)
         """
         return self.cond_infdiffuse
 
-    def get_double_layer_length(self) -> float or None:
-        """Getter for the double layer length (surface to the end of the diffuse layer)
+    def get_double_layer_length(self) -> Union[float, None]:
+        """Getter for the EDL thickness (the Debye length by default).
 
         Returns:
-            float or None: Length of the electrical double layer
+            float or None: EDL thickness (m)
         """
         return self.double_layer_length
 
     def save(self, _pth: str) -> None:
-        """Save phyllosilicate class as pickle
+        """Save phyllosilicate class as pickle object.
 
         Args:
             _pth (str): path to save
@@ -1891,8 +1644,8 @@ class Phyllosilicate:
 
 # pylint: disable=dangerous-default-value
 class Smectite(Phyllosilicate):
-    """Inherited class from Phyllosilicate, with surface adsorption site density and layer
-    charge fixed to the physical properties of smectite
+    """Subclass of Phyllosilicate, with TLM parameters are fixed to the
+    smectite's properties.
 
     Args:
         Phyllosilicate: Phyllosilicate class
@@ -1921,35 +1674,37 @@ class Smectite(Phyllosilicate):
         cond_infdiffuse: float = None,
         logger: Logger = None,
     ):
-        """Inherited class from Phyllosilicate. Number density of
-            reactors on the surface and fixing the layer charge for
-            smectite case.
+        """Set TLM parameters for representing the electrochemical properties of smectite.
 
         Args:
             nacl (NaCl): Instance of NaCl class
-            layer_width (float): Distance between sheets of phyllosilicate minerals
-                (unit: m). Defaults to 1.3e-9 (When 3 water molecules are trapped).
+            layer_width (float): Thickness of the interlayer.
             tlm_params (TLMParams): TLM parameter.
-            potential_0_o (float, optional): Surface potential (unit: V).
-            potential_stern_o (float, optional): Stern plane potential (unit: V).
-            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
-            charge_0_o (float, optional): Charges in surface layer (unit: C/m3).
-            charge_stern_o (float, optional): Charges in stern layer (unit: C/m3).
-            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m3).
-            potential_0_i (float, optional): Surface potential (unit: V).
-            potential_stern_i (float, optional): Stern plane potential (unit: V).
-            potential_zeta_i (float, optional): Zeta plane potential (unit: V).
-            potential_r_i (float, optional): Potential at the position truncated
-                inside the inter layer (unit: V).
-            charge_0_i (float, optional): Charges in surface layer (unit: C/m3).
-            charge_stern_i (float, optional): Charges in stern layer (unit: C/m3).
-            charge_diffuse_i (float, optional): Charges in zeta layer (unit: C/m3).
-            xd (float, optional): Distance from quartz surface to zeta plane (unit: V).
-            cond_intra (float, optional): Inter layer conductivity (unit: S/m).
-            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
-            logger (Logger): Logger for debugging.
+            potential_0_o (float): Surface potential of the outer surface (V)
+            potential_stern_o (float): Stern potential of the outer surface (V)
+            potential_zeta_o (float): Zeta potential of the outer surface (V)
+            charge_0_o (float): Charge density of the outer surface (C/m^2)
+            charge_stern_o (float): CCharge density of the Stern layer on the
+                outer surface (C/m^2)
+            charge_diffuse_o (float): Charge density of the diffuse layer on
+                the outer surface (C/m^2)
+            potential_0_i (float): Surface potential of the inner surface (V)
+            potential_stern_i (float): Stern potential of the inner surface (V)
+            potential_zeta_i (float): Zeta potential of the inner surface (V)
+            potential_r_i (float): Potential at the midpoint of the interlayer
+                (i.e., truncation point) (V)
+            charge_0_i (float): Charge density of the inner surface (C/m^2)
+            charge_stern_i (float): Charge density of the Stern layer in
+                the inner surafce (C/m^2)
+            charge_diffuse_i (float): Charge density of the diffuse layer
+                in the innner surface (C/m3)
+            xd (float): Distance from the surface (i.e., the center of the oxygen
+                in the siloxane surface) to shear plane (V)
+            cond_intra (float): Inter layer conductivity (S/m)
+            cond_infdiffuse (float): Conductivity of the outer surface (S/m)
+            logger (Logger): Logger for debugging
         """
-
+        # default parameters
         if tlm_params is None:
             tlm_params = TLMParams(
                 T=nacl.get_temperature(),
@@ -1996,12 +1751,41 @@ class Smectite(Phyllosilicate):
             cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )
+        
+    def calc_cond_tensor(self) -> np.ndarray:
+        """Calculate the electrical conductivity tensor of smectite with layers
+        aligned parallel to the xy-plane. The TOT plane is assumed to be an
+        insulator (e.g., Watanabe [2005]).
+
+        Returns:
+            np.ndarray: Electrical conductivity tensor (3×3; S/m)
+        """
+        assert self._check_if_calculated_electrical_params_truncated, (
+            "Before calculating the conductivity tensor of smectite, you should"
+            "calculate the electrochemical properties of the truncated diffuse layer"
+        )
+        if self.cond_intra is None:
+            self.calc_cond_interlayer()
+        sigma_intra = self.cond_intra
+        # conductivity and width of the TOT layer
+        ctot, dtot = 1.0e-12, 6.6e-10
+        sigma_h = (sigma_intra * self.layer_width + ctot * dtot) / (
+            dtot + self.layer_width
+        )
+        sigma_v = (self.layer_width + dtot) / (
+            self.layer_width / sigma_intra + dtot / ctot
+        )
+        cond_tensor = np.array(
+            [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
+            dtype=np.float64,
+        )
+        self.cond_tensor = cond_tensor
+        return cond_tensor
 
 
 # pylint: disable=dangerous-default-value
 class Kaolinite(Phyllosilicate):
-    """Inherited class from Phyllosilicate, with surface adsorption site density, layer
-    charge, and layer width fixed to the physical properties of kaolinite
+    """Set TLM parameters for representing the electrochemical properties of smectite.
 
     Args:
         Phyllosilicate: Phyllosilicate class
@@ -2027,18 +1811,20 @@ class Kaolinite(Phyllosilicate):
         Args:
             nacl (NaCl): Instance of NaCl class
             tlm_params (TLMParams): TLM parameter
-            potential_0_o (float, optional): Surface potential (unit: V).
-            potential_stern_o (float, optional): Stern plane potential (unit: V).
-            potential_zeta_o (float, optional): Zeta plane potential (unit: V).
-            charge_0_o (float, optional): Charges in surface layer (unit: C/m3).
-            charge_stern_o (float, optional): Charges in stern layer (unit: C/m3).
-            charge_diffuse_o (float, optional): Charges in zeta layer (unit: C/m3).
-            cond_infdiffuse (float, optional): Infinite diffuse layer conductivity (unit: S/m).
+            potential_0_o (float): Surface potential of the outer surface (V)
+            potential_stern_o (float): Stern potential of the outer surface (V)
+            potential_zeta_o (float): Zeta potential of the outer surface (V)
+            charge_0_o (float): Charge density of the outer surface (C/m^2)
+            charge_stern_o (float): CCharge density of the Stern layer on the
+                outer surface (C/m^2)
+            charge_diffuse_o (float): Charge density of the diffuse layer on
+                the outer surface (C/m^2)
+            cond_infdiffuse (float): Conductivity of the outer surface (S/m)
             logger (Logger): Logger for debugging.
         """
 
         if tlm_params is None:
-            # TODO: set valid params
+            # TODO: validate this parameter
             # Set parameters are based on Leroy & Revil (2004)
             tlm_params = TLMParams(
                 T=nacl.get_temperature(),
@@ -2076,6 +1862,23 @@ class Kaolinite(Phyllosilicate):
             cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )
+
+    def calc_cond_tensor(self) -> np.ndarray:
+        """Calculate conductivity tensor of kaolinite.
+
+        Args:
+            edge_length (float): Lengths of the edges of the cube's cells
+
+        Returns:
+            np.ndarray: 3 rows and 3 columns condutivity tensor
+        """
+        cond_silica = 1.0e-12
+        cond_tensor = np.array(
+            [[cond_silica, 0.0, 0.0], [0.0, cond_silica, 0.0], [0.0, 0.0, cond_silica]],
+            dtype=np.float64,
+        )
+        self.cond_tensor = cond_tensor
+        return cond_tensor
 
 
 if __name__ == "__main__":

@@ -1,6 +1,6 @@
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from copy import deepcopy
 from logging import Logger
 from math import pi, sqrt, log, log10, exp, tanh, isclose
@@ -55,11 +55,11 @@ class NaCl(Fluid):
                  pressure is set to be on the vapor + liquid coexistence curve.
             molarity (float): Molarity (mol/l)
             molarity (float): Molality (mol/kg)
-            ph (float, optional): pH
+            ph (float): pH
             conductivity (float): Electrical conductivity of NaCl fluid
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
-            method (str): Method to calculate electrical conductivity
-                sen_and_goode: Sen and Goode (1992)
+            method (str): Method to calculate electrical conductivity:
+                "sen_and_goode": Eq.(9) in Sen & Goode (1992)
             logger (Logger): Logger
         """
         assert molarity is not None or molality is not None
@@ -85,7 +85,7 @@ class NaCl(Fluid):
 
             def __callback(__x) -> float:
                 rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
-                nh20 = (rho - 1000.0 * molarity * MNaCl) / MH2O  # mol/m3
+                nh20 = (rho - 1000.0 * molarity * MNaCl) / MH2O  # mol/m^3
                 return __x - molarity / (molarity + nh20 * 1.0e-3)
 
             xnacl = bisect(
@@ -126,7 +126,6 @@ class NaCl(Fluid):
                 del ion_props[_s]
                 continue
             if _s == Species.H.name:
-                # Assume proton activity coefficient is 1
                 # TODO: convert proton activity to concentration
                 _prop[IonProp.Molarity.name] = _ah
                 _prop[IonProp.Activity.name] = _ah
@@ -198,10 +197,10 @@ class NaCl(Fluid):
             self.calc_cond_tensor_cube_oxyz()
 
     def set_cond(self, _cond: float) -> None:
-        """Set fluid conductivity
+        """Set electrical conductivity of fluid.
 
         Args:
-            _cond (float): Fluid conductivity
+            _cond (float): Electrical conductivity of fluid (S/m)
         """
         self.conductivity = _cond
 
@@ -209,7 +208,7 @@ class NaCl(Fluid):
         """Calculate isotropic conductivity tensor.
 
         Returns:
-            np.ndarray: 3 rows and 3 columns condutivity tensor
+            np.ndarray: Electrical condutivity tensor (3×3)
         """
         cond_tensor = np.array(
             [
@@ -227,14 +226,16 @@ class NaCl(Fluid):
         """Getter for the ion_props
 
         Returns:
-            Dict: Ion properties
+            Dict: Ion properties (keys are the names of ion species,
+            and the values are properties of each species, such as
+            activity, molality, etc.)
         """
         return deepcopy(self.ion_props)
 
     def get_pressure(self) -> float:
-        """Getter for the pressure
+        """Getter for the fluid pressure
         Returns:
-            float: Absolute pressure
+            float: Fluid pressure (Pa)
         """
         return self.pressure
 
@@ -242,7 +243,7 @@ class NaCl(Fluid):
         """Getter for the temperature
 
         Returns:
-            float: Absolute temperature
+            float: Absolute temperature (K)
         """
         return self.temperature
 
@@ -255,19 +256,19 @@ class NaCl(Fluid):
         return self.density
 
     def get_dielec_water(self) -> float:
-        """Getter for the permittivity of water
+        """Getter for the dielectric permittivity of water
 
         Returns:
-            float: permittivity of water
+            float: Dielectric permittivity of water (F/m)
         """
         return self.dielec_water
 
     def get_dielec_fluid(self) -> float:
-        """Getter for the permittivity of H2O-NaCl fluid
+        """Getter for the dielectric permittivity of H2O-NaCl fluid
         (not pure water)
 
         Returns:
-            float: permittivity of H2O-NaCl fluid
+            float: Dielectric permittivity of H2O-NaCl fluid (F/m)
         """
         return self.dielec_fluid
 
@@ -275,7 +276,7 @@ class NaCl(Fluid):
         """Getter for the viscosity(Ps・s) of H2O-NaCl fluid
 
         Returns:
-            float: viscosity of water
+            float: Viscosity of H2O-NaCl fluid (Pa・s)
         """
         return self.viscosity
 
@@ -292,25 +293,25 @@ class NaCl(Fluid):
         """Getter for the electrical conductivity of fluid
 
         Returns:
-            float: electrical conductivity (S/m)
+            float: Electrical conductivity of fluid (S/m)
         """
         return self.conductivity
 
-    def get_cond_tensor(self) -> np.ndarray or None:
-        """Getter for the conductivity tensor
+    def get_cond_tensor(self) -> Union[np.ndarray, None]:
+        """Getter for the electrical conductivity tensor
 
         Returns:
-            np.ndarray: Conductivity tensor with 3 rows and 3 columns
+            np.ndarray: Electrical conductivity tensor (3×3; S/m)
         """
         if self.cond_tensor is not None:
             return deepcopy(self.cond_tensor)
         return self.cond_tensor
 
     def save(self, _pth: str) -> None:
-        """Save NaCl class as pickle
+        """Save NaCl object as pickle
 
         Args:
-            _pth (str): path to save
+            _pth (str): File path to save
         """
         with open(_pth, "wb") as pkf:
             pickle.dump(self, pkf, pickle.HIGHEST_PROTOCOL)
@@ -319,11 +320,11 @@ class NaCl(Fluid):
 class ConstPitzer:
     """Constants used to calculate activity in the Pitzer equation"""
 
-    # Common parameters
+    # common parameters
     alpha = 2.0
     b = 1.2
 
-    # Temperature dependence parameter listed at Table3 in Simoes et al.(2017)
+    # temperature dependence parameter listed at Table3 in Simoes et al.(2017)
     kappa1_case1 = -1.4e-3
     kappa2_case1 = 3.34e-4
     kappa3_case1 = 2.72e-4
@@ -350,7 +351,7 @@ class ConstPitzer:
             # parameter of Simoes et al.(2017)
             "rm": 2.18,
             "rx": 2.24,
-            # parameters of Voigt(2020)
+            # parameters of Voigt (2020)
             "b0": {
                 "A": 9931.0954,
                 "B": -223.8321,
@@ -381,14 +382,14 @@ class ConstPitzer:
 
 def __calc_pitzer_params_nacl(name: str, T: float) -> float:
     """Calculate temperature dependence of Pitzer's parameter
-    based on Voigt(2020)
+    based on Voigt (2020)
 
     Args:
         name (name): Name of Pitzer's parameter (b0 or b1 or cphi)
         T (float): Absolute temperature (K)
 
     Returns:
-        float: Pitzer's parameter corrected for temperature
+        float: Pitzer's parameter calibrated for temperature T
     """
     param = ConstPitzer.params["NaCl"][name]
     A = param["A"]
@@ -401,15 +402,16 @@ def __calc_pitzer_params_nacl(name: str, T: float) -> float:
 
 
 def sen_and_goode_1992(T, M) -> float:
-    """Calculate conductivity of NaCl fluid based on Sen & Goode (1992) equation.
-    The modified equation was in Watanabe et al. (2021).
+    """Calculate electrical conductivity of NaCl fluid based on the
+    Sen & Goode (1992)'s equation. The modified equation can be found
+    in Watanabe et al. (2021).
 
     Args:
         T (float): Absolute temperature (K)
-        M (float): Molality
+        M (float): Molality (mol/kg)
 
     Returens:
-        float: Conductivity of NaCl fluid in liquid phase
+        float: Electrical conductivity of NaCl fluid in liquid phase (S/m)
     """
     # convert Kelvin to Celsius
     T -= 273.15
@@ -445,8 +447,11 @@ def calc_nacl_activities(
         ion_props (Dict): Dictionary containing ion properties. Default
             values are defined in constants.py
         method (str): Character that identifies which method is used to
-            implement the temperature dependence of Pizter's parameters
-            (thereda or simones).
+            implement the temperature dependence of Pizter's parameters:
+
+            "thereda": Voigt(2020)'s empirical equation will be used.
+            "simones": Simoes et al. (2017)'s semi-empirical equation
+                will be used.
 
     Returns:
         Dict: Updated ion_props
@@ -502,7 +507,7 @@ def calc_nacl_activities(
         ) * (T - 298.15)
 
     if method == "thereda":
-        # based on Voigt(2020)
+        # based on Voigt (2020)
         beta0 = __calc_pitzer_params_nacl("b0", T)
         beta1 = __calc_pitzer_params_nacl("b1", T)
         cphi = __calc_pitzer_params_nacl("cphi", T)
@@ -542,7 +547,7 @@ def calc_nacl_activities(
         + abs(zx) * mplus * mminus * cmx
     )
 
-    # conversion between molality and molarity scale (Pitzer, 1991, eq.34)
+    # conversion between molality and molarity scale (Eq.34 in Pitzer, 1991)
     y_plus = (
         ion_props[Species.Na.name][IonProp.Molality.name]
         * (1.0e-3 * rho)
@@ -568,7 +573,7 @@ def calc_nacl_activities(
 
 
 def __calc_ion_strength(ion_props: Dict) -> float:
-    """Calculate ion strength by eq.(A5) in Leroy et al. (2015)
+    """Calculate ion strength by Eq.(A5) in Leroy et al. (2015)
 
     Args:
         ion_props (Dict): Dictionary containing ion properties. Default
@@ -595,13 +600,13 @@ def __calc_f(
     ion_props: Dict,
     beta1: float,
 ) -> float:
-    """Calculate F by eq.(A3) in Leroy et al. (2015)
+    """Calculate F by Eq.(A3) in Leroy et al. (2015)
 
     Args:
         T (float): Absolute temperature (K)
         rho (float): Density of water (kg/m^3)
-        dielec_water (float): Dielec permittivity of water (F/m)
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        dielec_water (float): Dielectric permittivity of water (F/m)
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
         ion_props (Dict): Dictionary containing ion properties. Default
             values are defined in constants.py.
@@ -623,12 +628,12 @@ def __calc_f(
 
 
 def __calc_aphi(T: float, rho: float, dielec_water: float) -> float:
-    """Calculate Aφ by eq.(A4) in Leroy et al.(2015)
+    """Calculate Aφ by Eq.(A4) in Leroy et al.(2015)
 
     Args:
         T (float): Absolute temperature (K)
         rho (float): Density of water (kg/m^3)
-        dielec_water (float): Dielec permittivity of water (F/m)
+        dielec_water (float): Dielectric permittivity of water (F/m)
 
     Returns:
         float: Aφ
@@ -642,10 +647,10 @@ def __calc_aphi(T: float, rho: float, dielec_water: float) -> float:
 
 
 def __calc_bdash(ion_strength: float, beta1: float) -> float:
-    """Calculate B' by eq.(A6) in Leroy et al.(2015)
+    """Calculate B' by Eq.(A6) in Leroy et al.(2015)
 
     Args:
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
         beta1 (float): Pitzer's parameter
 
@@ -658,10 +663,10 @@ def __calc_bdash(ion_strength: float, beta1: float) -> float:
 
 
 def __calc_ki1(ion_strength: float) -> float:
-    """Calculate χ1 by eq.(A7) in Leroy et al.(2015)
+    """Calculate χ1 by Eq.(A7) in Leroy et al.(2015)
 
     Args:
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
 
     Returns:
@@ -671,10 +676,10 @@ def __calc_ki1(ion_strength: float) -> float:
 
 
 def __calc_b(ion_strength: float, beta0: float, beta1: float) -> float:
-    """Calculate B by eq.(A8) in Leroy et al.(2015)
+    """Calculate B by Eq.(A8) in Leroy et al.(2015)
 
     Args:
-        ion_strength (float): Ion strength (mol/kg) calculated by eq.(A5) in
+        ion_strength (float): Ion strength (mol/kg) calculated by Eq.(A5) in
             Leroy et al (2015)
         beta0 (float): Pitzer's parameter
         beta1 (float): Pitzer's parameter
@@ -710,7 +715,8 @@ def calc_dielec_nacl_simonin1996(Cs: float, dielec_water: float) -> float:
 
 
 def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
-    """Calculate dielectric permittivity of H2O-NaCl fluid by Raspo and Neau (2020).
+    """Calculate dielectric permittivity of H2O-NaCl fluid by the empirical
+    equations proposed by Raspo & Neau (2020).
 
     Reference:
         Raspo I., Neau E., An empirical correlation for the relative permittivity of liquids
@@ -723,7 +729,7 @@ def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
 
     Args:
         T (float): Absolute temperature (K)
-        X (float): Mole fraction of NaCl
+        X (float): Mole fraction of NaCl in 0–1 (-)
 
     Returns:
         float: Dielectric permittivity of H2O-NaCl fluid (F/m)
@@ -736,16 +742,16 @@ def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
     bi = 0.07779607 * GAS_CONST * Tc / Pc
     vstar = bi
 
-    # δ(T) in eq.(7)
+    # δ(T) in Eq.(7)
     dt = 0.6 * tanh(0.02 * (498.15 - T))
 
-    # E(T, X) in eq.(6)
+    # E(T, X) in Eq.(6)
     E = 1.0 + dt * (
         2.0e-5 * X / vstar
         - (ALPHA_Na + ALPHA_Cl) * X / (vstar * (1.0 + 1.6e-4 * X / vstar))
     )
 
-    # εri in eq.(1). Parameters are in Table 2.
+    # εri in Eq.(1). Parameters are in Table 2.
     A0 = -1664.4988
     A1 = -0.884533
     A2 = 0.0003635
@@ -753,7 +759,7 @@ def calc_dielec_nacl_RaspoAndNeau2020(T: float, X: float) -> float:
     A5 = 308.3394
     er = A0 + A1 * T + A2 * T**2 + A4 / T + A5 * log(T)
 
-    # εr* in eq.(5). (bi=v*)
+    # εr* in Eq.(5). (bi=v*)
     erstar = er * E
 
     return erstar * DIELECTRIC_VACUUM
@@ -770,7 +776,7 @@ def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
-        Xnacl (float): Weight fraction of NaCl
+        Xnacl (float): Weight fraction of NaCl in 0–1 (-)
 
     Returns:
         float: Viscosity (Pa s)
@@ -789,7 +795,7 @@ def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     e1 = a1 * Xnacl**a2
     e2 = 1.0 - b1 * T**b2 - b3 * (Xnacl**a2) * (T**b2)
 
-    # eq.(4)
+    # Eq.(4)
     Tstar = e1 + e2 * T
     Tstar += 273.15
 
@@ -820,7 +826,7 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
-        Xnacl (float): Molar fraction of NaCl
+        Xnacl (float): Molar fraction of NaCl in 0–1 (-)
 
     Returns:
         float: Density (kg/m3)
@@ -833,6 +839,7 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
     mh2o = 18.015e-3
     mnacl = 58.443e-3
 
+    # TODO: fix first two branch
     # This condition branch is implemented based on line 370 of "Driesner_eqs"
     # in Klyukin et al. (2020).
     v = calc_X_L_Sat(T, P)
@@ -914,12 +921,12 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
 
 
 def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
-    """Calculate T* (K) of eq.(13) in Driesner(2007).
+    """Calculate T* (K) of Eq.(13) in Driesner(2007).
 
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
-        Xnacl (float): Molar fraction of NaCl
+        Xnacl (float): Molar fraction of NaCl in 0–1 (-)
 
     Returns:
         float: T* (K)
@@ -930,10 +937,10 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     # convert Pa to bar
     P *= 1.0e-5
 
-    # parameter to calculate eq.(9)
+    # parameter to calculate Eq.(9)
     # Below parameters are based on Mao et al.(2015)
     n11 = -0.45146040e2 - 0.29812895e2 * exp(-0.13786998e-2 * P)
-    # eq.(11)
+    # Eq.(11)
     n10 = (
         330.47
         + 0.942876 * sqrt(P)
@@ -942,14 +949,14 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
         + 3.45052e-10 * P**3
     )
     n12 = -(n11 + n10)
-    # eq.(9)
+    # Eq.(9)
     n1 = n10 + n11 * (1.0 - Xnacl) + n12 * (1.0 - Xnacl) ** 2
 
-    # parameter to calculate eq.(10)
+    # parameter to calculate Eq.(10)
     n21 = -2.6105212 - 0.20362282e-3 * P
     n22 = 0.031998439 + 0.36137426e-5 * P + 0.15608215e-8 * P**2
     n20 = 1.0 - n21 * sqrt(n22)
-    # eq.(12)
+    # Eq.(12)
     n2_xnacl1 = (
         -0.0370751
         + 0.00237723 * sqrt(P)
@@ -960,7 +967,7 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     n23 = n2_xnacl1 - n20 - n21 * (sqrt(1.0 + n22))
     n2 = n20 + n21 * sqrt(Xnacl + n22) + n23 * Xnacl
 
-    # parameter to calculate eq.(14)
+    # parameter to calculate Eq.(14)
     n300 = 0.64988075e7 / (P + 0.42937670e3) ** 2
     n301 = -0.47287373e2 - 0.81190283e2 * exp(-0.59264170e-3 * P)
     n302 = 0.28803474e3 * exp(-0.56045287e-2 * P)
@@ -968,14 +975,14 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     n311 = -0.41933849e2 + 0.19198040e2 * exp(-0.10315741e-2 * P)
     n312 = -0.29097042 - 0.83864808e-3 * P
 
-    # calculate eq.(15)
+    # calculate Eq.(15)
     n30 = n300 * (exp(n301 * Xnacl) - 1.0) + n302 * Xnacl
     n31 = n310 * exp(n311 * Xnacl) + n312 * Xnacl
     D = n30 * exp(n31 * T)
 
-    # calculate eq.(14)
+    # calculate Eq.(14)
     Tv = n1 + n2 * T + D
-    # calculate eq.(7)
+    # calculate Eq.(7)
     Tv += 273.15
 
     return Tv
@@ -1067,7 +1074,7 @@ def calc_X_L_Sat(T: float, P: float) -> float:
         P (float): Pressure (Pa)
 
     Returns:
-        float: Molar fraction of NaCl
+        float: Molar fraction of NaCl in 0–1 (-)
     """
     T -= 273.15
     P *= 1.0e-5
@@ -1333,18 +1340,18 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     Sum1 = 0.0
     P_Crit = None
     if T < TH2O_Crit:
-        # eq. 5a of Driesner (2007, part1)
+        # Eq.5a of Driesner (2007, part1)
         for i in range(7):
             Sum1 += C[i] * (TH2O_Crit - T) ** CA[i]
         P_Crit = PH2O_Crit + Sum1
     else:
         if T >= TH2O_Crit and T <= 500.0:
-            # eq. 5b of Driesner (2007, part1)
+            # Eq.5b of Driesner (2007, part1)
             for i in range(7, 11):
                 Sum1 += C[i] * (T - TH2O_Crit) ** CA[i]
             P_Crit = PH2O_Crit + Sum1
         else:
-            # eq. 5c of Driesner (2007, part1)
+            # Eq.5c of Driesner (2007, part1)
             for i in range(11, 14):
                 Sum1 += C[i] * (T - 500.0) ** [i - 11]
             P_Crit = Sum1
@@ -1352,12 +1359,12 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     Sum1 = 0.0
     x_crit = 0.0
     if T >= TH2O_Crit and T <= 600.0:
-        # eq. 7a of Driesner (2007, part1)
+        # Eq. 7a of Driesner (2007, part1)
         for i in range(7):
             Sum1 += d[i] * (T - TH2O_Crit) ** (i + 1)
         x_crit = Sum1
     elif T > 600.0:
-        # eq. 7b of Driesner (2007, part1)
+        # Eq. 7b of Driesner (2007, part1)
         for i in range(7, 11):
             Sum1 += d[i] * (T - 600.0) ** (i - 7)
         x_crit = Sum1
@@ -1368,14 +1375,4 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 
 if __name__ == "__main__":
-    # x = calc_X_L_Sat(598.0, 118.14e-1)
-    # density = calc_density(598.0, 118.14e5, x)
-    # def __callback(__x) -> float:
-    #     nh20 = (density - 1000.0 * __x * MNaCl) / MH2O  # mol/m3
-    #     return x - __x / (__x + nh20 * 1.0e-3)
-
-    # molarity = bisect(__callback, 0.0, 12.0)
-    # # calculate molality(mol/kg)
-    # molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
-    # print(molality)
     pass

@@ -1,6 +1,6 @@
 # Effective electorical conductivity simulator for rocks
 
-These codes were developed to simulate the bulk electrical conductivity of rocks containing clay minerals.
+These codes were developed to simulate the electrical conductivity measurements on rocks containing clay minerals.
 
 # Install
 The following versions of the packages are recommended for installation.

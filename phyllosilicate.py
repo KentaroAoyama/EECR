@@ -42,7 +42,7 @@ with open(smectite_trun_init_pth, "rb") as pkf:
 
 
 class TLMParams:
-    """TLM parameters"""
+    """Parameters of triple layer model (TLM)"""
 
     def __init__(
         self,
@@ -916,30 +916,28 @@ class Phyllosilicate:
         Returns:
             float: xd (m)
         """
-        # TODO: simplify
         xd: float = None
-        r = self.layer_width * 1.0e10
-        if r < 9.4:
-            xd = 2.0845481049562675
-        elif r < 12.3:
-            l = 12.3 - 9.4
-            r -= 9.4
-            xd = 2.4187499999999993 * abs(r / l) + 2.0845481049562675 * abs(l - r) / l
-        elif r < 15.2:
-            l = 15.2 - 12.3
-            r -= 12.3
-            xd = 4.206896551724138 * abs(r / l) + 2.4187499999999993 * abs(l - r) / l
-        elif r < 18.4:
-            l = 18.4 - 15.2
-            r -= 15.2
-            xd = 4.182509505703424 * abs(r / l) + 4.206896551724138 * abs(l - r) / l
-        elif r < 21.6:
-            l = 21.6 - 18.4
-            r -= 18.4
-            xd = 4.220116618075801 * abs(r / l) + 4.182509505703424 * abs(l - r) / l
+        rintp = self.layer_width * 1.0e10
+        r_ls = (9.4, 12.3, 15.2, 18.4, 21.6)
+        xd_ls = (
+            2.0845481049562675,
+            2.4187499999999993,
+            4.206896551724138,
+            4.182509505703424,
+            4.220116618075801,
+        )
+        xdintp: float = None
+        if rintp < r_ls[0]:
+            xdintp = xd_ls[0]
+        elif rintp > r_ls[-1]:
+            xdintp = xd_ls[-1]
         else:
-            xd = 4.220116618075801
-        self.xd = xd * 1.0e-10
+            for i, (r, xd) in enumerate(zip(r_ls, xd_ls)):
+                if r <= rintp <= r_ls[i + 1]:
+                    dr = rintp - r
+                    xdintp = xd + dr * ((xd_ls[i + 1] - xd) / (r_ls[i + 1] - r))
+                    break
+        self.xd = xdintp * 1.0e-10
         return self.xd
 
     def calc_potentials_and_charges_inf(
@@ -998,10 +996,10 @@ class Phyllosilicate:
 
         if x_init is None:
             # Set initial electrical parameters
-            if self.qi < 0.0 and self.gamma_1 == 0.0:
+            if isinstance(self, Smectite):
                 # for smectite case
                 params = smectite_inf_init_params
-            elif self.qi == 0.0 and self.gamma_1 > 0.0:
+            elif isinstance(self, Kaolinite):
                 # for kaolinite case
                 params = kaolinite_init_params
             else:
@@ -1430,12 +1428,10 @@ class Phyllosilicate:
                 the interlayer (S/m), and the tuple containing conductivity of
                 the Stern layer and the diffuse layer (both S/m).
         """
-        assert self._check_if_calculated_electrical_params_truncated(), (
-            "Before calculating the conductivity of the interlayer, you should "
-            "calculate the electrochemical properties of the truncated diffuse layer"
-        )
         if self.xd is None:
             self.calc_xd()
+        if not self._check_if_calculated_electrical_params_truncated():
+            self.calc_potentials_and_charges_truncated()
         if self.kappa_truncated is None:
             self.__calc_kappa_truncated()
 
@@ -1509,67 +1505,17 @@ class Phyllosilicate:
 
         return self.cond_infdiffuse, (cond_stern, cond_na_diffuse)
 
-    def calc_smec_cond_tensor_cube_oxyz(self) -> np.ndarray:
-        """Calculate the electrical conductivity tensor of smectite with layers
-        aligned parallel to the xy-plane. The TOT plane is assumed to be an
-        insulator (e.g., Watanabe [2005]).
-
-        Returns:
-            np.ndarray: Electrical conductivity tensor (3×3; S/m)
-        """
-        assert self._check_if_calculated_electrical_params_truncated, (
-            "Before calculating the conductivity tensor of smectite, you should"
-            "calculate the electrochemical properties of the truncated diffuse layer"
-        )
-        sigma_intra = self.cond_intra
-        # TODO: If it is not calculated, do it here.
-        assert sigma_intra is not None, (
-            "Before calculating the conductivity of smectite, you should calculate"
-            "the interlayer conductivity"
-        )
-        # conductivity and width of the TOT layer
-        ctot, dtot = 1.0e-12, 6.6e-10
-        sigma_h = (sigma_intra * self.layer_width + ctot * dtot) / (
-            dtot + self.layer_width
-        )
-        sigma_v = (self.layer_width + dtot) / (
-            self.layer_width / sigma_intra + dtot / ctot
-        )
-        cond_tensor = np.array(
-            [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
-            dtype=np.float64,
-        )
-        return cond_tensor
-
-    def calc_kaol_cond_tensor_cube_oxyz(self) -> np.ndarray:
-        # TODO: validate this
-        """Calculate conductivity tensor of kaolinite.
-
-        Args:
-            edge_length (float): Lengths of the edges of the cube's cells
-
-        Returns:
-            np.ndarray: 3 rows and 3 columns condutivity tensor
-        """
+    def calc_cond_tensor(self) -> None:
+        """Calculate conductivity tensor."""
         cond_silica = 1.0e-12
         cond_tensor = np.array(
             [[cond_silica, 0.0, 0.0], [0.0, cond_silica, 0.0], [0.0, 0.0, cond_silica]],
             dtype=np.float64,
         )
-        return cond_tensor
-
-    def calc_cond_tensor(self) -> None:
-        # TODO: remove this
-        """Calculate conductivity tensor. Separate cases by smectite and kaolinite."""
-        if self.qi < 0.0 and self.gamma_1 == 0.0:
-            tensor = self.calc_smec_cond_tensor_cube_oxyz()
-        else:
-            tensor = self.calc_kaol_cond_tensor_cube_oxyz()
-
-        self.cond_tensor = tensor
-
         if self.logger is not None:
             self.logger.info(f"cond_tensor: {self.cond_tensor}")
+        self.cond_tensor = cond_tensor
+        return cond_tensor    
 
     def __calc_na_density_at_x(self, x: float) -> float:
         """Calculate Na+ number density at distance x from the shear plane.
@@ -1805,6 +1751,36 @@ class Smectite(Phyllosilicate):
             cond_infdiffuse=cond_infdiffuse,
             logger=logger,
         )
+        
+    def calc_cond_tensor(self) -> np.ndarray:
+        """Calculate the electrical conductivity tensor of smectite with layers
+        aligned parallel to the xy-plane. The TOT plane is assumed to be an
+        insulator (e.g., Watanabe [2005]).
+
+        Returns:
+            np.ndarray: Electrical conductivity tensor (3×3; S/m)
+        """
+        assert self._check_if_calculated_electrical_params_truncated, (
+            "Before calculating the conductivity tensor of smectite, you should"
+            "calculate the electrochemical properties of the truncated diffuse layer"
+        )
+        if self.cond_intra is None:
+            self.calc_cond_interlayer()
+        sigma_intra = self.cond_intra
+        # conductivity and width of the TOT layer
+        ctot, dtot = 1.0e-12, 6.6e-10
+        sigma_h = (sigma_intra * self.layer_width + ctot * dtot) / (
+            dtot + self.layer_width
+        )
+        sigma_v = (self.layer_width + dtot) / (
+            self.layer_width / sigma_intra + dtot / ctot
+        )
+        cond_tensor = np.array(
+            [[sigma_h, 0.0, 0.0], [0.0, sigma_h, 0.0], [0.0, 0.0, sigma_v]],
+            dtype=np.float64,
+        )
+        self.cond_tensor = cond_tensor
+        return cond_tensor
 
 
 # pylint: disable=dangerous-default-value
@@ -1887,6 +1863,26 @@ class Kaolinite(Phyllosilicate):
             logger=logger,
         )
 
+    def calc_cond_tensor(self) -> np.ndarray:
+        """Calculate conductivity tensor of kaolinite.
+
+        Args:
+            edge_length (float): Lengths of the edges of the cube's cells
+
+        Returns:
+            np.ndarray: 3 rows and 3 columns condutivity tensor
+        """
+        cond_silica = 1.0e-12
+        cond_tensor = np.array(
+            [[cond_silica, 0.0, 0.0], [0.0, cond_silica, 0.0], [0.0, 0.0, cond_silica]],
+            dtype=np.float64,
+        )
+        self.cond_tensor = cond_tensor
+        return cond_tensor
+
 
 if __name__ == "__main__":
+    nacl = NaCl(298.15, 5.0e6, 1.0e-2)
+    smec = Smectite(nacl=nacl)
+    print(smec.calc_cond_tensor())
     pass

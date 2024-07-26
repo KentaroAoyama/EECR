@@ -120,7 +120,7 @@ class Cube:
             self.ez = np.float64(1.0)
 
     # pylint: disable=dangerous-default-value
-    def create_pixel_by_macro_variable(
+    def assign_elements_from_macro_variable(
         self,
         shape: Tuple[int] = (10, 10, 10),
         edge_length: float = 1.0e-6,
@@ -132,7 +132,7 @@ class Cube:
         seed: int = 42,
         rotation_setting: Union[str, Dict[Any, Tuple[float]]] = "random",
     ) -> None:
-        """Create a pixel based on macroscopic physical properties such as porosity and mineral
+        """Assign elements based on macroscopic physical properties such as porosity and mineral
         mass fractions.
 
         Args:

@@ -58,7 +58,7 @@ k_xna_smec_trun = 0.95  # Gonçalvès et al. (2007), Table 1
 c1_smec_trun = 2.1  # Gonçalvès et al. (2007), Table 1
 c2_smec_trun = 0.55  # Gonçalvès et al. (2007), Table 1
 
-# Kaolinite
+# Kaolinite (not fully tested)
 k_aloh_kaol = 1.0e-10  # Leroy & Revil (2004), Table 1
 k_sioh_kaol = 4.95e-6  # Leroy & Revil (2004), Table 2
 k_xh_kaol = 1.0e-2  # Leroy & Revil (2004), Table 1
@@ -106,10 +106,7 @@ class IonProp(IntEnum):
     Valence = auto()
 
 
-# http://apchem2.kanagawa-u.ac.jp/matsumotolab/Echem3.pdf
-# Reference：doi:10.1029/2008JB006114
-# In the dynamic stern layer assumtion, stern layer has surtain
-# mobility (https://doi.org/10.1016/j.jcis.2015.03.047)
+# default properties of NaCl solution
 ion_props_default = {
     Species.Na.name: {
         IonProp.Molarity.name: 1.0e-3,
@@ -145,7 +142,8 @@ ion_props_default = {
     },
 }
 
-# Based on Roger et al. (2009) and Gouellec and Elimelech (2002)
+# properties used in the mean spherical approximation
+# based on Roger et al. (2009) and Gouellec and Elimelech (2002)
 msa_props: Dict[str, Dict] = {
     Species.Na.name: {"radius": 1.17 * 1.0e-10, "D0": 1.33 * 1.0e-9},
     Species.Cl.name: {"radius": 1.81 * 1.0e-10, "D0": 2.03 * 1.0e-9},

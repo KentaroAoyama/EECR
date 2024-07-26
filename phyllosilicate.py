@@ -1882,7 +1882,4 @@ class Kaolinite(Phyllosilicate):
 
 
 if __name__ == "__main__":
-    nacl = NaCl(298.15, 5.0e6, 1.0e-2)
-    smec = Smectite(nacl=nacl)
-    print(smec.calc_cond_tensor())
     pass

@@ -14,8 +14,8 @@ import random
 import pickle
 import numpy as np
 from scipy.integrate import quad
-from deap import creator, base, tools
-import optuna
+# from deap import creator, base, tools
+# import optuna
 
 import constants as const
 from constants import Species, IonProp

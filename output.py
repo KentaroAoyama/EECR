@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.cm as cm
-import vtk
+# import vtk
 
 from solver import FEM_Cube
 from cube import Cube

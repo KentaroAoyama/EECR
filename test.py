@@ -31,8 +31,8 @@ import numpy as np
 from tqdm import tqdm
 import pandas as pd
 from scipy.optimize import least_squares, curve_fit, bisect
-from lmfit import Model, Parameter
-from sklearn.metrics import r2_score
+# from lmfit import Model, Parameter
+# from sklearn.metrics import r2_score
 from phyllosilicate import Smectite, Kaolinite
 from quartz import Quartz
 import constants as const
@@ -1865,7 +1865,7 @@ def cs_tempe_th():
     plt.rcParams['ytick.direction'] = 'in'
 
     fig, ax = plt.subplots()
-    ax.plot(tempe_ls, [v/nacl_ls[0] for v in nacl_ls], color=cm.jet(0.0), linestyle="dotted", label="NaCl(aq) ($σ_{f}$)")
+    ax.plot(tempe_ls, [v/nacl_ls[0] for v in nacl_ls], color=cm.jet(0.0), linestyle="dotted", label="NaCl(aq) ($σ_{w}$)")
     ax.plot(tempe_ls, [v/smec_ls[0] for v in smec_ls], color=cm.jet(0.4), linestyle="dashdot", label="Smectite ($σ_{s}$)")
     ax.plot(tempe_ls, [v/quartz_ls[0] for v in quartz_ls], color=cm.jet(0.8), linestyle="dashed", label="Quartz ($Σ_{s}$/λ)")
 
@@ -1881,6 +1881,8 @@ def cs_tempe_th():
     ax.tick_params(axis="x", which="minor", length=5)
     ax.tick_params(axis="y", which="major", length=7)
     ax.tick_params(axis="y", which="minor", length=5)
+    ax.set_ylim(bottom=1.0)
+    ax.set_yticks([1.0, 3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0])
     ax.legend(frameon=False, loc=(0.1, 0.65), fontsize=8.0)
     ax.set_xlabel("Temperature (℃)", fontsize=14.0, labelpad=5)
     ax.set_ylabel("Normalized surface conductivity", fontsize=14.0, labelpad=5)
@@ -7107,7 +7109,7 @@ if __name__ == "__main__":
     # test_WT(use_cache=True)
     # test_Clavier(use_cache=True)
     # test_SenandGoode(use_cache=True)
-    test_BHS(use_cache=True)
+    # test_BHS(use_cache=True)
     # test_TR(use_cache=True)
     # test_QiandWu(use_cache=True)
     # test_BHS_modified(use_cache=True)
@@ -7121,7 +7123,7 @@ if __name__ == "__main__":
     # Revil_etal_fig2()
     # compare_md_cond() #!
     # smectite_cond_intra_th()
-    # cs_tempe_th()
+    cs_tempe_th()
     # test_aniso_distribution()
     # test_random_distribution()
     # smec_cond_intra_r_dependence_th()

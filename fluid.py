@@ -654,10 +654,11 @@ def sen_and_goode_1992(T, M) -> float:
     return left - right
 
 
-def Watanabeetal2021(mu: float):
-    a1 = 4.16975e-3
+# TODO:
+# def Watanabeetal2021(mu: float):
+#     a1 = 4.16975e-3
 
-    return
+#     return
 
 
 def calc_nacl_activities(
@@ -1082,7 +1083,6 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
     # This condition branch is implemented based on line 370 of "Driesner_eqs"
     # in Klyukin et al. (2020).
     v = calc_X_L_Sat(T, P)
-    # conditions
     if P <= calc_Water_Boiling_Curve(T) and T <= 473.15 and v - Xnacl < 0.01:
         T = calc_T_Star_V(T, P, Xnacl)
         # calculate molar volume (m3/mol)
@@ -1392,7 +1392,7 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
     h10 = 0.0000606896
     h11 = 0.00762859
 
-    G1 = h2 + (h1 - h2) / (1.0 + exp((T - h3) / h4)) + h5 * T ** 2
+    G1 = h2 + (h1 - h2) / (1.0 + exp((T - h3) / h4)) + h5 * T**2
     G2 = h7 + (h6 - h7) / (1.0 + exp((T - h8) / h9)) + h10 * exp(-h11 * T)
     XN_Crit, P_Crit = calc_X_and_P_crit(T + 273.15)
     P_Crit *= 1.0e-5  # bar
@@ -1405,7 +1405,7 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
         TmpUnit = calc_P_Boil(T + 273.15) * 1.0e-5
         TmpUnit2 = 1.0
     assert None not in (TmpUnit, TmpUnit2), (TmpUnit, TmpUnit2)
-    
+
     TmpUnit3, X_VL_Liq = None, None
     if T < 373.946:
         TmpUnit3 = calc_P_H2O_Boiling_Curve(T + 273.15) * 1.0e-5
@@ -1646,7 +1646,9 @@ def calc_Water_Pressure(T: float, Rho: float) -> float:
     R_constant = 0.46151805
     Delta_Rho = Rho / 322.0
     Tau = 647.096 / T
-    Water_Pressure_calc = ((1.0 + Delta_Rho * PhiR_Delta(Delta_Rho, Tau)) * Rho * R_constant * T) * 1000.0
+    Water_Pressure_calc = (
+        (1.0 + Delta_Rho * PhiR_Delta(Delta_Rho, Tau)) * Rho * R_constant * T
+    ) * 1000.0
     return Water_Pressure_calc
 
 

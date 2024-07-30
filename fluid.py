@@ -380,6 +380,240 @@ class ConstPitzer:
     }
 
 
+class CK:
+    """Constants in l.75-146 in Klyukin et al. (2020)"""
+
+    C = [0] * 54
+    for i in range(7, 22):
+        C[i] = 1.0
+    for i in range(22, 42):
+        C[i] = 2.0
+    for i in range(42, 46):
+        C[i] = 3
+    C[46] = 4.0
+    for i in range(47, 51):
+        C[i] = 6.0
+
+    n = [
+        0.012533547935523,
+        7.8957634722828,
+        -8.7803203303561,
+        0.31802509345418,
+        -0.26145533859358,
+        -7.8199751687981e-3,
+        8.8089493102134e-03,
+        -0.66856572307965,
+        0.20433810950965,
+        -6.6212605039687e-05,
+        -0.19232721156002,
+        -0.25709043003438,
+        0.16074868486251,
+        -0.040092828925807,
+        3.9343422603254e-07,
+        -7.5941377088144e-06,
+        5.6250979351888e-04,
+        -1.5608652257135e-05,
+        1.1537996422951e-09,
+        3.6582165144204e-07,
+        -1.3251180074668e-12,
+        -6.2639586912454e-10,
+        -0.10793600908932,
+        0.017611491008752,
+        0.22132295167546,
+        -0.40247669763528,
+        0.58083399985759,
+        4.9969146990806e-03,
+        -0.031358700712549,
+        -0.74315929710341,
+        0.4780732991548,
+        0.020527940895948,
+        -0.13636435110343,
+        0.014180634400617,
+        8.3326504880713e-03,
+        -0.029052336009585,
+        0.038615085574206,
+        -0.020393486513704,
+        -1.6554050063734e-03,
+        1.9955571979541e-03,
+        1.5870308324157e-04,
+        -1.638856834253e-05,
+        0.043613615723811,
+        0.034994005463765,
+        -0.076788197844621,
+        0.022446277332006,
+        -6.2689710414685e-05,
+        -5.5711118565645e-10,
+        -0.19905718354408,
+        0.31777497330738,
+        -0.11841182425981,
+        -31.306260323435,
+        31.546140237781,
+        -2521.3154341695,
+        -0.14874640856724,
+        0.31806110878444,
+    ]
+
+    d = [
+        1.0,
+        1.0,
+        1.0,
+        2.0,
+        2.0,
+        3.0,
+        4.0,
+        1.0,
+        1.0,
+        1.0,
+        2.0,
+        2.0,
+        3.0,
+        4.0,
+        4.0,
+        5.0,
+        7.0,
+        9.0,
+        10.0,
+        11.0,
+        13.0,
+        15.0,
+        1.0,
+        2.0,
+        2.0,
+        2.0,
+        3.0,
+        4.0,
+        4.0,
+        4.0,
+        5.0,
+        6.0,
+        6.0,
+        7.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        10.0,
+        10.0,
+        12.0,
+        3.0,
+        4.0,
+        4.0,
+        5.0,
+        14.0,
+        3.0,
+        6.0,
+        6.0,
+        6.0,
+        3.0,
+        3.0,
+        3.0,
+    ]
+
+    T = [
+        -0.5,
+        0.875,
+        1.0,
+        0.5,
+        0.75,
+        0.375,
+        1.0,
+        4.0,
+        6.0,
+        12.0,
+        1.0,
+        5.0,
+        4.0,
+        2.0,
+        13.0,
+        9.0,
+        3.0,
+        4.0,
+        11.0,
+        4.0,
+        13.0,
+        1.0,
+        7.0,
+        1.0,
+        9.0,
+        10.0,
+        10.0,
+        3.0,
+        7.0,
+        10.0,
+        10.0,
+        6.0,
+        10.0,
+        10.0,
+        1.0,
+        2.0,
+        3.0,
+        4.0,
+        8.0,
+        6.0,
+        9.0,
+        8.0,
+        16.0,
+        22.0,
+        23.0,
+        23.0,
+        10.0,
+        50.0,
+        44.0,
+        46.0,
+        50.0,
+        0.0,
+        1.0,
+        4.0,
+    ]
+
+    Alpha = [0.0] * 54
+    Alpha[51] = 20.0
+    Alpha[52] = 20.0
+    Alpha[53] = 20.0
+
+    Beta = [0.0] * 56
+    Beta[51] = 150.0
+    Beta[52] = 150.0
+    Beta[53] = 250.0
+    Beta[54] = 0.3
+    Beta[55] = 0.3
+
+    Gamma = [0.0] * 54
+    Gamma[51] = 1.21
+    Gamma[52] = 1.21
+    Gamma[53] = 1.25
+
+    Epsilon = [0.0] * 54
+    Epsilon[51] = 1.0
+    Epsilon[52] = 1.0
+    Epsilon[53] = 1.0
+
+    a = [0.0] * 56
+    a[54] = 3.5
+    a[55] = 3.5
+
+    b = [0.0] * 56
+    b[54] = 0.85
+    b[55] = 0.95
+
+    B_Caps = [0.0] * 56
+    B_Caps[54] = 0.2
+    B_Caps[55] = 0.2
+
+    A_caps = [0.0] * 56
+    A_caps[54] = 0.32
+    A_caps[55] = 0.32
+
+    c_Caps = [0.0] * 56
+    c_Caps[54] = 28.0
+    c_Caps[55] = 32.0
+
+    D_Caps = [0.0] * 56
+    D_Caps[54] = 700.0
+    D_Caps[55] = 800.0
+
+
 def __calc_pitzer_params_nacl(name: str, T: float) -> float:
     """Calculate temperature dependence of Pitzer's parameter
     based on Voigt (2020)
@@ -418,6 +652,12 @@ def sen_and_goode_1992(T, M) -> float:
     left = (5.6 + 0.27 * T - 1.5 * 1.0e-4 * T**2) * M
     right = (2.36 + 0.099 * T) / (1.0 + 0.214 * M**0.5) * M**1.5
     return left - right
+
+
+def Watanabeetal2021(mu: float):
+    a1 = 4.16975e-3
+
+    return
 
 
 def calc_nacl_activities(
@@ -839,85 +1079,92 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
     mh2o = 18.015e-3
     mnacl = 58.443e-3
 
-    # TODO: fix first two branch
     # This condition branch is implemented based on line 370 of "Driesner_eqs"
     # in Klyukin et al. (2020).
     v = calc_X_L_Sat(T, P)
-    V: float = None
+    # conditions
     if P <= calc_Water_Boiling_Curve(T) and T <= 473.15 and v - Xnacl < 0.01:
         T = calc_T_Star_V(T, P, Xnacl)
         # calculate molar volume (m3/mol)
-        Vsat = mh2o / calc_rho_sat_water(T)
-        # Vwat = mh2o / iapws.IAPWS95(T=T, P=P * 1.0e-6).rho
-        # if Vsat < Vwat:
-        P *= 1.0e-5  # bar
-        o2 = (
-            0.00000020125
-            + 0.00000000329977 * exp(-4.31279 * log10(P))
-            - 0.000000117748 * log10(P)
-            + 0.0000000758009 * (log10(P)) ** 2
-        )
-        v = Vsat
-        V2 = mh2o / calc_rho_sat_water(T - 0.005)
-        T -= 273.15  # ℃
-        o1 = (v - V2) / 0.005 - 3 * o2 * T**2
-        o0 = v - o1 * T - o2 * T**3
-        V = o0 + (o2 * T**3) + (o1 * T)
-        P *= 1.0e5  # Pa
+        Vsat = mh2o / calc_rho_sat_water(T) * 1.0e6
+        Vwat = mh2o / iapws.IAPWS95(T=T, P=P * 1.0e-6).rho * 1.0e6
+        if Vsat < Vwat:
+            P *= 1.0e-5  # bar
+            o2 = (
+                2.0125e-7
+                + 3.29977e-9 * exp(-4.31279 * log10(P))
+                - 1.17748e-7 * log10(P)
+                + 7.58009e-8 * (log10(P)) ** 2
+            )
+            v = Vsat
+            V2 = mh2o / calc_rho_sat_water(T - 0.005) * 1.0e6
+            T -= 273.15  # ℃
+            o1 = (v - V2) / 0.005 - 3.0 * o2 * T**2
+            o0 = v - o1 * T - o2 * T**3
+            v = o0 + (o2 * T**3) + (o1 * T)
+            P *= 1.0e5  # Pa
+            v *= 1.0e-6
+        else:
+            Tv = calc_T_Star_V(T, P, Xnacl)
+            # calculate molar volume (m3/mol)
+            water = iapws.IAPWS95(T=Tv, P=P * 1.0e-6)
+            v = mh2o / water.rho
     elif P * 1.0e-5 <= 350.0 and T >= 873.15:
         # V + L coexistence surface
         v = calc_X_VL_Liq(T, P)
-
-        def __Rh_Br_for_V_extr(xNaCl_frac, T_in_C, P_in_Bar) -> float:
-            mH2O = 18.015268
-            mNaCl = 58.4428
-            T = T_in_C
-            P = P_in_Bar
-            T_Star = calc_T_Star_V(T, P * 0.1, xNaCl_frac)
-            V_water = mH2O / iapws.IAPWS95(T=T_Star, P=P * 0.1).rho * 1000
-            return (mH2O * (1 - xNaCl_frac) + mNaCl * xNaCl_frac) / V_water * 1000
-
         if round(Xnacl, 5) >= round(v, 5):
             T -= 273.15  # ℃
             P *= 1.0e-5  # bar
-            V1000 = (mh2o * (1.0 - Xnacl) + mnacl * Xnacl) / __Rh_Br_for_V_extr(
-                Xnacl, T, 1000
+            V1000 = (
+                (mh2o * (1.0 - Xnacl) + mnacl * Xnacl)
+                / __Rh_Br_for_V_extr(Xnacl, T, 1000.0)
+                * 1.0e6
             )
-            v = (mh2o * (1 - Xnacl) + mnacl * Xnacl) / __Rh_Br_for_V_extr(
-                Xnacl, T, 390.147
+            v = (
+                (mh2o * (1.0 - Xnacl) + mnacl * Xnacl)
+                / __Rh_Br_for_V_extr(Xnacl, T, 390.147)
+                * 1.0e6
             )
-            V2 = (mh2o * (1 - Xnacl) + mnacl * Xnacl) / __Rh_Br_for_V_extr(
-                Xnacl, T, 390.137
+            V2 = (
+                (mh2o * (1.0 - Xnacl) + mnacl * Xnacl)
+                / __Rh_Br_for_V_extr(Xnacl, T, 390.137)
+                * 1.0e6
             )
-
-            dVdP390 = (v - V2) / (0.01)
-
+            dVdP390 = (v - V2) * 1.0e2
             o4 = (v - V1000 + dVdP390 * 1609.853) / (
                 log(1390.147 / 2000.0) - 2390.147 / 1390.147
             )
             o3 = v - o4 * log(1390.147) - 390.147 * dVdP390 + 390.147 / 1390.147 * o4
-            o5 = dVdP390 - o4 / (1390.147)
+            o5 = dVdP390 - o4 / 1390.147
 
-            V = o3 + o4 * log(P + 1000) + o5 * P
+            v = o3 + o4 * log(P + 1000.0) + o5 * P
             T += 273.15  # K
             P *= 1.0e5  # Pa
+        else:
+            Tv = calc_T_Star_V(T, P, Xnacl)
+            # calculate molar volume (m3/mol)
+            water = iapws.IAPWS95(T=Tv, P=P * 1.0e-6)
+            v = mh2o / water.rho
     else:
         Tv = calc_T_Star_V(T, P, Xnacl)
-        # molar mass (kg/mol)
-        mh2o = 18.015e-3
-        mnacl = 58.443e-3
-
         # calculate molar volume (m3/mol)
         water = iapws.IAPWS95(T=Tv, P=P * 1.0e-6)
-        V = mh2o / water.rho
-
-    assert V is not None, V
-
+        v = mh2o / water.rho
     # calculate molar mass (kg/mol)
     m = Xnacl * mnacl + (1.0 - Xnacl) * mh2o
 
     # calculate density (kg/m3)
-    return m / V
+    return m / v
+
+
+def __Rh_Br_for_V_extr(xNaCl_frac, T_in_C, P_in_Bar) -> float:
+    mH2O = 18.015268
+    mNaCl = 58.4428
+    T = T_in_C + 273.15
+    P = P_in_Bar * 1.0e5
+    T_Star = calc_T_Star_V(T, P, xNaCl_frac)
+    V_water = mH2O / iapws.IAPWS95(T=T_Star, P=P * 1.0e-6).rho * 1000.0
+    return (mH2O * (1.0 - xNaCl_frac) + mNaCl * xNaCl_frac) / V_water * 1000.0
 
 
 def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
@@ -1005,7 +1252,6 @@ def calc_Water_Boiling_Curve(T: float) -> float:
         T = 0.01
     T += 273.15
     T_inv = 1.0 - T / 647.096
-
     c1 = -2.03150240
     c2 = -2.6830294
     c3 = -5.38626492
@@ -1023,10 +1269,18 @@ def calc_Water_Boiling_Curve(T: float) -> float:
         )
         * 322.0
     )
-
-    satvapor = iapws.IAPWS95(T=T, rho=RhoVapSat)
-
-    return satvapor.P * 1.0e6
+    RhoVapSat = (
+        exp(
+            c1 * T_inv ** (1.0 / 3.0)
+            + c2 * T_inv ** (2.0 / 3.0)
+            + c3 * T_inv ** (4.0 / 3.0)
+            + c4 * T_inv**3
+            + c5 * T_inv ** (37.0 / 6.0)
+            + c6 * T_inv ** (71.0 / 6.0)
+        )
+        * 322.0
+    )
+    return calc_Water_Pressure(T, RhoVapSat) * 10.0
 
 
 def calc_rho_sat_water(T: float) -> float:
@@ -1086,7 +1340,7 @@ def calc_X_L_Sat(T: float, P: float) -> float:
     e4 = 3.36474 - 0.000154023 * P + 0.0000000817048 * P**2
     e5 = 1.0 - e0 - e1 - e2 - e3 - e4
 
-    # calculate temperature on halite melting curve
+    # calculate temperature on halite melting curve (T_hm)
     a = 0.024726
     T_tr_NaCl = 800.7
     P_tr_NaCl = 0.0005
@@ -1138,10 +1392,10 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
     h10 = 0.0000606896
     h11 = 0.00762859
 
-    G1 = h2 + (h1 - h2) / (1.0 + exp((T - h3)) / h4) + h5 * T**2
+    G1 = h2 + (h1 - h2) / (1.0 + exp((T - h3) / h4)) + h5 * T ** 2
     G2 = h7 + (h6 - h7) / (1.0 + exp((T - h8) / h9)) + h10 * exp(-h11 * T)
-
     XN_Crit, P_Crit = calc_X_and_P_crit(T + 273.15)
+    P_Crit *= 1.0e-5  # bar
 
     TmpUnit, TmpUnit2 = None, None
     if T < 800.7:
@@ -1151,7 +1405,7 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
         TmpUnit = calc_P_Boil(T + 273.15) * 1.0e-5
         TmpUnit2 = 1.0
     assert None not in (TmpUnit, TmpUnit2), (TmpUnit, TmpUnit2)
-
+    
     TmpUnit3, X_VL_Liq = None, None
     if T < 373.946:
         TmpUnit3 = calc_P_H2O_Boiling_Curve(T + 273.15) * 1.0e-5
@@ -1200,7 +1454,7 @@ def calc_P_Boil(T: float) -> float:
     P_Triple_NaCl = 0.0005
     P_Boil = 10.0 ** (
         log10(P_Triple_NaCl)
-        + B_boil * (1 / (T_Triple_NaCl + 273.15) - 1 / (T + 273.15))
+        + B_boil * (1.0 / (T_Triple_NaCl + 273.15) - 1.0 / (T + 273.15))
     )
 
     return P_Boil * 1.0e5
@@ -1278,8 +1532,7 @@ def calc_P_VLH(T: float) -> float:
     for i, fi in enumerate(f):
         if i != 10:
             f[10] -= fi
-        P_VLH += f[i] * (T / T_tr_NaCl) ** i
-
+        P_VLH += fi * (T / T_tr_NaCl) ** i
     return P_VLH * 1.0e5
 
 
@@ -1353,11 +1606,15 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
         else:
             # Eq.5c of Driesner (2007, part1)
             for i in range(11, 14):
-                Sum1 += C[i] * (T - 500.0) ** [i - 11]
+                Ci = C[i]
+                if i == 11:
+                    Ci = C[11]
+                if i == 12:
+                    Ci = C[12]
+                Sum1 += Ci * (T - 500.0) ** (i - 11)
             P_Crit = Sum1
 
-    Sum1 = 0.0
-    x_crit = 0.0
+    Sum1, x_crit = 0.0, 0.0
     if T >= TH2O_Crit and T <= 600.0:
         # Eq. 7a of Driesner (2007, part1)
         for i in range(7):
@@ -1372,6 +1629,85 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     assert None not in (x_crit, P_Crit), (x_crit, P_Crit)
 
     return x_crit, P_Crit * 1.0e5
+
+
+def calc_Water_Pressure(T: float, Rho: float) -> float:
+    """Calculate pure water pressure from temperature and density. This
+    implementation is based on "Water_Pressure_calc" function in
+    "Water_prop" module of Klyukin et al.(2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+        Rho (float): Density (kg/m^3)
+
+    Returns:
+        float: water pressure (Pa)
+    """
+    R_constant = 0.46151805
+    Delta_Rho = Rho / 322.0
+    Tau = 647.096 / T
+    Water_Pressure_calc = ((1.0 + Delta_Rho * PhiR_Delta(Delta_Rho, Tau)) * Rho * R_constant * T) * 1000.0
+    return Water_Pressure_calc
+
+
+def PhiR_Delta(Delta_Rho, Tau):
+    # Reference: Kyukin et al. (2020)
+    Sum1 = 0.0
+    Sum2 = 0.0
+    Sum3 = 0.0
+    Sum4 = 0.0
+    for i in range(7):
+        Sum1 += CK.n[i] * CK.d[i] * Delta_Rho ** (CK.d[i] - 1.0) * Tau ** CK.T[i]
+    for i in range(7, 51):
+        Sum2 += (
+            CK.n[i]
+            * exp(-(Delta_Rho ** CK.C[i]))
+            * (
+                Delta_Rho ** (CK.d[i] - 1.0)
+                * Tau ** CK.T[i]
+                * (CK.d[i] - CK.C[i] * Delta_Rho ** CK.C[i])
+            )
+        )
+    for i in range(51, 54):
+        Sum3 += (
+            CK.n[i]
+            * Delta_Rho ** CK.d[i]
+            * Tau ** CK.T[i]
+            * exp(
+                -CK.Alpha[i] * (Delta_Rho - CK.Epsilon[i]) ** 2.0
+                - CK.Beta[i] * (Tau - CK.Gamma[i]) ** 2.0
+            )
+            * (CK.d[i] / Delta_Rho - 2.0 * CK.Alpha[i] * (Delta_Rho - CK.Epsilon[i]))
+        )
+    for i in range(54, 56):
+        Theta = (1.0 - Tau) + CK.A_caps[i] * ((Delta_Rho - 1.0) ** 2.0) ** (
+            1.0 / (2.0 * CK.Beta[i])
+        )
+        Delta = Theta**2.0 + CK.B_Caps[i] * ((Delta_Rho - 1.0) ** 2.0) ** CK.a[i]
+        Psi = exp(
+            -CK.c_Caps[i] * (Delta_Rho - 1.0) ** 2.0 - CK.D_Caps[i] * (Tau - 1.0) ** 2.0
+        )
+        dPsidDelta = -2.0 * CK.c_Caps[i] * (Delta_Rho - 1.0) * Psi
+        dDeltaddelta = (Delta_Rho - 1.0) * (
+            CK.A_caps[i]
+            * Theta
+            * 2.0
+            / CK.Beta[i]
+            * ((Delta_Rho - 1.0) ** 2.0) ** (1.0 / (2.0 * CK.Beta[i]) - 1.0)
+            + 2.0
+            * CK.B_Caps[i]
+            * CK.a[i]
+            * ((Delta_Rho - 1.0) ** 2.0) ** (CK.a[i] - 1.0)
+        )
+        if isclose(Delta, 0.0):
+            dDeltaBIdDelta = 0.0
+        else:
+            dDeltaBIdDelta = dDeltaddelta * CK.b[i] * Delta ** (CK.b[i] - 1.0)
+        Sum4 += CK.n[i] * (
+            Delta ** CK.b[i] * (Psi + Delta_Rho * dPsidDelta)
+            + dDeltaBIdDelta * Delta_Rho * Psi
+        )
+    return Sum1 + Sum2 + Sum3 + Sum4
 
 
 if __name__ == "__main__":

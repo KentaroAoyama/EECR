@@ -1,4 +1,4 @@
-from enum import IntEnum, auto
+from enum import IntEnum, Enum, auto
 from math import log, exp
 from typing import Dict
 
@@ -104,6 +104,18 @@ class IonProp(IntEnum):
     Activity = auto()
     Mobility = auto()
     Valence = auto()
+
+class Phase(Enum):
+    V = 1    # vapour
+    L = 1    # liquid
+    S = 1    # solid
+    VL = 2   # vapour + liquid
+    LH = 2   # vapour + halite
+    VH = 2   # vapour + liquid
+    SL = 2   # solid + liquid
+    F = 1    # supercritical fluid
+    T = 3    # triple point
+    C = 3    # critical point
 
 
 # default properties of NaCl solution

@@ -1,11 +1,13 @@
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict, Tuple, Union
+from typing import Dict, Tuple, List, Union, Callable
 from copy import deepcopy
 from logging import Logger
 from math import pi, sqrt, log, log10, exp, tanh, isclose
+from sys import float_info
 
 import pickle
+import iapws._utils
 import numpy as np
 from scipy.optimize import bisect
 import iapws
@@ -14,6 +16,7 @@ from constants import (
     ion_props_default,
     Species,
     IonProp,
+    Phase,
     AVOGADRO_CONST,
     GAS_CONST,
     ELEMENTARY_CHARGE,
@@ -41,6 +44,8 @@ class NaCl(Fluid):
         pressure: float = 5.0e6,
         molarity: float = None,
         molality: float = None,
+        wtper: float = None,
+        xnacl: float = None,
         ph: float = 7.0,
         conductivity: float = None,
         cond_tensor: np.ndarray = None,
@@ -55,6 +60,8 @@ class NaCl(Fluid):
                  pressure is set to be on the vapor + liquid coexistence curve.
             molarity (float): Molarity (mol/l)
             molarity (float): Molality (mol/kg)
+            wtper (float): Weight fraction of NaCl in 0–1 (-).
+            xnacl (float): Mole fraction of NaCl in 0–1 (-).
             ph (float): pH
             conductivity (float): Electrical conductivity of NaCl fluid
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
@@ -62,14 +69,20 @@ class NaCl(Fluid):
                 "sen_and_goode": Eq.(9) in Sen & Goode (1992)
             logger (Logger): Logger
         """
-        assert molarity is not None or molality is not None
-        if molarity is not None:
-            assert pressure is not None
+        assert (
+            (molarity is not None)
+            or (molality is not None)
+            or (wtper is not None)
+            or (xnacl is not None)
+        )
 
         self.temperature = temperature
         self.pressure = pressure
         self.conductivity = conductivity
         self.cond_tensor = cond_tensor
+        self.phase = None
+        self.dielec_water: float = None
+        self.dielec_fluid: float = None
         self.logger = logger
 
         if self.logger is not None:
@@ -79,37 +92,57 @@ class NaCl(Fluid):
         ion_props: Dict = deepcopy(ion_props_default)
 
         # calculate density
-        # TODO: Extend to apply to supercritical conditions
+        # TODO: Extend this to apply to vapor or vapor+liquid phases
+        def __get_bisect_init_logspace(
+            func: Callable, spacing: Tuple[float, float, int]
+        ) -> Tuple[int, int]:
+            x_ls: List = np.logspace(*spacing).tolist()
+            x_ls.insert(0, 0.0)
+            v_ls = [func(x) for x in x_ls]
+            xmin, xmax = -1.0 * float_info.max, float_info.max
+            for v in v_ls:
+                if v > 0.0 and v < xmax:
+                    xmax = v
+                if v < 0.0 and v > xmin:
+                    xmin = v
+            assert xmin != -1.0 * float_info.max and xmax != float_info.max, (
+                xmin,
+                xmax,
+            )
+            return xmin, xmax
+
         xnacl, density = None, None
-        if molality is None:
+        if wtper is not None:
+            nnacl = wtper / MNaCl
+            nh2o = (1.0 - wtper) / MH2O
+            xnacl = nnacl / (nnacl + nh2o)
+        if xnacl is not None:
+            density = calc_density(self.temperature, self.pressure, xnacl)
+            v = 1.0 / density * (xnacl * MNaCl + (1.0 - xnacl) * MH2O)  # molar volume
+            molarity = xnacl / v * 1.0e-3
+            molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
+        elif molarity is not None:
 
             def __callback(__x) -> float:
                 rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
                 nh20 = (rho - 1000.0 * molarity * MNaCl) / MH2O  # mol/m^3
                 return __x - molarity / (molarity + nh20 * 1.0e-3)
 
-            xnacl = bisect(
-                __callback, 0.0, calc_X_L_Sat(self.temperature, self.pressure)
-            )
+            _min, _max = __get_bisect_init_logspace(__callback, (-10.0, 0.0, 10))
+            xnacl = bisect(__callback, _min, _max)
             density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
             # calculate molality(mol/kg)
             molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
-        if molarity is None:
+        elif molality is not None:
             xnacl = molality / (molality + 1.0 / MH2O)
-            if self.pressure is None:
-                # Set pressure on the vapor + liquid coexistence curve.
-                def __callback(__x) -> float:
-                    return xnacl - calc_X_VL_Liq(self.temperature, __x)
-
-                self.pressure = bisect(__callback, 0.0, 1.0e9)
-
             density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
 
             def __callback(__x) -> float:
                 nh20 = (density - 1000.0 * __x * MNaCl) / MH2O  # mol/m3
                 return xnacl - __x / (__x + nh20 * 1.0e-3)
 
-            molarity = bisect(__callback, 0.0, 10.0)
+            xmin, xmax = __get_bisect_init_logspace(__callback, (-10.0, 1.0, 1000))
+            molarity = bisect(__callback, xmin, xmax)
 
         self.density = density
         assert molality is not None and molarity is not None
@@ -145,6 +178,7 @@ class NaCl(Fluid):
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
+
         self.dielec_fluid = calc_dielec_nacl_RaspoAndNeau2020(self.temperature, xnacl)
 
         # calculate activity
@@ -154,7 +188,7 @@ class NaCl(Fluid):
         self.ion_props: Dict = ion_props
 
         # calculate viscosity
-        Xnacl = 1000.0 * molarity * MNaCl / self.density
+        Xnacl = 1000.0 * molarity * MNaCl / self.density  # weight fraction
         self.viscosity = calc_viscosity(self.temperature, self.pressure, Xnacl)
 
         # pKw
@@ -194,6 +228,10 @@ class NaCl(Fluid):
             self.conductivity = sen_and_goode_1992(
                 self.temperature, self.ion_props[Species.Na.name][IonProp.Molality.name]
             )
+        if method == "watanabeetal":
+            self.conductivity = Watanabeetal2021(molality, molarity, self.viscosity)
+
+        if self.conductivity is not None:
             self.calc_cond_tensor_cube_oxyz()
 
     def set_cond(self, _cond: float) -> None:
@@ -381,7 +419,7 @@ class ConstPitzer:
 
 
 class CK:
-    """Constants in l.75-146 in Klyukin et al. (2020)"""
+    """Constants in l.75-146 in ProBrine V2 (Klyukin et al., 2020)"""
 
     C = [0] * 54
     for i in range(7, 22):
@@ -654,11 +692,40 @@ def sen_and_goode_1992(T, M) -> float:
     return left - right
 
 
-# TODO:
-# def Watanabeetal2021(mu: float):
-#     a1 = 4.16975e-3
+def Watanabeetal2021(m: float, cf: float, mu: float):
+    """Calculate electrical conductivity of NaCl fluid based on the
+    Watanabe et al.(2021)'s equation.
 
-#     return
+    Reference:
+        Watanabe, N., Yamaya, Y., Kitamura, K., Mogi, T., (2021).
+            Viscosity-dependent empirical formula for electrical conductivity
+            of H2O-NaCl fluids at elevated temperatures and high salinity
+
+    Args:
+        m (float): Molality (mol/kg)
+        cf (float): Molarity (mol/l)
+        mu (float): Viscosity (Pa s)
+    """
+    # parameter values of the equation (Table 3 therein)
+    a1 = 4.16975e-3
+    a2 = -5.08206e-3
+    a3 = 5.75588e-1
+    a4 = 1.00422
+    b1 = 2.55008e1
+    b2 = 6.04911e-2
+    b3 = 2.51861e6
+    b4 = 4.30952e-1
+    c1 = -4.89245e-10
+    c2 = -1.75339e-11
+
+    A = a1 + (a2 - a1) * (1.0 + (m / a3) ** a4) ** (-1.0)
+    Binv = (b1 + (b2 - b1) * (1.0 + (sqrt(m) / b3) ** b4) ** (-1.0)) * 1.0e6
+    B = 1.0 / Binv
+    C = c1 + c2 * m
+
+    lamda = A + B * mu ** (-1.0) + C * mu ** (-2.0)
+
+    return lamda * cf * 1.0e-3
 
 
 def calc_nacl_activities(
@@ -1044,8 +1111,8 @@ def calc_viscosity(T: float, P: float, Xnacl: float) -> float:
     return iapws._iapws._Viscosity(water.rho, Tstar)
 
 
-def calc_density(T: float, P: float, Xnacl: float) -> float:
-    """Calculate H2O-NaCl fluid density (kg/m3)
+def calc_molar_volume(T: float, P: float, Xnacl: float) -> float:
+    """Calculate the molar volume of H2O-NaCl fluid (m3/mol)
 
     Reference:
         Driesner T., The system H2O-NaCl. Part II: Correlations for molar
@@ -1070,7 +1137,7 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
         Xnacl (float): Molar fraction of NaCl in 0–1 (-)
 
     Returns:
-        float: Density (kg/m3)
+        float: Density (m3/mol)
     """
     assert 273.15 <= T <= 1273.15, T
     assert 1.0e5 <= P <= 5.0e8, P
@@ -1081,7 +1148,7 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
     mnacl = 58.443e-3
 
     # This condition branch is implemented based on line 370 of "Driesner_eqs"
-    # in Klyukin et al. (2020).
+    # in ProBrine V2 (Klyukin et al., 2020)
     v = calc_X_L_Sat(T, P)
     if P <= calc_Water_Boiling_Curve(T) and T <= 473.15 and v - Xnacl < 0.01:
         T = calc_T_Star_V(T, P, Xnacl)
@@ -1150,6 +1217,40 @@ def calc_density(T: float, P: float, Xnacl: float) -> float:
         # calculate molar volume (m3/mol)
         water = iapws.IAPWS95(T=Tv, P=P * 1.0e-6)
         v = mh2o / water.rho
+
+    return v
+
+
+def calc_density(T: float, P: float, Xnacl: float) -> float:
+    """Calculate H2O-NaCl fluid density (kg/m3)
+
+    Reference:
+        Driesner T., The system H2O-NaCl. Part II: Correlations for molar
+            volume, enthalpy, and isobaric heat capacity from 0 to 1000℃,
+            1 to 5000 bar, and 0 to 1 XNaCl, 2007, http://dx.doi.org/10.1016/j.gca.2007.05.026
+        Driesner T., C. A. Heinrich,  The system H2O-NaCl. Part I: Correlation formulae for
+            phase relations in temperature-pressure-composition space from 0 to 1000 C,
+            0 to 5000 bar, and 0 to 1 XNaCl, 2007, http://dx.doi.org/10.1016/j.gca.2006.01.033
+
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+        Xnacl (float): Molar fraction of NaCl in 0–1 (-)
+
+    Returns:
+        float: Density (kg/m3)
+    """
+    assert 273.15 <= T <= 1273.15, T
+    assert 1.0e5 <= P <= 5.0e8, P
+    assert 0.0 <= Xnacl <= 1.0, Xnacl
+
+    # molar mass (kg/mol)
+    mh2o = 18.015e-3
+    mnacl = 58.443e-3
+
+    # molar volume
+    v = calc_molar_volume(T, P, Xnacl)
+
     # calculate molar mass (kg/mol)
     m = Xnacl * mnacl + (1.0 - Xnacl) * mh2o
 
@@ -1237,7 +1338,8 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
 
 def calc_Water_Boiling_Curve(T: float) -> float:
     """Calculate pressure on boiling curve. This implementation is based
-    on "Water_Boiling_Curve" function in "Water_prop" module of Klyukin et al.(2020).
+    on "Water_Boiling_Curve" function in "Water_prop" module in ProBrine V2
+    (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1285,7 +1387,8 @@ def calc_Water_Boiling_Curve(T: float) -> float:
 
 def calc_rho_sat_water(T: float) -> float:
     """Calculate saturated water density. This implementation is based
-    on "Rho_Water_Liq_sat" function in "Water_prop" module of Klyukin et al.(2020).
+    on "Rho_Water_Liq_sat" function in "Water_prop" module in ProBrine V2
+    (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1321,7 +1424,7 @@ def calc_rho_sat_water(T: float) -> float:
 
 def calc_X_L_Sat(T: float, P: float) -> float:
     """Calculate Xnacl on halite liquidus. This implementation is
-    based on "X_L_Sat" function in "Driesner_eqs" module of Klyukin et al.(2020).
+    based on "X_L_Sat" function in ProBrine V2 (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1341,10 +1444,7 @@ def calc_X_L_Sat(T: float, P: float) -> float:
     e5 = 1.0 - e0 - e1 - e2 - e3 - e4
 
     # calculate temperature on halite melting curve (T_hm)
-    a = 0.024726
-    T_tr_NaCl = 800.7
-    P_tr_NaCl = 0.0005
-    T_hm = T_tr_NaCl + a * (P - P_tr_NaCl)
+    T_hm = calc_T_hm(P * 1.0e5) - 273.15
 
     TmpUnt = T / T_hm
 
@@ -1365,20 +1465,190 @@ def calc_X_L_Sat(T: float, P: float) -> float:
     return X_L_Sat
 
 
+def calc_T_hm(P: float) -> float:
+    """Calculate temperature on halite melting curve using Eq.(1) from
+     Driesner & Heinrich (2007). This implementation is based on "T_hm"
+     function in ProBrine V2 (Klyukin et al., 2020).
+
+    Args:
+        P (float): Pressure (Pa)
+
+    Returns:
+        float: Temperature on halite melting curve (K)
+    """
+    P *= 1.0e-5
+    a = 0.024726
+    T_tr_NaCl = 800.7
+    P_tr_NaCl = 0.0005
+    T_hm = T_tr_NaCl + a * (P - P_tr_NaCl)
+    return T_hm + 273.15
+
+
+def calc_P_Subl(T: float) -> float:
+    """Calculate the halite sublimation curve using Eq.(2) from
+    Driesner & Heinrich (2007). This implementation is based on "P_Subl"
+     function in ProBrine V2 (Klyukin et al., 2020).
+
+    Args:
+        T (float): Temperature (K)
+
+    Returns:
+        float: Pressure on the halite sublimation curve (Pa)
+    """
+    T -= 273.15
+    B_subl = 11806.1
+    T_Triple_NaCl = 800.7
+    P_Triple_NaCl = 0.0005
+    P_Subl = 10.0 ** (
+        log10(P_Triple_NaCl)
+        + B_subl * (1.0 / (T_Triple_NaCl + 273.15) - 1.0 / (T + 273.15))
+    )
+    return P_Subl * 1.0e5
+
+
+def calc_X_V_Sat(T: float, P: float) -> float:
+    """Calculate the molar fraction of NaCl in the halite-saturated vapor using
+    Eq.(9) from Driesner & Heinrich (2007). This implementation is based on
+    "X_V_Sat" function in ProBrine V2 (Klyukin et al., 2020).
+
+    Args:
+        T (float): Temperature (K)
+        P (float): Pressure (Pa)
+
+    Returns:
+        float:  Molar fraction of NaCl in the halite-saturated vapor in 0–1 (-)
+    """
+    T -= 273.15
+    P *= 1.0e-5
+    k = list(range(16))
+    k[0] = -0.235694
+    k[1] = -0.188838
+    k[2] = 0.004
+    k[3] = 0.0552466
+    k[4] = 0.66918
+    k[5] = 396.848
+    k[6] = 45.0
+    k[7] = -0.00000032719
+    k[8] = 141.699
+    k[9] = -0.292631
+    k[10] = -0.00139991
+    k[11] = 0.00000195965
+    k[12] = -0.00000000073653
+    k[13] = 0.904411
+    k[14] = 0.000769766
+    k[15] = -0.00000118658
+
+    j = list(range(4))
+    j[0] = k[0] + k[1] * exp(-k[2] * T)
+    j[1] = (
+        k[4] + (k[3] - k[4]) / (1.0 + exp((T - k[5]) / k[6])) + k[7] * (T + k[8]) ** 2
+    )
+    j[2] = k[9] + k[10] * T + k[11] * T**2 + k[12] * T**3
+    j[3] = k[13] + k[14] * T + k[15] * T**2
+
+    if T > 800.7:
+        P_NaCl = calc_P_Boil(T + 273.15) * 1.0e-5
+    else:
+        P_NaCl = calc_P_Subl(T + 273.15) * 1.0e-5
+
+    x_l = calc_X_L_Sat(T + 273.15, P * 1.0e5)
+    _, P_Crit = calc_X_and_P_crit(T + 273.15)
+    P_Crit *= 1.0e-5
+    P_Line = (P - P_NaCl) / (P_Crit - P_NaCl)
+    P_Line = 1.0 - P_Line
+    Tmp = log10(calc_X_L_Sat(T + 273.15, P_NaCl * 1.0e5))
+    Log_K_Line = (
+        1.0
+        + j[0] * P_Line ** j[1]
+        + j[2] * P_Line
+        + j[3] * P_Line**2
+        - (1.0 + j[0] + j[2] + j[3]) * P_Line**3
+    )
+    Log_K_supScr = Log_K_Line * (log10(P_NaCl / P_Crit) - Tmp) + Tmp
+    Tmp = Log_K_supScr - log10(P_NaCl / P)
+    X_V_Sat = x_l / 10.0**Tmp
+    return X_V_Sat
+
+
+def calc_X_VL_Vap(T: float, P: float) -> float:
+    """Calculate molar fraction of NaCl in the vapor phase at vapor + liquid
+    coexistence. This implementation is based on "X_VL_Vap" function
+    in ProBrine V2 (Klyukin et al., 2020).
+
+    Args:
+        T (float): Temperature (K)
+        P (float): Pressure (Pa)
+
+    Returns:
+        float: Molar fraction of NaCl in the vapor phase
+    """
+    T -= 273.15
+    P *= 1.0e-5
+    k = list(range(16))
+    k[0] = -0.235694
+    k[1] = -0.188838
+    k[2] = 0.004
+    k[3] = 0.0552466
+    k[4] = 0.66918
+    k[5] = 396.848
+    k[6] = 45.0
+    k[7] = -0.00000032719
+    k[8] = 141.699
+    k[9] = -0.292631
+    k[10] = -0.00139991
+    k[11] = 0.00000195965
+    k[12] = -0.00000000073653
+    k[13] = 0.904411
+    k[14] = 0.000769766
+    k[15] = -0.00000118658
+    j = list(range(4))
+    j[0] = k[0] + k[1] * exp(-k[2] * T)
+    j[1] = (
+        k[4] + (k[3] - k[4]) / (1.0 + exp((T - k[5]) / k[6])) + k[7] * (T + k[8]) ** 2
+    )
+    j[2] = k[9] + k[10] * T + k[11] * T**2 + k[12] * T**3
+    j[3] = k[13] + k[14] * T + k[15] * T**2
+
+    if T > 800.7:
+        P_NaCl = calc_P_Boil(T + 273.15) * 1.0e-5
+    else:
+        P_NaCl = calc_P_Subl(T + 273.15) * 1.0e-5
+
+    X_VL_Lq = calc_X_VL_Liq(T + 273.15, P * 1.0e5)
+    _, P_Crit = calc_X_and_P_crit(T + 273.15)
+    P_Crit *= 1.0e-5
+    P_Line = (P - P_NaCl) / (P_Crit - P_NaCl)
+    Log_K_Line = (
+        1.0
+        + j[0] * (1.0 - P_Line) ** j[1]
+        + j[2] * (1.0 - P_Line)
+        + j[3] * (1.0 - P_Line) ** 2
+        - (1.0 + j[0] + j[2] + j[3]) * (1.0 - P_Line) ** 3
+    )
+
+    Tmp = calc_X_L_Sat(T + 273.15, P_NaCl * 1.0e-5)
+    Log_K_supScr = Log_K_Line * (log10(P_NaCl / P_Crit) - log10(Tmp)) + log10(Tmp)
+
+    X_VL_Vap = X_VL_Lq / 10.0**Log_K_supScr * P_NaCl / P
+    if P <= calc_P_VLH(T + 273.15) * 1.0e-5:
+        X_VL_Vap = calc_X_L_Sat(T + 273.15, P * 1.0e-5) / X_VL_Lq * X_VL_Vap
+    return X_VL_Vap
+
+
 def calc_X_VL_Liq(T: float, P: float) -> float:
-    """Calculate molar fraction of NaCl on the V+L coexistance surface. This
-    implementation is based on "X_VL_Liq" function in "Driesner_eqs" of Klyukin et al.(2020).
+    """Calculate molar fraction of NaCl in the liquid at vapor + liquid
+    coexistence. This implementation is based on "X_VL_Liq" function
+    in ProBrine V2 (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
         P (float): Pressure (Pa)
 
     Returns:
-        float: Molar fraction of NaCl
+        float: Molar fraction of NaCl in the V+L coexistance region
     """
     T -= 273.15  # ℃
     P *= 1.0e-5  # bar
-
     # parameters in Table 7 of Driesner & Heinrich (2007)
     h1 = 0.00168486
     h2 = 0.000219379
@@ -1439,8 +1709,8 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
 
 
 def calc_P_Boil(T: float) -> float:
-    """Calculate pressure liquid NaCl (PNaCl, liquid). This implementation is
-    based on "P_Boil" in "Driesner_eqs" module of Klyukin et al.(2020).
+    """Calculate vapor pressure of NaCl (PNaCl). This implementation is
+    based on "P_Boil" in ProBrine V2 (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1462,7 +1732,7 @@ def calc_P_Boil(T: float) -> float:
 
 def calc_P_H2O_Boiling_Curve(T: float) -> float:
     """Calculate pressure on boiling curve. This implementation is
-    based on "P_H2O_Boiling_Curve" in "Water_prop" module of Klyukin et al.(2020).
+    based on "P_H2O_Boiling_Curve" in ProBrine V2 (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1502,7 +1772,8 @@ def calc_P_H2O_Boiling_Curve(T: float) -> float:
 
 def calc_P_VLH(T: float) -> float:
     """Calculate pressure on Vapor-Liquid-Halite coexistence curve.
-    This implementation is based on "P_VLH" in "Driesner_eqs" of Klyukin et al.(2020).
+    This implementation is based on "P_VLH" in ProBrine V2
+    (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1538,7 +1809,7 @@ def calc_P_VLH(T: float) -> float:
 
 def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     """Calculate critical composition and pressure. This implementation is
-    based on "X_and_P_crit" function in "Driesner_eqs" of Klyukin et al.(2020).
+    based on "X_and_P_crit" function in ProBrine V2 (Klyukin et al., 2020).
 
     Args:
         T (float): Absolute temperature (K)
@@ -1633,8 +1904,8 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
 
 def calc_Water_Pressure(T: float, Rho: float) -> float:
     """Calculate pure water pressure from temperature and density. This
-    implementation is based on "Water_Pressure_calc" function in
-    "Water_prop" module of Klyukin et al.(2020).
+    implementation is based on "Water_Pressure_calc" function in ProBrine V2
+    (Klyukin et al., 2020)
 
     Args:
         T (float): Absolute temperature (K)
@@ -1711,6 +1982,98 @@ def PhiR_Delta(Delta_Rho, Tau):
         )
     return Sum1 + Sum2 + Sum3 + Sum4
 
+# TODO: test
+# TODO: docstring
+def get_naclaq_pahse(T: float, P: float, X: float) -> Phase:
+    """_summary_
 
+    Args:
+        T (float): _description_
+        P (float): _description_
+        X (float): _description_
+
+    Returns:
+        bool: _description_
+    """
+    T -= 273.15  # ℃
+    P *= 1.0e-5  # bar 
+    XNaCl_Crit, PCrit = calc_X_and_P_crit(T)
+    phase: Phase = None
+    # only H2O
+    if X == 0.0:
+        water = iapws.IAPWS95(T=T+273.15, P=P*0.1)
+        water.calculo()
+        if water.phase == "Supercritical fluid":
+            phase = Phase.F
+        elif water.phase == "Gas":
+            phase = Phase.V
+        elif water.phase == "Compressible liquid":
+            phase = Phase.L
+        elif water.phase == "Critical point":
+            phase = Phase.C
+        elif water.phase == "Saturated vapor":
+            phase = Phase.VL
+        elif water.phase == "Saturated liquid":
+            phase = Phase.VL
+        elif water.phase == "Two phases":
+            phase = Phase.VL
+        elif water.phase == "Vapour":
+            phase = Phase.V
+        elif water.phase == "Liquid":
+            phase = Phase.L
+    # only NaCl
+    elif X == 1.0:
+        pboil = calc_P_Boil(T - 273.15)
+        pmelt = (T - 800.7) / 2.4726 * 1.0e2 + 0.0005
+        if T == 800.7 and P == 5.0e-4:
+            phase = Phase.T
+        elif P < pboil:
+            phase = Phase.V
+        elif pboil == P:
+            phase = Phase.VL
+        elif pboil < P < pmelt:
+            phase = Phase.L
+        elif pmelt == P:
+            phase = Phase.SL
+        elif P > pmelt:
+            phase = Phase.S
+    # H2O-NaCl
+    else:
+        if P >= PCrit:
+            phase = Phase.F
+        else:
+            if T <= 373.946:  # critical temperature from IAPWS-95
+                pboil = calc_Water_Boiling_Curve(T + 273.15)
+                if P > pboil:
+                    phase = Phase.L
+                else:
+                    pvlh = calc_P_VLH(T + 273.15)
+                    if P < pvlh:
+                        if X <= calc_X_V_Sat(T + 273.15, P * 1.0e5):
+                            phase = Phase.V
+                        else:
+                            phase = Phase.VH
+                    # modified from ProBrine V2
+                    elif X < abs(calc_X_VL_Liq(T + 273.15, P * 1.0e5)):
+                        phase = Phase.VL
+                    elif X > abs(calc_X_L_Sat(T + 273.15, P * 1.0e5)):
+                         phase = Phase.SL
+                    else:
+                        phase = Phase.L
+            else:
+                pvlh: float = None
+                if T <= 800.7:
+                    pvlh = calc_P_VLH(T + 273.15) * 1.0e-5
+                else:
+                    pvlh = -1.0
+                if P <= pvlh:
+                    if X <= calc_X_V_Sat(T + 273.15, P * 1.0e5):
+                        pass # TODO: l194
+                    
+    return phase
+
+# TODO: remove
 if __name__ == "__main__":
+    print(Phase.F.name)
+    get_naclaq_pahse(398.15, 1.0e5, 0.0)
     pass

@@ -120,6 +120,7 @@ class Quartz:
         self.ion_props: Dict = nacl.get_ion_props()
         self.temperature: float = nacl.get_temperature()
         self.dielec_fluid: float = nacl.get_dielec_fluid()
+        assert self.dielec_fluid is not None
         self.viscosity: float = nacl.get_viscosity()
         self.logger: Logger = logger
         self.ph: float = -1.0 * log10(
@@ -738,6 +739,7 @@ class Quartz:
         Returns:
             float: Spesicic surface conductivity of EDL (S/m)
         """
+        assert self.viscosity is not None
         coeff = (
             2000.0 * const.AVOGADRO_CONST * self.length_edl * const.ELEMENTARY_CHARGE
         )

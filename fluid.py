@@ -1,10 +1,10 @@
 """Calculate electrical properties of fluid"""
 # pylint: disable=import-error
-from typing import Dict, Tuple, List, Union, Callable
+from typing import Dict, Tuple, Union
 from copy import deepcopy
 from logging import Logger
 from math import pi, sqrt, log, log10, exp, tanh, isclose
-from sys import float_info
+from warnings import warn
 
 import pickle
 import iapws._utils
@@ -32,6 +32,9 @@ from constants import (
 
 class Fluid:
     pass
+
+
+SINGLE_PHASE = set((Phase.V, Phase.L, Phase.S, Phase.F))
 
 
 class NaCl(Fluid):
@@ -68,6 +71,9 @@ class NaCl(Fluid):
             method (str): Method to calculate electrical conductivity:
                 "sen_and_goode": Eq.(9) in Sen & Goode (1992)
             logger (Logger): Logger
+
+        NOTE: molarity and molality arguments were not tested in vapor-liquid,
+        halite-liquid, and vapor-halite coexisting phases.
         """
         assert (
             (molarity is not None)
@@ -75,14 +81,26 @@ class NaCl(Fluid):
             or (wtper is not None)
             or (xnacl is not None)
         )
+        assert 273.15 <= temperature <= 1273.15
+        assert 0.0 <= pressure <= 5.0e8
+        if wtper is not None:
+            assert 0.0 <= wtper <= 1.0
+        if xnacl is not None:
+            assert 0.0 <= xnacl <= 1.0
 
         self.temperature = temperature
         self.pressure = pressure
         self.conductivity = conductivity
         self.cond_tensor = cond_tensor
-        self.phase = None
+        self.phase: Phase = None
+        self.density: float = None
         self.dielec_water: float = None
         self.dielec_fluid: float = None
+        self.ion_props: float = None
+        self.viscosity: float = None
+        self.kw: float = None
+        self.cond_from_mobility: float = None
+
         self.logger = logger
 
         if self.logger is not None:
@@ -92,26 +110,8 @@ class NaCl(Fluid):
         ion_props: Dict = deepcopy(ion_props_default)
 
         # calculate density
-        # TODO: Extend this to apply to vapor or vapor+liquid phases
-        def __get_bisect_init_logspace(
-            func: Callable, spacing: Tuple[float, float, int]
-        ) -> Tuple[int, int]:
-            x_ls: List = np.logspace(*spacing).tolist()
-            x_ls.insert(0, 0.0)
-            v_ls = [func(x) for x in x_ls]
-            xmin, xmax = -1.0 * float_info.max, float_info.max
-            for v in v_ls:
-                if v > 0.0 and v < xmax:
-                    xmax = v
-                if v < 0.0 and v > xmin:
-                    xmin = v
-            assert xmin != -1.0 * float_info.max and xmax != float_info.max, (
-                xmin,
-                xmax,
-            )
-            return xmin, xmax
-
-        xnacl, density = None, None
+        _flag = False  # TODO: remove this
+        density = None
         if wtper is not None:
             nnacl = wtper / MNaCl
             nh2o = (1.0 - wtper) / MH2O
@@ -122,30 +122,35 @@ class NaCl(Fluid):
             molarity = xnacl / v * 1.0e-3
             molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
         elif molarity is not None:
-
+            _flag = True
             def __callback(__x) -> float:
                 rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
                 nh20 = (rho - 1000.0 * molarity * MNaCl) / MH2O  # mol/m^3
                 return __x - molarity / (molarity + nh20 * 1.0e-3)
-
-            _min, _max = __get_bisect_init_logspace(__callback, (-10.0, 0.0, 10))
-            xnacl = bisect(__callback, _min, _max)
+            xnacl = bisect(
+                __callback, 0.0, calc_X_L_Sat(self.temperature, self.pressure)
+            )
             density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
             # calculate molality(mol/kg)
             molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
         elif molality is not None:
+            _flag = True
             xnacl = molality / (molality + 1.0 / MH2O)
             density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
-
             def __callback(__x) -> float:
                 nh20 = (density - 1000.0 * __x * MNaCl) / MH2O  # mol/m3
                 return xnacl - __x / (__x + nh20 * 1.0e-3)
-
-            xmin, xmax = __get_bisect_init_logspace(__callback, (-10.0, 1.0, 1000))
-            molarity = bisect(__callback, xmin, xmax)
+            molarity = bisect(__callback, 0.0, 10.0)
 
         self.density = density
-        assert molality is not None and molarity is not None
+        assert xnacl is not None, xnacl
+        assert molality is not None and molarity is not None  # TODO: should be removed?
+        if wtper is None:
+            wtper = 1000.0 * molarity * MNaCl / self.density  # weight fraction
+
+        self.phase: Phase = get_naclaq_phase(self.temperature, self.pressure, xnacl)
+        if _flag and self.phase is not Phase.L:
+            warn("Functions to convert from molar concentration to molar fraction have yet to be tested at this temperature and pressure.")
 
         # set ion properties
         _ah = 10.0 ** (-1.0 * ph)
@@ -172,63 +177,90 @@ class NaCl(Fluid):
             _prop[IonProp.Molarity.name] = molarity
             _prop[IonProp.Molality.name] = molality
             _prop[IonProp.MolFraction.name] = xnacl
+            _prop[IonProp.WtFraction.name] = wtper
 
         # get dielectric constant
-        water = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=self.temperature)
+        # use IAPWS-95, which can be applied up to high pressure conditions
+        water = iapws.IAPWS95(P=self.pressure * 1.0e-6, T=self.temperature)
         self.dielec_water: float = (
             iapws._iapws._Dielectric(water.rho, self.temperature) * DIELECTRIC_VACUUM
         )
-
-        self.dielec_fluid = calc_dielec_nacl_RaspoAndNeau2020(self.temperature, xnacl)
+        if (
+            self.phase is Phase.L
+            and self.temperature <= 598.15
+            and 3.0e3 <= self.pressure <= 1.18e7
+        ):
+            self.dielec_fluid = calc_dielec_nacl_RaspoAndNeau2020(
+                self.temperature, xnacl
+            )
 
         # calculate activity
-        ion_props = calc_nacl_activities(
-            self.temperature, self.pressure, self.dielec_water, ion_props, "thereda"
-        )
+        if 273.15 <= self.temperature <= 473.15 and self.phase is Phase.L:
+            ion_props = calc_nacl_activities(
+                self.temperature, self.pressure, self.dielec_water, ion_props, "thereda"
+            )
         self.ion_props: Dict = ion_props
 
         # calculate viscosity
-        Xnacl = 1000.0 * molarity * MNaCl / self.density  # weight fraction
-        self.viscosity = calc_viscosity(self.temperature, self.pressure, Xnacl)
+        self.viscosity = calc_viscosity(self.temperature, self.pressure, wtper)
 
         # pKw
         self.kw = calc_equibilium_const(DG_H2O, self.temperature)
 
-        # calculate mobility based on Zhang et al.(2020)' experimental eqs
-        P1 = 1.1844738522786495
-        P2 = 0.3835869097290443
-        C = -94.93082293033551
-        coeff = exp(-P1 * molality**P2) - (C / self.temperature)
-        water_ref = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=298.15)
-        eta_298 = iapws._iapws._Viscosity(water_ref.rho, 298.15)
-        eta_t = iapws._iapws._Viscosity(water.rho, self.temperature)
-        for _s, _prop in ion_props.items():
-            if _s in (Species.H.name, Species.OH.name):
-                continue
-            d0 = msa_props[_s]["D0"] * eta_298 * self.temperature / (eta_t * 298.15)
-            m0 = ELEMENTARY_CHARGE * d0 / (self.temperature * BOLTZMANN_CONST)
-            # TODO: make valid for dilute (< 1.0e-3) region
-            m = m0 * coeff
-            ion_props[_s][IonProp.Mobility.name] = m
+        # calculate ion mobility based on Zhang et al.(2020)' experimental eqs
+        if self.phase is Phase.L and self.temperature <= 200.0:
+            P1 = 1.1844738522786495
+            P2 = 0.3835869097290443
+            C = -94.93082293033551
+            coeff = exp(-P1 * molality**P2) - (C / self.temperature)
+            water_ref = iapws.IAPWS97(P=self.pressure * 1.0e-6, T=298.15)
+            eta_298 = iapws._iapws._Viscosity(water_ref.rho, 298.15)
+            eta_t = iapws._iapws._Viscosity(water.rho, self.temperature)
+            for _s, _prop in self.ion_props.items():
+                if _s in (Species.H.name, Species.OH.name):
+                    continue
+                d0 = msa_props[_s]["D0"] * eta_298 * self.temperature / (eta_t * 298.15)
+                m0 = ELEMENTARY_CHARGE * d0 / (self.temperature * BOLTZMANN_CONST)
+                # TODO: make valid for dilute (< 1.0e-3) region
+                m = m0 * coeff
+                self.ion_props[_s][IonProp.Mobility.name] = m
 
-        self.cond_from_mobility = (
-            ion_props["Na"]["Molarity"]
-            * AVOGADRO_CONST
-            * 1000.0
-            * ELEMENTARY_CHARGE
-            * (
-                ion_props[Species.Na.name][IonProp.Mobility.name]
-                + ion_props[Species.Cl.name][IonProp.Mobility.name]
+            self.cond_from_mobility = (
+                ion_props["Na"]["Molarity"]
+                * AVOGADRO_CONST
+                * 1000.0
+                * ELEMENTARY_CHARGE
+                * (
+                    self.ion_props[Species.Na.name][IonProp.Mobility.name]
+                    + self.ion_props[Species.Cl.name][IonProp.Mobility.name]
+                )
             )
-        )
+        else:
+            for _s, _prop in self.ion_props.items():
+                self.ion_props[_s][IonProp.Mobility.name] = None
 
-        # TODO: add Watanabe et al. (2021)
         method = method.lower()
         if method == "sen_and_goode":
+            if self.phase is not Phase.L:
+                warn(
+                    f"Invalid phase: Sen & Goode's (1992) equation can only be applied to the liquid phase but in the {self.phase.name} phase."
+                )
+            if self.temperature > 473.15:
+                warn(
+                    "Invalid temperature: Temperature exceeds 200℃, at which the Sen & Goode (1992) equation can be applied."
+                )
             self.conductivity = sen_and_goode_1992(
                 self.temperature, self.ion_props[Species.Na.name][IonProp.Molality.name]
             )
         if method == "watanabeetal":
+            if (self.phase not in SINGLE_PHASE) or self.phase is Phase.V:
+                warn(
+                    f"Invalid phase: Watanabe et al.'s (2021) equation can only be applied to the liquid or super critical fluid phase but in the {self.phase.name} phase."
+                )
+            if self.temperature > 798.15 or self.pressure > 2.0e8 or wtper > 0.25:
+                warn(
+                    f"Temperature, pressure, and salinity ({self.temperature}, {self.pressure}, {self.wtper}) exceed the conditions (T<=798.15 K, P<= 200 MPa, X <= 0.25), under which the Watanabe et al. (2021) equation is applicable."
+                )
             self.conductivity = Watanabeetal2021(molality, molarity, self.viscosity)
 
         if self.conductivity is not None:
@@ -284,6 +316,14 @@ class NaCl(Fluid):
             float: Absolute temperature (K)
         """
         return self.temperature
+
+    def get_phase(self) -> Phase:
+        """Getter for the phase
+
+        Returns:
+            Phase: Phase class (see constant.py for details)
+        """
+        return self.phase
 
     def get_density(self) -> float:
         """Getter for the density of aqueous NaCl solution
@@ -824,7 +864,7 @@ def calc_nacl_activities(
 
     # calculate activity
     ion_strength = __calc_ion_strength(ion_props)
-    rho = iapws.IAPWS97(T=T, P=P * 1.0e-6).rho
+    rho = iapws.IAPWS95(T=T, P=P * 1.0e-6).rho
     f = __calc_f(
         T,
         rho,
@@ -1382,7 +1422,7 @@ def calc_Water_Boiling_Curve(T: float) -> float:
         )
         * 322.0
     )
-    return calc_Water_Pressure(T, RhoVapSat) * 10.0
+    return calc_Water_Pressure(T, RhoVapSat)
 
 
 def calc_rho_sat_water(T: float) -> float:
@@ -1666,7 +1706,6 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
     G2 = h7 + (h6 - h7) / (1.0 + exp((T - h8) / h9)) + h10 * exp(-h11 * T)
     XN_Crit, P_Crit = calc_X_and_P_crit(T + 273.15)
     P_Crit *= 1.0e-5  # bar
-
     TmpUnit, TmpUnit2 = None, None
     if T < 800.7:
         TmpUnit = calc_P_VLH(T + 273.15) * 1.0e-5
@@ -1982,26 +2021,26 @@ def PhiR_Delta(Delta_Rho, Tau):
         )
     return Sum1 + Sum2 + Sum3 + Sum4
 
-# TODO: test
-# TODO: docstring
-def get_naclaq_pahse(T: float, P: float, X: float) -> Phase:
-    """_summary_
+
+def get_naclaq_phase(T: float, P: float, X: float) -> Phase:
+    """Get phase from TPX condition.
 
     Args:
-        T (float): _description_
-        P (float): _description_
-        X (float): _description_
+        T (float): Temperature (K)
+        P (float): Pressure (Pa)
+        X (float): Molar fraction of NaCl in 0–1 (-)
 
     Returns:
-        bool: _description_
+        Phase: Subclass of Enum indicating phase
     """
     T -= 273.15  # ℃
-    P *= 1.0e-5  # bar 
-    XNaCl_Crit, PCrit = calc_X_and_P_crit(T)
+    P *= 1.0e-5  # bar
+    _, PCrit = calc_X_and_P_crit(T + 273.15)
+    PCrit *= 1.0e-5
     phase: Phase = None
-    # only H2O
+    # H2O single-phase
     if X == 0.0:
-        water = iapws.IAPWS95(T=T+273.15, P=P*0.1)
+        water = iapws.IAPWS95(T=T + 273.15, P=P * 0.1)
         water.calculo()
         if water.phase == "Supercritical fluid":
             phase = Phase.F
@@ -2021,33 +2060,51 @@ def get_naclaq_pahse(T: float, P: float, X: float) -> Phase:
             phase = Phase.V
         elif water.phase == "Liquid":
             phase = Phase.L
-    # only NaCl
+    # NaCl single-phase
     elif X == 1.0:
-        pboil = calc_P_Boil(T - 273.15)
-        pmelt = (T - 800.7) / 2.4726 * 1.0e2 + 0.0005
-        if T == 800.7 and P == 5.0e-4:
-            phase = Phase.T
-        elif P < pboil:
-            phase = Phase.V
-        elif pboil == P:
-            phase = Phase.VL
-        elif pboil < P < pmelt:
-            phase = Phase.L
-        elif pmelt == P:
-            phase = Phase.SL
-        elif P > pmelt:
-            phase = Phase.S
+        if T > 800.7:
+            pboil = calc_P_Boil(T - 273.15) * 1.0e-5
+            pmelt = (T - 800.7) / 2.4726 * 1.0e2 + 0.0005
+            if P < pboil:
+                phase = Phase.V
+            elif P == pboil:
+                phase = Phase.VL
+            elif pboil < P < pmelt:
+                phase = Phase.L
+            elif P == pmelt:
+                phase = Phase.SL
+            else:
+                phase = Phase.S
+        else:
+            psubl = calc_P_Subl(T + 273.15) * 1.0e-5
+            if T == 800.7 and P == 5.0e-4:
+                phase = Phase.T
+            elif P < psubl:
+                phase = Phase.V
+            elif P == psubl:
+                phase = Phase.VS
+            else:
+                phase = Phase.S
     # H2O-NaCl
     else:
         if P >= PCrit:
-            phase = Phase.F
-        else:
-            if T <= 373.946:  # critical temperature from IAPWS-95
-                pboil = calc_Water_Boiling_Curve(T + 273.15)
-                if P > pboil:
+            if X <= calc_X_L_Sat(T + 273.15, P * 1.0e5):
+                if T <= 373.946:
                     phase = Phase.L
                 else:
-                    pvlh = calc_P_VLH(T + 273.15)
+                    phase = Phase.F
+            else:
+                phase = Phase.LH
+        else:
+            if T <= 373.946:  # critical temperature from IAPWS-95
+                pboil = calc_Water_Boiling_Curve(T + 273.15) * 1.0e-5
+                if P > pboil:
+                    if X <= calc_X_L_Sat(T + 273.15, P * 1.0e5):
+                        phase = Phase.L
+                    else:
+                        phase = Phase.LH
+                else:
+                    pvlh = calc_P_VLH(T + 273.15) * 1.0e-5
                     if P < pvlh:
                         if X <= calc_X_V_Sat(T + 273.15, P * 1.0e5):
                             phase = Phase.V
@@ -2057,7 +2114,7 @@ def get_naclaq_pahse(T: float, P: float, X: float) -> Phase:
                     elif X < abs(calc_X_VL_Liq(T + 273.15, P * 1.0e5)):
                         phase = Phase.VL
                     elif X > abs(calc_X_L_Sat(T + 273.15, P * 1.0e5)):
-                         phase = Phase.SL
+                        phase = Phase.LH
                     else:
                         phase = Phase.L
             else:
@@ -2067,13 +2124,29 @@ def get_naclaq_pahse(T: float, P: float, X: float) -> Phase:
                 else:
                     pvlh = -1.0
                 if P <= pvlh:
+                    # modified from ProBrine V2
                     if X <= calc_X_V_Sat(T + 273.15, P * 1.0e5):
-                        pass # TODO: l194
-                    
+                        phase = Phase.F
+                    else:
+                        phase = Phase.VH
+                else:
+                    # modified from ProBrine V2
+                    xvl_vap = calc_X_VL_Vap(T + 273.15, P * 1.0e5)
+                    xvl_liq = calc_X_VL_Liq(T + 273.15, P * 1.0e5)
+                    xlsat = calc_X_L_Sat(T + 273.15, P * 1.0e5)
+                    if X <= xvl_vap:
+                        phase = Phase.F
+                    elif xvl_vap <= X < xvl_liq:
+                        phase = Phase.VL
+                    elif X <= xvl_liq:
+                        phase = Phase.F
+                    elif xvl_liq < X <= xlsat:
+                        phase = Phase.F
+                    else:
+                        phase = Phase.LH
+    assert phase is not None, phase
     return phase
 
-# TODO: remove
+
 if __name__ == "__main__":
-    print(Phase.F.name)
-    get_naclaq_pahse(398.15, 1.0e5, 0.0)
     pass

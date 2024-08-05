@@ -100,27 +100,27 @@ class Species(IntEnum):
 
 
 class IonProp(IntEnum):
-    Molarity = auto()     # mol/l fraction of bulk
-    Molality = auto()     # mol/kg fraction of solvent
+    Molarity = auto()  # mol/l fraction of bulk
+    Molality = auto()  # mol/kg fraction of solvent
     MolFraction = auto()  # mole fraction
-    WtFraction = auto()   # weight fraction
+    WtFraction = auto()  # weight fraction
     Activity = auto()
     Mobility = auto()
     Valence = auto()
 
 
 class Phase(Enum):
-    V = auto()   # vapour
-    L = auto()   # liquid
-    S = auto()   # solid
+    V = auto()  # vapour
+    L = auto()  # liquid
+    S = auto()  # solid
     VL = auto()  # vapour + liquid
-    LH = auto()  # vapour + halite
-    VH = auto()  # vapour + liquid
+    LH = auto()  # liquid + halite
+    VH = auto()  # vapour + halite
     SL = auto()  # solid + liquid
     VS = auto()  # solid + gas
-    F = auto()   # supercritical fluid
-    T = auto()   # triple point
-    C = auto()   # critical point
+    F = auto()  # supercritical fluid
+    T = auto()  # triple point
+    C = auto()  # critical point
 
 
 # default properties of NaCl solution

@@ -52,7 +52,8 @@ class NaCl(Fluid):
         ph: float = 7.0,
         conductivity: float = None,
         cond_tensor: np.ndarray = None,
-        method: str = "sen_and_goode",
+        method: str = "auto",
+        is_standard: bool = False,
         logger: Logger = None,
     ):
         """Initialize NaCl instance
@@ -70,10 +71,14 @@ class NaCl(Fluid):
             cond_tensor (np.ndarray): Electrical conductivity tensor (3×3)
             method (str): Method to calculate electrical conductivity:
                 "sen_and_goode": Eq.(9) in Sen & Goode (1992)
+                "watanabeetal": Eq.(1)–(5) in Watanabe et al. (2021)
+                "auto": Conductivity is automatically calculated
+            is_standard (bool): If True, convert from molarity to molar and mass fractions
+                in the standard state (25℃, 1 hPa)
             logger (Logger): Logger
 
-        NOTE: molarity and molality arguments were not tested in vapor-liquid,
-        halite-liquid, and vapor-halite coexisting phases.
+        NOTE: molarity arguments were not tested in vapor-liquid,
+            halite-liquid, and vapor-halite coexisting phases.
         """
         assert (
             (molarity is not None)
@@ -100,6 +105,7 @@ class NaCl(Fluid):
         self.viscosity: float = None
         self.kw: float = None
         self.cond_from_mobility: float = None
+        self.vapor_saturation = None
 
         self.logger = logger
 
@@ -110,37 +116,36 @@ class NaCl(Fluid):
         ion_props: Dict = deepcopy(ion_props_default)
 
         # calculate density
-        _flag = False  # TODO: remove this
+        _flag = False
         density = None
         if wtper is not None:
             nnacl = wtper / MNaCl
             nh2o = (1.0 - wtper) / MH2O
             xnacl = nnacl / (nnacl + nh2o)
+        if molality is not None:
+            xnacl = molality / (molality + 1.0 / MH2O)
         if xnacl is not None:
-            density = calc_density(self.temperature, self.pressure, xnacl)
-            v = 1.0 / density * (xnacl * MNaCl + (1.0 - xnacl) * MH2O)  # molar volume
-            molarity = xnacl / v * 1.0e-3
-            molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
+            density, molarity, molality = calc_rho_molar_molal(
+                self.temperature, self.pressure, xnacl
+            )
         elif molarity is not None:
             _flag = True
+            if is_standard:
+                _t, _p = 298.15, 1.0e5
+            else:
+                _t, _p = self.temperature, self.pressure
+
             def __callback(__x) -> float:
-                rho = calc_density(T=self.temperature, P=self.pressure, Xnacl=__x)
+                rho = calc_density(T=_t, P=_p, Xnacl=__x)
                 nh20 = (rho - 1000.0 * molarity * MNaCl) / MH2O  # mol/m^3
                 return __x - molarity / (molarity + nh20 * 1.0e-3)
-            xnacl = bisect(
-                __callback, 0.0, calc_X_L_Sat(self.temperature, self.pressure)
+
+            xnacl = bisect(__callback, 0.0, calc_X_L_Sat(_t, _p))
+            density, molarity, molality = calc_rho_molar_molal(
+                self.temperature, self.pressure, xnacl
             )
-            density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
             # calculate molality(mol/kg)
             molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
-        elif molality is not None:
-            _flag = True
-            xnacl = molality / (molality + 1.0 / MH2O)
-            density = calc_density(T=self.temperature, P=self.pressure, Xnacl=xnacl)
-            def __callback(__x) -> float:
-                nh20 = (density - 1000.0 * __x * MNaCl) / MH2O  # mol/m3
-                return xnacl - __x / (__x + nh20 * 1.0e-3)
-            molarity = bisect(__callback, 0.0, 10.0)
 
         self.density = density
         assert xnacl is not None, xnacl
@@ -149,8 +154,10 @@ class NaCl(Fluid):
             wtper = 1000.0 * molarity * MNaCl / self.density  # weight fraction
 
         self.phase: Phase = get_naclaq_phase(self.temperature, self.pressure, xnacl)
-        if _flag and self.phase is not Phase.L:
-            warn("Functions to convert from molar concentration to molar fraction have yet to be tested at this temperature and pressure.")
+        if _flag and self.phase is not Phase.L and not is_standard:
+            warn(
+                "Functions to convert from molar concentration to molar fraction have yet to be tested at this temperature and pressure."
+            )
 
         # set ion properties
         _ah = 10.0 ** (-1.0 * ph)
@@ -249,19 +256,63 @@ class NaCl(Fluid):
                 warn(
                     "Invalid temperature: Temperature exceeds 200℃, at which the Sen & Goode (1992) equation can be applied."
                 )
-            self.conductivity = sen_and_goode_1992(
-                self.temperature, self.ion_props[Species.Na.name][IonProp.Molality.name]
-            )
+            self.conductivity = sen_and_goode_1992(self.temperature, molality)
         if method == "watanabeetal":
             if (self.phase not in SINGLE_PHASE) or self.phase is Phase.V:
                 warn(
-                    f"Invalid phase: Watanabe et al.'s (2021) equation can only be applied to the liquid or super critical fluid phase but in the {self.phase.name} phase."
+                    f"Invalid phase: Watanabe et al.'s (2021) equation can only be applied to the single phase but in the {self.phase.name} phase."
                 )
             if self.temperature > 798.15 or self.pressure > 2.0e8 or wtper > 0.25:
                 warn(
                     f"Temperature, pressure, and salinity ({self.temperature}, {self.pressure}, {self.wtper}) exceed the conditions (T<=798.15 K, P<= 200 MPa, X <= 0.25), under which the Watanabe et al. (2021) equation is applicable."
                 )
-            self.conductivity = Watanabeetal2021(molality, molarity, self.viscosity)
+            self.conductivity = watanabeetal2021(molality, molarity, self.viscosity)
+        if method == "auto":
+            if self.phase is Phase.L and self.temperature <= 473.15:
+                self.conductivity = sen_and_goode_1992(self.temperature, molality)
+            elif self.phase in SINGLE_PHASE and self.temperature <= 798.15:
+                self.conductivity = watanabeetal2021(molality, molarity, self.viscosity)
+            elif self.phase is Phase.VL and self.temperature <= 798.15:
+                # conductivity of vapor + liquid phase
+                # liquid conductivity
+                xvl_liq = calc_X_VL_Liq(self.temperature, self.pressure)
+                rho_liq, molar_liq, molal_liq = calc_rho_molar_molal(
+                    self.temperature, self.pressure, xvl_liq + 1.0e-10
+                )
+                wtper_liq = 1000.0 * molar_liq * MNaCl / rho_liq
+                visc_liq = calc_viscosity(self.temperature, self.pressure, wtper_liq)
+                cond_liq = watanabeetal2021(molal_liq, molar_liq, visc_liq)
+
+                # vapor conductivity
+                xvl_vap = calc_X_VL_Vap(self.temperature, self.pressure)
+                rho_vap, molar_vap, _ = calc_rho_molar_molal(
+                    self.temperature, self.pressure, xvl_vap - 1.0e-10
+                )
+                wtper_vap = 1000.0 * molar_vap * MNaCl / rho_vap
+                cond_vap = sinmyo_and_keppler_2016(
+                    self.temperature, self.pressure, wtper_vap
+                )
+
+                # calculate volume fraction of liquid phase by lever rule
+                xliq = (xnacl - xvl_vap) / (
+                    xvl_liq - xvl_vap
+                )  # mol fraction of liquid phase
+                vliq = (
+                    1.0 / rho_liq * (xvl_liq * MNaCl + (1.0 - xvl_liq) * MH2O)
+                )  # molar volume of liqud phase
+                vvl = (
+                    1.0 / self.density * (xnacl * MNaCl + (1.0 - xnacl) * MH2O)
+                )  # molar volume of bulk phase (vapor + liquid phase)
+                phi_liq = xliq * vliq / vvl
+                self.conductivity = calc_cond_in_VL(cond_liq, cond_vap, phi_liq)
+                self.vapor_saturation = 1.0 - phi_liq
+
+            elif 423.15 <= self.temperature <= 873.15:
+                self.conductivity = sinmyo_and_keppler_2016(
+                    self.temperature, self.pressure, wtper
+                )
+            else:
+                warn("Conductivity is not set")
 
         if self.conductivity is not None:
             self.calc_cond_tensor_cube_oxyz()
@@ -724,6 +775,11 @@ def sen_and_goode_1992(T, M) -> float:
 
     Returens:
         float: Electrical conductivity of NaCl fluid in liquid phase (S/m)
+        
+    Reference:
+        Sen, P. N., & Goode, P. A. (1992). Influence of temperature on electrical
+            conductivity on shaly sands, Geophysics, 57(1), 89-96,
+            https://doi.org/10.1190/1.1443191
     """
     # convert Kelvin to Celsius
     T -= 273.15
@@ -732,19 +788,20 @@ def sen_and_goode_1992(T, M) -> float:
     return left - right
 
 
-def Watanabeetal2021(m: float, cf: float, mu: float):
+def watanabeetal2021(m: float, cf: float, mu: float):
     """Calculate electrical conductivity of NaCl fluid based on the
     Watanabe et al.(2021)'s equation.
-
-    Reference:
-        Watanabe, N., Yamaya, Y., Kitamura, K., Mogi, T., (2021).
-            Viscosity-dependent empirical formula for electrical conductivity
-            of H2O-NaCl fluids at elevated temperatures and high salinity
 
     Args:
         m (float): Molality (mol/kg)
         cf (float): Molarity (mol/l)
         mu (float): Viscosity (Pa s)
+        
+    Reference:
+        Watanabe, N., Yamaya, Y., Kitamura, K., Mogi, T., (2021).
+            Viscosity-dependent empirical formula for electrical conductivity
+            of H2O-NaCl fluids at elevated temperatures and high salinity,
+            https://doi.org/10.1016/j.fluid.2021.113187
     """
     # parameter values of the equation (Table 3 therein)
     a1 = 4.16975e-3
@@ -765,7 +822,94 @@ def Watanabeetal2021(m: float, cf: float, mu: float):
 
     lamda = A + B * mu ** (-1.0) + C * mu ** (-2.0)
 
-    return lamda * cf * 1.0e-3
+    return lamda * cf * 1.0e3
+
+
+def sinmyo_and_keppler_2016(T: float, P: float, wtper: float) -> float:
+    """Calculate electrical conductivity of H2O-NaCl fluid using Eq.(11)
+    from Sinmyo & Keppler (2016).
+
+    Args:
+        T (float): Temperature (K)
+        P (float): Pressure (Pa)
+        wtper (float): Weight fraction of NaCl in 0–1 (-).
+
+    Returns:
+        float: Electrical conductivity of H2O-NaCl fluid (S/m)
+        
+    Reference:
+        Sinmyo, R., Keppler, H., (2016). Electrical conductivity of
+            NaCl‑bearing aqueous fluids to 600 °C and 1 GP,
+            http://dx.doi.org/10.1007/s00410-016-1323-z
+
+    NOTE: This equation cannot apply below 150℃.
+    """
+    assert T >= 100.0, T
+    wtper *= 1.0e2
+    water = iapws.IAPWS95(T=T, P=P * 1.0e-6)
+    rho_gcm3 = water.rho * 1.0e-3
+    lamda0 = calc_lamda0(T, rho_gcm3)
+    Tinv = 1.0 / T
+    A = -1.7060
+    B = -93.78
+    C = 0.8075
+    D = 3.0781
+    return 10.0 ** (
+        A + B * Tinv + C * log10(wtper) + D * log10(rho_gcm3) + log10(lamda0)
+    )
+
+
+def calc_lamda0(T: float, rho_gcm3: float):
+    """Calculate Λ0 in Eq.(12) from Sinmyo & Keppler (2016).
+
+    Args:
+        T (float): Temperature (K)
+        rho_gcm3 (float): Density (g/cm3)
+    """
+    Tinv = 1.0 / T
+    return 1573.0 - 1212.0 * rho_gcm3 + 537062.0 * Tinv - 208122721.0 * Tinv**2
+
+
+def calc_cond_in_VL(
+    cond_liq: float, cond_vap: float, phi_liq: float, method: str = "volume_average"
+) -> float:
+    """Calculate the electrical conductivity of vapor+liquid coexisting phase.
+
+    Args:
+        cond_liq (float): Liquid conductivity (S/m)
+        cond_vap (float): Vapor conductivity (S/m)
+        phi_liq (float): Volume fraction of the liquid phase in 0–1 (-)
+        method (str, optional): String specifying how the effective
+            conductivity is calculated
+
+    Raises:
+        NotImplementedError: Raise if method is not inplemented.
+
+    Returns:
+        float: Effective electrical conductivity of fluid in the vapor + liquid phase (S/m)
+    """
+    if method not in ("volume_average"):
+        raise NotImplementedError()
+    assert 0.0 <= phi_liq <= 1.0
+    return cond_liq * phi_liq + cond_vap * (1.0 - phi_liq)
+
+
+def calc_rho_molar_molal(T: float, P: float, xnacl: float) -> float:
+    """Convert mol fraction to density, molarity, and molality.
+
+    Args:
+        T (float): Temperature (K)
+        P (float): Pressure (Pa)
+        molfrac (float): Mol fraction of NaCl in 0–1 (-)
+
+    Returns:
+        float: Density (kg/m3), molarity (mol/l), molality (mol/kg-H2O)
+    """
+    density = calc_density(T, P, xnacl)
+    v = 1.0 / density * (xnacl * MNaCl + (1.0 - xnacl) * MH2O)  # molar volume
+    molarity = xnacl / v * 1.0e-3
+    molality = 1000.0 * molarity / (density - 1000.0 * molarity * MNaCl)
+    return density, molarity, molality
 
 
 def calc_nacl_activities(

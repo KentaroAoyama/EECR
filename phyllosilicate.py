@@ -981,6 +981,8 @@ class Phyllosilicate:
         """
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
+        assert self.dielec_fluid is not None
+        assert self.viscosity is not None
 
         # set constants
         self.gamma_1 = self.tlm_params.gamma_1o
@@ -1125,6 +1127,8 @@ class Phyllosilicate:
         # assert self.layer_width >= 0.9e-9, "self.layer_width < 0.9e-9"
         assert 0.0 < beta < 1.0
         assert lamda > 1.0
+        assert self.dielec_fluid is not None
+        assert self.viscosity is not None
 
         # obtain init values based on infinity developed diffuse layer
         # phi0, phib, phid, phir, q0, qb, qs

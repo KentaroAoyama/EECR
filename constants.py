@@ -1,6 +1,7 @@
-from enum import IntEnum, auto
+from enum import IntEnum, Enum, auto
 from math import log, exp
 from typing import Dict
+
 
 def calc_standard_gibbs_energy(k_25: float, t: float = 298.15) -> float:
     """Calculate standard Gibbs free energy of formation at 298.15K (25℃)
@@ -36,10 +37,10 @@ BOLTZMANN_CONST = 1.380649e-23
 AVOGADRO_CONST = 6.0221408e23
 GAS_CONST = 8.31446262
 PRESSURE = 2.0 * 1.0e6
-DISSOSIATION_WATER = 9.888215487598867e-15 # at 25℃
+DISSOSIATION_WATER = 9.888215487598867e-15  # at 25℃
 PRESSURE_ATM = 101300.0
-MNaCl = 58.443e-3 # kg/mol
-MH2O = 18.015e-3 # kg/mol
+MNaCl = 58.443e-3  # kg/mol
+MH2O = 18.015e-3  # kg/mol
 
 # Equilibrium constants (at 25℃) & Capacitance (F/m)
 # Smectite (infinite diffuse layer case)
@@ -89,6 +90,7 @@ dg_xna_kaol = calc_standard_gibbs_energy(k_xna_kaol)
 # based on https://thermatdb.securesite.jp/Achievement/PropertiesDBtop.html
 DG_H2O = 79.885e3
 
+
 class Species(IntEnum):
     Na = auto()
     Cl = auto()
@@ -98,12 +100,27 @@ class Species(IntEnum):
 
 
 class IonProp(IntEnum):
-    Molarity = auto() # mol/l fraction of bulk
-    Molality = auto() # mol/kg fraction of solvent
-    MolFraction = auto()
+    Molarity = auto()  # mol/l fraction of bulk
+    Molality = auto()  # mol/kg fraction of solvent
+    MolFraction = auto()  # mole fraction
+    WtFraction = auto()  # weight fraction
     Activity = auto()
     Mobility = auto()
     Valence = auto()
+
+
+class Phase(Enum):
+    V = auto()  # vapour
+    L = auto()  # liquid
+    S = auto()  # solid
+    VL = auto()  # vapour + liquid
+    LH = auto()  # liquid + halite
+    VH = auto()  # vapour + halite
+    SL = auto()  # solid + liquid
+    VS = auto()  # solid + gas
+    F = auto()  # supercritical fluid
+    T = auto()  # triple point
+    C = auto()  # critical point
 
 
 # default properties of NaCl solution
@@ -112,6 +129,7 @@ ion_props_default = {
         IonProp.Molarity.name: 1.0e-3,
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
+        IonProp.WtFraction.name: None,
         IonProp.Activity.name: 1.0e-3,
         IonProp.Mobility.name: 5.19e-8,
         IonProp.Valence.name: 1,
@@ -120,6 +138,7 @@ ion_props_default = {
         IonProp.Molarity.name: 1.0e-3,
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
+        IonProp.WtFraction.name: None,
         IonProp.Activity.name: 1.0e-3,
         IonProp.Mobility.name: 7.91e-8,
         IonProp.Valence.name: -1,
@@ -128,6 +147,7 @@ ion_props_default = {
         IonProp.Molarity.name: 1.0e-7,
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
+        IonProp.WtFraction.name: None,
         IonProp.Activity.name: 1.0e-7,
         IonProp.Mobility.name: 36.3e-8,
         IonProp.Valence.name: 1,
@@ -136,6 +156,7 @@ ion_props_default = {
         IonProp.Molarity.name: 1.0e-7,
         IonProp.Molality.name: None,
         IonProp.MolFraction.name: None,
+        IonProp.WtFraction.name: None,
         IonProp.Activity.name: 1.0e-7,
         IonProp.Mobility.name: 20.5e-8,
         IonProp.Valence.name: -1,
@@ -147,5 +168,5 @@ ion_props_default = {
 msa_props: Dict[str, Dict] = {
     Species.Na.name: {"radius": 1.17 * 1.0e-10, "D0": 1.33 * 1.0e-9},
     Species.Cl.name: {"radius": 1.81 * 1.0e-10, "D0": 2.03 * 1.0e-9},
-    Species.Ca.name: {"radius": 1.14 * 1.0e-10, "D0": 0.79e-9}
+    Species.Ca.name: {"radius": 1.14 * 1.0e-10, "D0": 0.79e-9},
 }

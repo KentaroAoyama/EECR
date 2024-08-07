@@ -215,7 +215,7 @@ class NaCl(Fluid):
         self.kw = calc_equibilium_const(DG_H2O, self.temperature)
 
         # calculate ion mobility based on Zhang et al.(2020)' experimental eqs
-        if self.phase is Phase.L and self.temperature <= 200.0:
+        if self.phase is Phase.L and self.temperature <= 473.15:
             P1 = 1.1844738522786495
             P2 = 0.3835869097290443
             C = -94.93082293033551

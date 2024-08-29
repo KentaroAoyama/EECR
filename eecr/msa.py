@@ -19,7 +19,7 @@ from collections import OrderedDict
 from scipy.optimize import bisect
 import iapws
 
-import constants as const
+from . import constants as const
 
 
 # Set the ionic radius and the diffusion coefficient in solution at infinite dilution

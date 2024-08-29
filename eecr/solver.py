@@ -7,7 +7,7 @@ from warnings import warn
 
 import pickle
 import numpy as np
-from cube import Cube, calc_m
+from .cube import Cube, calc_m
 
 
 class FEM_Cube:

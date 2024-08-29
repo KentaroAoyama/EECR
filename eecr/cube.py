@@ -15,7 +15,7 @@ os.environ["OMP_NUM_THREADS"] = "1"
 
 import numpy as np
 
-from fluid import Fluid
+from .fluid import Fluid
 
 DictLike = Union[Dict, OrderedDict]
 # pylint: disable=invalid-name

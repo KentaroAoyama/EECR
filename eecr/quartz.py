@@ -12,14 +12,14 @@ import pickle
 import numpy as np
 from scipy.optimize import bisect
 
-import constants as const
-from constants import (
+from . import constants as const
+from .constants import (
     Species,
     IonProp,
     calc_standard_gibbs_energy,
     calc_equibilium_const,
 )
-from fluid import NaCl
+from .fluid import NaCl
 
 # initial parameter
 # TODO: consider pH dependence

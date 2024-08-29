@@ -14,9 +14,9 @@ import pickle
 import numpy as np
 from scipy.integrate import quad
 
-import constants as const
-from constants import Species, IonProp
-from fluid import NaCl
+from . import constants as const
+from .constants import Species, IonProp
+from .fluid import NaCl
 
 # load initial parameters for Newton-Raphson method
 # for smectite, infinite diffuse layer case

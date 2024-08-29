@@ -9,11 +9,11 @@ pip install git+https://github.com/KentaroAoyama/EECR.git
 
 # Quick Start
 ```
-from fluid import NaCl
-from quartz import Quartz
-from phyllosilicate import Smectite
-from cube import Cube
-from solver import FEM_Cube
+from eecr.fluid  import NaCl
+from eecr.quartz import Quartz
+from eecr.phyllosilicate import Smectite
+from eecr.cube import Cube
+from eecr.solver import FEM_Cube
 
 # T: temperature (K), P: pressure (Pa), M: molarity (mol/l)
 T = 298.15

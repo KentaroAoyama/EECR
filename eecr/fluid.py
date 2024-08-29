@@ -3,7 +3,8 @@
 from typing import Dict, Tuple, Union
 from copy import deepcopy
 from logging import Logger
-from math import pi, sqrt, log, log10, exp, tanh, isclose
+from math import pi, sqrt, log, log10, exp, tanh, isclose, copysign
+from functools import partial
 from warnings import warn
 
 import pickle
@@ -12,7 +13,7 @@ import numpy as np
 from scipy.optimize import bisect
 import iapws
 
-from constants import (
+from .constants import (
     ion_props_default,
     Species,
     IonProp,
@@ -34,6 +35,7 @@ class Fluid:
     pass
 
 
+sign = partial(copysign, 1)
 SINGLE_PHASE = set((Phase.V, Phase.L, Phase.S, Phase.F))
 
 
@@ -1520,6 +1522,41 @@ def calc_T_Star_V(T: float, P: float, Xnacl: float) -> float:
     return Tv
 
 
+def calc_enthalpy(T: float, P: float, X: float) -> float:
+    """Calculate specific enthalpy (eq.(21) in Driesner (2007))
+    This implementation is derived from ProBrine (Klyukin et al., 2017)
+
+    Args:
+        T (float): Temperature (K)
+        P (float): Pressure (Pa)
+        X (float): Molar fraction of NaCl (-)
+
+    Returns:
+        float: Specific enthaly (kJ/kg)
+    """
+    T -= 273.15
+    P *= 1.0e-5
+    xH2O = 1.0 - X
+    q11 = -32.1724 + 0.0621255 * P
+    q21 = -1.69513 - 0.000452781 * P - 0.0000000604279 * P**2
+    q22 = 0.0612567 + 0.0000188082 * P
+    q_oneNaCl = 47.9048 - 0.00936994 * P + 0.00000651059 * P**2
+    q_twoNaCl = 0.241022 + 0.0000345087 * P - 0.00000000428356 * P**2
+
+    q10 = q_oneNaCl
+    q12 = -q11 - q10
+
+    q20 = 1.0 - q21 * q22**0.5
+    q23 = q_twoNaCl - q20 - q21 * (1.0 + q22)**0.5
+
+    q1 = q10 + q11 * xH2O + q12 * xH2O**2
+    q2 = q20 + q21 * (X + q22)**0.5 + q23 * X
+
+    TstrH = q1 + q2 * T + 273.15
+    rho = Rho_Water(TstrH, P*1.0e5)
+    return calc_Water_Enthalpy(TstrH, rho)
+
+
 def calc_Water_Boiling_Curve(T: float) -> float:
     """Calculate pressure on boiling curve. This implementation is based
     on "Water_Boiling_Curve" function in "Water_prop" module in ProBrine V2
@@ -1891,68 +1928,6 @@ def calc_X_VL_Liq(T: float, P: float) -> float:
     return X_VL_Liq
 
 
-def calc_P_Boil(T: float) -> float:
-    """Calculate vapor pressure of NaCl (PNaCl). This implementation is
-    based on "P_Boil" in ProBrine V2 (Klyukin et al., 2020).
-
-    Args:
-        T (float): Absolute temperature (K)
-
-    Returns:
-        float: Pressure on halite boiling curve (Pa)
-    """
-    T -= 273.15
-    B_boil = 9418.12
-    T_Triple_NaCl = 800.7
-    P_Triple_NaCl = 0.0005
-    P_Boil = 10.0 ** (
-        log10(P_Triple_NaCl)
-        + B_boil * (1.0 / (T_Triple_NaCl + 273.15) - 1.0 / (T + 273.15))
-    )
-
-    return P_Boil * 1.0e5
-
-
-def calc_P_H2O_Boiling_Curve(T: float) -> float:
-    """Calculate pressure on boiling curve. This implementation is
-    based on "P_H2O_Boiling_Curve" in ProBrine V2 (Klyukin et al., 2020).
-
-    Args:
-        T (float): Absolute temperature (K)
-
-    Returns:
-        float: Pressure on boiling curve (Pa)
-    """
-    T -= 273.15
-    if isclose(T, 0.0, abs_tol=0.01):
-        T = 0.01
-    T += 273.15
-    T_inv = 1.0 - T / 647.096
-    a1 = -7.85951783
-    a2 = 1.84408259
-    a3 = -11.7866497
-    a4 = 22.6807411
-    a5 = -15.9618719
-    a6 = 1.80122502
-
-    P_H2O_Boiling_Curve = (
-        exp(
-            647.096
-            / T
-            * (
-                a1 * T_inv
-                + a2 * T_inv**1.5
-                + a3 * T_inv**3
-                + a4 * T_inv**3.5
-                + a5 * T_inv**4
-                + a6 * T_inv**7.5
-            )
-        )
-        * 22.64e6
-    )
-    return P_H2O_Boiling_Curve
-
-
 def calc_P_VLH(T: float) -> float:
     """Calculate pressure on Vapor-Liquid-Halite coexistence curve.
     This implementation is based on "P_VLH" in ProBrine V2
@@ -2085,6 +2060,68 @@ def calc_X_and_P_crit(T: float) -> Tuple[float, float]:
     return x_crit, P_Crit * 1.0e5
 
 
+def calc_P_Boil(T: float) -> float:
+    """Calculate vapor pressure of NaCl (PNaCl). This implementation is
+    based on "P_Boil" in ProBrine V2 (Klyukin et al., 2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        float: Pressure on halite boiling curve (Pa)
+    """
+    T -= 273.15
+    B_boil = 9418.12
+    T_Triple_NaCl = 800.7
+    P_Triple_NaCl = 0.0005
+    P_Boil = 10.0 ** (
+        log10(P_Triple_NaCl)
+        + B_boil * (1.0 / (T_Triple_NaCl + 273.15) - 1.0 / (T + 273.15))
+    )
+
+    return P_Boil * 1.0e5
+
+
+def calc_P_H2O_Boiling_Curve(T: float) -> float:
+    """Calculate pressure on boiling curve. This implementation is
+    based on "P_H2O_Boiling_Curve" in ProBrine V2 (Klyukin et al., 2020).
+
+    Args:
+        T (float): Absolute temperature (K)
+
+    Returns:
+        float: Pressure on boiling curve (Pa)
+    """
+    T -= 273.15
+    if isclose(T, 0.0, abs_tol=0.01):
+        T = 0.01
+    T += 273.15
+    T_inv = 1.0 - T / 647.096
+    a1 = -7.85951783
+    a2 = 1.84408259
+    a3 = -11.7866497
+    a4 = 22.6807411
+    a5 = -15.9618719
+    a6 = 1.80122502
+
+    P_H2O_Boiling_Curve = (
+        exp(
+            647.096
+            / T
+            * (
+                a1 * T_inv
+                + a2 * T_inv**1.5
+                + a3 * T_inv**3
+                + a4 * T_inv**3.5
+                + a5 * T_inv**4
+                + a6 * T_inv**7.5
+            )
+        )
+        * 22.64e6
+    )
+    return P_H2O_Boiling_Curve
+
+
 def calc_Water_Pressure(T: float, Rho: float) -> float:
     """Calculate pure water pressure from temperature and density. This
     implementation is based on "Water_Pressure_calc" function in ProBrine V2
@@ -2163,6 +2200,265 @@ def PhiR_Delta(Delta_Rho, Tau):
             Delta ** CK.b[i] * (Psi + Delta_Rho * dPsidDelta)
             + dDeltaBIdDelta * Delta_Rho * Psi
         )
+    return Sum1 + Sum2 + Sum3 + Sum4
+
+
+def Rho_Water(T, P):
+    """Pure water density. This implementation is derived from ProBrine (Klyukin et al., 2020)
+    Args:
+        T (float): Absolute temperature (K)
+        P (float): Pressure (Pa)
+
+    Returns:
+        float: water density (kg/m3)
+    """
+    T_K = T
+    P_mPa = P * 1.0e-6
+    TH2O_Crit = 647.096
+
+    Rho1, Rho2 = 0.0, 0.0
+    if T_K <= TH2O_Crit:
+        if round(P_mPa * 10.0, 3) <= round(calc_Water_Boiling_Curve(T_K) * 1.0e-5, 3):
+            # 0.001021135 stands for density of vapor at T=1000 C and P=0.006 bar
+            # Rho1 = 0.001021135
+            Rho1 = 0.000001
+            Rho2 = calc_Rho_Water_Vap_sat(T_K) + 1.0
+        else:
+            Rho1 = calc_Rho_Water_Liq_sat(T_K) - 1.0
+            Rho2 = 1701.0
+    else:
+        Rho1 = 0.000001
+        Rho2 = 1701.0
+    Toler = 1.0
+    n = 0
+    while n <= 1000:
+        RhoAprx = (Rho1 + Rho2) * 0.5
+        if abs(Rho2 - Rho1) * 0.5 <= Toler:
+            RhoAprx = Rho2
+            n = 1000
+        n += 1
+        aa = (
+            calc_Water_Pressure(T_K, RhoAprx) * 1.0e-6
+            - P_mPa
+        )
+        bb = (
+            calc_Water_Pressure(T_K, Rho1) * 1.0e-6
+            - P_mPa
+        )
+        if sign(aa) == sign(bb):
+            Rho1 = RhoAprx
+        else:
+            Rho2 = RhoAprx
+    if Rho1 < 0.0:
+        Rho1 = 0.0
+    if Rho2 < 0.0:
+        Rho2 = 0.0
+    
+    # Newthon method to compare desired P_in with pressure,
+    # and to get accuracy defined as either below 0.01 or 1e-10 bar
+    Toler = 0.00001
+    Rho1 = RhoAprx
+    Rho2 = Rho1 - Toler
+    n = 0
+    while n < 10000:
+        RhoAprx = Rho2
+        P_tmp1 = (
+            calc_Water_Pressure(T_K, Rho1) * 1.0e-6
+            - P_mPa
+        )
+        P_tmp2 = (
+            calc_Water_Pressure(T_K, Rho2) * 1.0e-6
+            - P_mPa
+        )
+        P_der = (P_tmp1 - P_tmp2) / (Rho1 - Rho2)
+        Rho1 = Rho1 - P_tmp1 / P_der
+        P_tmp1 = P_tmp1 + P_mPa
+        Rho2 = Rho1 - Toler
+        n += 1
+        if abs(1.0 - P_mPa / P_tmp1) <= 1.0e-8 or abs(RhoAprx - Rho1) < Toler:
+            break
+    Rho_Water = Rho1
+    return Rho_Water
+
+
+def calc_Rho_Water_Vap_sat(T: float) -> float:
+    """Calculate saturated vapor density of pure water. This implementation is
+    derived from ProBrine (Klyukin et al., 2020).
+
+    Args:
+        T (float): Temperature (K)
+
+    Returns:
+        float: Saturated vapor density (kg/m3)
+    """
+    T -= 273.15
+    if T == 0.0:
+        T = 0.01
+    T += 273.15
+    T_inv = 1.0 - T / 647.096
+
+    C = [-2.0315024, -2.6830294, -5.38626492, -17.2991605, -44.7586581, -63.9201063]
+
+    Rho_Water_Vap_sat = exp(
+        C[0] * T_inv**(1.0 / 3.0)
+        + C[1] * T_inv**(2.0 / 3.0)
+        + C[2] * T_inv**(4.0 / 3.0)
+        + C[3] * T_inv**(3.0)
+        + C[4] * T_inv**(37.0 / 6.0)
+        + C[5] * T_inv**(71.0 / 6.0)
+    ) * 322.0
+    return Rho_Water_Vap_sat
+
+
+def calc_Rho_Water_Liq_sat(T) -> float:
+    """Calculate saturated liquid density of pure water. This implementation is
+    derived from ProBrine (Klyukin et al., 2020).
+
+    Args:
+        T (float): Temperature (K)
+
+    Returns:
+        float: Saturated liquid density (kg/m3)
+    """
+    T -= 273.15
+    if T == 0.0:
+        T = 0.01
+    T += 273.15
+    T_inv = 1.0 - T / 647.096
+    b = [1.99274064, 1.09965342, -0.510839303, -1.75493479, -45.5170352, -674694.45]
+    Rho_Water_Liq_sat = (
+        1.0
+        + b[0] * T_inv**(1.0 / 3.0)
+        + b[1] * T_inv**(2.0 / 3.0)
+        + b[2] * T_inv**(5.0 / 3.0)
+        + b[3] * T_inv**(16.0 / 3.0)
+        + b[4] * T_inv**(43.0 / 3.0)
+        + b[5] * T_inv**(110.0 / 3.0)
+    ) * 322.0
+    return Rho_Water_Liq_sat
+
+
+def calc_Water_Enthalpy(T, Rho):
+    """Calculate specific enthalpy of pure water in J/kg. This implementation
+    is derived from ProBrine (Klyukin et al., 2020)
+
+    Args:
+        T: Temperature (K)
+        Rho: Density (kg/m3)
+
+    Returns:
+        Enthalpy in J/kg
+    """
+    R_constant = 0.46151805
+    Delta_Rho = Rho / 322.0
+    Tau = 647.096 / T
+    Water_Enthalpy_calc = (
+        (1.0
+        + Tau * (Phi0_Tau(Tau) + PhiR_Tau(Delta_Rho, Tau))
+        + Delta_Rho * PhiR_Delta(Delta_Rho, Tau)
+        ) * R_constant * T
+    )
+    return Water_Enthalpy_calc
+
+
+def Phi0_Tau(Tau):
+    n0 = [0.0] * 8
+    n0[1] = 6.6832105268
+    n0[2] = 3.00632
+    n0[3] = 0.012436
+    n0[4] = 0.97315
+    n0[5] = 1.2795
+    n0[6] = 0.96956
+    n0[7] = 0.24873
+
+    gamma0 = [0.0] * 8
+    gamma0[3] = 1.28728967
+    gamma0[4] = 3.53734222
+    gamma0[5] = 7.74073708
+    gamma0[6] = 9.24437796
+    gamma0[7] = 27.5075105
+
+    _sum = 0.0
+    for i in range(3, 8):
+        _sum += n0[i] * gamma0[i] * ((1.0 - exp(-gamma0[i] * Tau))**(-1.0) - 1.0)
+    Phi0_Tau = n0[1] + n0[2] / Tau + _sum
+    return Phi0_Tau
+
+
+def PhiR_Tau(Delta_Rho, Tau):
+    Sum1 = 0.0
+    for i in range(7):
+        Sum1 += (
+            CK.n[i]
+            * CK.T[i]
+            * Delta_Rho ** CK.d[i]
+            * Tau**(CK.T[i] - 1.0)
+        )
+
+    Sum2 = 0.0
+    for i in range(7, 51):
+        Sum2 += (
+            CK.n[i]
+            * CK.T[i]
+            * Delta_Rho**CK.d[i]
+            * Tau ** (CK.T[i] - 1.0)
+            * exp(-(Delta_Rho ** CK.C[i]))
+        )
+
+    Sum3 = 0.0
+    for i in range(51, 54):
+        Sum3 += (
+            CK.n[i]
+            * Delta_Rho ** CK.d[i]
+            * Tau ** CK.T[i]
+            * exp(
+                -CK.Alpha[i]
+                * (Delta_Rho - CK.Epsilon[i])**2.0
+                - CK.Beta[i]
+                * (Tau - CK.Gamma[i])**2.0
+            )
+            * (
+                CK.T[i] / Tau
+                - 2.0
+                * CK.Beta[i]
+                * (Tau - CK.Gamma[i])
+            )
+        )
+
+    Sum4 = 0.0
+    for i in range(54, 56):
+        Theta = (1.0 - Tau) + CK.A_caps[i] * (
+            (Delta_Rho - 1.0)**2.0
+        )**(1.0 / (2.0 * CK.Beta[i]))
+        Delta = (
+            Theta**2.0
+            + CK.B_Caps[i]
+            * (
+                (Delta_Rho - 1.0)
+                **2.0
+            )
+            ** CK.a[i]
+        )
+        Psi = exp(-CK.c_Caps[i] * (Delta_Rho - 1.0)**2.0
+            - CK.D_Caps[i] * (Tau - 1.0)**2.0)
+
+        dDeltaBIdTau = (-2.0
+            * Theta
+            * CK.b[i]
+            * Delta ** (CK.b[i] - 1.0)
+        )
+        dPsidTau = (
+            -2.0
+            * CK.D_Caps[i]
+            * (Tau - 1.0)
+            * Psi
+        )
+        Sum4 += (
+            CK.n[i]
+            * Delta_Rho
+            * (dDeltaBIdTau * Psi + Delta ** CK.b[i] * dPsidTau)
+        )
+
     return Sum1 + Sum2 + Sum3 + Sum4
 
 

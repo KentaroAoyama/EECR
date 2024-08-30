@@ -1,4 +1,4 @@
-# Effective electorical conductivity simulator for rocks
+# Effective electrical conductivity simulator for rocks
 
 These codes were developed to simulate the electrical conductivity measurements on rocks containing clay minerals.
 

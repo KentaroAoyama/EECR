@@ -2339,15 +2339,15 @@ def calc_Rho_Water_Liq_sat(T) -> float:
 
 
 def calc_Water_Enthalpy(T, Rho):
-    """Calculate specific enthalpy of pure water in J/kg. This implementation
-    is derived from ProBrine (Klyukin et al., 2020)
+    """Calculate specific enthalpy of pure water in kJ/kg. This implementation
+    is derived from ProBrine (Klyukin et al., 2020).
 
     Args:
         T: Temperature (K)
         Rho: Density (kg/m3)
 
     Returns:
-        Enthalpy in J/kg
+        Enthalpy in kJ/kg
     """
     R_constant = 0.46151805
     Delta_Rho = Rho / 322.0

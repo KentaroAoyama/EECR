@@ -56,6 +56,8 @@ I appreciate all contributions, such as questions, suggestions, bug reports, and
 
 2. Klyukin, Y. I., Haroldson, E. L., & Steele-MacInnis, M. (2020). A comprehensive numerical model for the thermodynamic and transport properties of H2O-NaCl fluids, Chemical Geology, 557, https://doi.org/10.1016/j.chemgeo.2020.119840
 
+3. Aoyama, K., & Hashimoto, T. (2024). Numerical simulation on the electrical conductivity of ternary mixtures containing NaCl solution, quartz, and smectite. Journal of Geophysical Research: Solid Earth, 129, e2024JB029063. https://doi.org/10.1029/2024JB029063
+
 # Contact:
 - [Issue](https://github.com/KentaroAoyama/EECR/issues)
 - aoyama.kentaro.k0@elms.hokudai.ac.jp
